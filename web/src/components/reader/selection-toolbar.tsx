@@ -75,7 +75,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PaperTerm } from "@/lib/papers/report";
-import { setHighlightOffer } from "@/lib/reader/explain-offer";
+import { setHighlightOffer, setNoteOffer } from "@/lib/reader/explain-offer";
 import { MARGIN_CARD_SELECTOR, placeInMargin, useMarginRect, type MarginRect } from "@/lib/reader/margin";
 import { useWindows } from "@/lib/reader/windows";
 import type { ExplainSelection, ViewRect } from "./paper-body";
@@ -615,7 +615,7 @@ export function actionsPlace(input: {
   const { bounds, viewport, margin, sizes } = input;
   const pill = toolbarPlace({ bounds, viewport, size: sizes.above });
   if (pill === null) return null;
-  if (margin === null) return { mode: "above", ...pill };
+  if (margin === null || (margin as MarginRect & { presentation?: string }).presentation === "bottom") return { mode: "above", ...pill };
   const level = { left: margin.left + MARGIN_INSET_PX, top: placeInMargin(margin, bounds.top, sizes.margin.height) };
   const spot = clearOfHeaders({ margin, size: sizes.margin, ...level, headers: input.headers ?? [], controls: input.controls ?? [], words: input.words ?? [] });
   return { mode: "margin", left: spot.left, top: spot.top, below: false, ...(spot.how === "level" ? {} : { clear: spot.how }) };
@@ -889,8 +889,11 @@ export function SelectionToolbar({
   useEffect(() => {
     setHighlightOffer(onBar);
   }, [onBar]);
-  useEffect(() => () => setHighlightOffer(false), []);
+  const noteOnBar = target !== null && !target.unavailableReason && frame !== null && frame.of === target && frame.viewport.width < MASTHEAD_MIN_VIEWPORT_PX && frame.bounds.bottom > 0 && frame.bounds.top < frame.viewport.height;
+  useEffect(() => { setNoteOffer(noteOnBar); }, [noteOnBar]);
+  useEffect(() => () => { setHighlightOffer(false); setNoteOffer(false); }, []);
 
+  if (target?.unavailableReason) return <div role="status" className="pointer-events-none fixed inset-x-4 bottom-20 z-[69] mx-auto w-fit max-w-[calc(100%-2rem)] rounded bg-heading px-3 py-2 text-body-sm text-bg">{target.unavailableReason}</div>;
   if (!target || !place) return null;
   const highlight = actions.includes("highlight") ? () => onHighlight?.(target) : undefined;
   // P11-38 rule 1: the press explains, and ends the group's job and the selection (in the margin; the pill above the selection is as it was).

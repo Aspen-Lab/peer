@@ -117,8 +117,10 @@ describe("the exports (rule 5)", () => {
     updatedAt: "2026-10-14T00:00:00.000Z",
   } as Note;
 
-  it("the .md export keeps the marks: Markdown is the format", () => {
-    expect(toMarkdown(note)).toContain("alpha ==__**beta**__== gamma [@rose2024]");
+  // Re-aimed (P12-77 O2): held `alpha ==__**beta**__== gamma` in the .md; the Markdown now leaves with the underline as `<u>…</u>`
+  // (`__x__` is bold to CommonMark, Obsidian and Pandoc); the highlight, the bold inside it, the citation and the heading are as stored.
+  it("the .md export keeps the marks: Markdown is the format, the underline as <u>…</u>", () => {
+    expect(toMarkdown(note)).toContain("alpha ==<u>**beta**</u>== gamma [@rose2024]");
     expect(toMarkdown(note)).toContain("## a **bold** heading");
   });
 

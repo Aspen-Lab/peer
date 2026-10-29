@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx } from "./explain-dock";
-import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, useWindows } from "@/lib/reader/windows";
+import { EXPLAIN_WINDOW_ID, useWindows } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { ExplainTurn } from "@/store/explain-threads";
@@ -230,7 +230,7 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
     run.mounted.unmount();
   });
 
-  it("is a header tall, with a way to raise it, when another card is raised over it; a header press raises it back", async () => {
+  it("P12-04: stays a visible equal panel when another card activates; its header activates without relocating it", async () => {
     const seen: Array<{ behind: unknown; style: Record<string, number | string | undefined> | undefined }> = [];
     const note: Step = (tree) => seen.push({ behind: cardOf(tree)!.props.behind, style: styleOf(tree) });
     const run = await scenario(base(selection(380, 300)), [
@@ -242,13 +242,14 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
     ]);
     await wait();
     // The sticky joined after the explain card: it is the front, the explain card a header at the cascade's origin.
-    expect(seen[0].behind).toBe(true);
-    expect(seen[0].style).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, zIndex: 60 });
+    // P12-04 RE-AIM: front means visible; actual active order still controls Escape.
+    expect(seen[0].behind).toBe(false);
+    expect(seen[0].style).toMatchObject({ top: 0, maxHeight: 400, height: 400, zIndex: 60 });
     // A press on its header raises it back over the sticky: whole again, in front.
     expect(seen[1].behind).toBeFalsy();
     const order = (id: string) => useWindows.getState().windows.find((w) => w.id === id)!.order;
     expect(order(EXPLAIN_WINDOW_ID)).toBeGreaterThan(order("s1"));
-    expect(styleOf(run.last())!.zIndex).toBe(61);
+    expect(styleOf(run.last())).toMatchObject({ top: 0, maxHeight: 400, height: 400, zIndex: 60 });
     run.mounted.unmount();
   });
 
@@ -295,9 +296,10 @@ describe("ExplainBox — one card of the margin's stack (P11-14 rule 4; O-8, BAC
   });
 });
 
-describe("ExplainBox — below 1024 px it is the card and the sheet, outside the stack (P11-14 rule 4)", () => {
+describe("ExplainBox — without a registered margin the card/sheet fallback remains (P12-07)", () => {
   it("does not register in the stack at 900 px (the card under the selection) or at 390 px (the sheet)", async () => {
     for (const width of [900, 390]) {
+      useMarginStore.setState({ rect: null });
       stubWindow(width, 900);
       const run = await scenario(base(selection(380, 300)), [() => open()]);
       await wait();
@@ -306,6 +308,20 @@ describe("ExplainBox — below 1024 px it is the card and the sheet, outside the
       expect(styleOf(run.last())!.zIndex, `${width}`).toBeUndefined();
       run.mounted.unmount();
     }
+  });
+});
+
+describe("P12-07: the registered bottom margin owns the same Explain card", () => {
+  it("joins the shared stack at phone width and follows the registered rectangle", async () => {
+    stubWindow(390, 844);
+    const rect: MarginRect = { left: 8, width: 374, top: 376, bottom: 796, presentation: "bottom" };
+    useMarginStore.setState({ rect });
+    const run = await scenario(base(selection(380, 300)), [() => open()]);
+    await wait();
+    expect(explainRegistered()).toBeDefined();
+    expect(styleOf(run.last())).toMatchObject({ left: 8, width: 374 });
+    expect(cardOf(run.last())?.props.sheet).toBe(false);
+    run.mounted.unmount();
   });
 });
 
@@ -389,7 +405,7 @@ describe("ExplainBox — the card keeps its top at the selection when the answer
     run.mounted.unmount();
   });
 
-  it("a card behind another one keeps today's rules: a header tall, at the cascade's frozen origin", async () => {
+  it("P12-04: an inactive panel remains fully visible in the equal split while its standalone origin is retained", async () => {
     stubWindow(1440, 900);
     useMarginStore.setState({ rect: MARGIN });
     const run = await scenario(base(selection(380, 300)), [
@@ -398,8 +414,9 @@ describe("ExplainBox — the card keeps its top at the selection when the answer
       () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }),
     ]);
     await wait();
-    expect(cardOf(run.last())!.props.behind).toBe(true);
-    expect(styleOf(run.last())).toMatchObject({ top: 300, maxHeight: WINDOW_HEADER_PX, height: WINDOW_HEADER_PX });
+    expect(cardOf(run.last())!.props.behind).toBe(false);
+    expect(cardOf(run.last())!.props.compact).toBe(true);
+    expect(styleOf(run.last())).toMatchObject({ top: 0, maxHeight: 400, height: 400 });
     expect(useWindows.getState().origin).toBe(300);
     run.mounted.unmount();
   });

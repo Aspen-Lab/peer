@@ -64,7 +64,8 @@ export function viewOf(tree: ReactNode): View {
     listbox,
     options: all.filter((el) => el.props.role === "option"),
     headings: all.filter((el) => el.props.role === "group" && el.props["aria-label"] !== ASK.chips.gist).map((el) => String(el.props["aria-label"])),
-    submit: all.find((el) => el.type === "button" && el.props.children === ASK.submit)!,
+    // P12-06: both acknowledgement labels identify the same guarded control.
+    submit: all.find((el) => el.type === "button" && (el.props.children === ASK.submit || el.props.children === ASK.submitted))!,
     boxes: all.filter((el) => el.type === "input" && el.props.type === "checkbox"),
   };
 }

@@ -13,6 +13,9 @@
 // its colour and its ink written into it (`mso-highlight:yellow` besides for Yellow, Word's own highlighter). A sticky's quote
 // and a `quote` block stay out, as above.
 //
+// P12-77 (O2; A P12-71 §6): Markdown has no underline, and the notes store it as `__x__`, which every other Markdown reader takes for
+// bold. The Markdown leaves with `<u>x</u>` instead (`portableUnderline`, `inline.ts`); the notes themselves still read both.
+//
 // The Markdown keeps citations as `[@key]` — Pandoc's syntax — and the .bib
 // carries the same keys, so `pandoc draft.md --citeproc --bibliography
 // draft.bib` turns a draft into a paper with its references formatted. In
@@ -20,8 +23,8 @@
 // prompts are UI, never content: they do not leave.
 
 import type { Block, HighlightColourId, Note, Source } from "./types";
-import { isWrapping, parseInline } from "./inline";
-import { citedKeys, isList, isTextual, listNumber, readHighlight } from "./blocks";
+import { isWrapping, parseInline, portableUnderline } from "./inline";
+import { citedKeys, highlightSegments, isList, isTextual, listNumber, readHighlight } from "./blocks";
 import { authorYear, externalLink } from "./cite";
 import { highlightPaint } from "./highlight-colours";
 
@@ -69,18 +72,22 @@ function isTitleLine(note: Pick<Note, "title" | "blocks">, b: Block, i: number):
 /** P11-08: a highlight's words as an export carries them — the whole passage on one line; null when the block holds no readable ones
  *  (a highlight whose field is missing or malformed, or whose passage is empty, leaves no line). */
 function highlightWords(b: Block): string | null {
-  const words = readHighlight(b)?.quote.replace(/\s+/g, " ").trim();
+  const spot = readHighlight(b);
+  const words = spot ? highlightSegments(spot).map((s) => s.quote.replace(/\s+/g, " ").trim()).join("\n\n") : null;
   return words ? words : null;
 }
 
 function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<string, Source>): string | null {
   // P10-09e (review 7.3): quoted text is not exported — a quote block leaves no line, in any format.
   if (b.type === "quote") return null;
-  const pad = "    ".repeat(b.indent ?? 0);
+  const pad = "  ".repeat(b.indent ?? 0);
   if (isTextual(b.type) && !b.text.trim()) return null;
   // Prose loses trailing spaces (a citation typed at a line's end leaves
-  // one); code keeps every character it was given.
-  const text = b.type === "code" ? b.text : b.text.replace(/[ \t]+$/gm, "");
+  // one); code keeps every character it was given. P12-77 (O2): and prose leaves with its underline as `<u>…</u>`,
+  // which CommonMark, Obsidian and Pandoc read as underline, where they read the stored `__x__` as bold. This is the one place the
+  // Markdown of every route is made (the notes window's Export, the notes page's, the rail's download), and it covers a note stored
+  // either way; the stored form is not touched, and the other marks and the list markers are written as they were.
+  const text = b.type === "code" ? b.text : portableUnderline(b.text.replace(/[ \t]+$/gm, ""));
   // A line break inside a list item has to stay inside the item.
   const item = (t: string) => t.replace(/\n/g, `\n${pad}  `);
   switch (b.type) {
@@ -112,7 +119,8 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
       // P11-08: the notes' own highlight mark around the words. A star, an underscore and an equals sign in the paper's words are
       // written with the dialect's escapes (`\*`, `\_`, `\=`), so the words come back as one mark and a renderer reads them the same.
       const words = highlightWords(b);
-      return words === null ? null : `==${words.replace(/[*_=]/g, "\\$&")}==`;
+      const spot = readHighlight(b);
+      return words === null || !spot ? null : highlightSegments(spot).map((segment) => `${segment.kind === "heading" ? "### " : ""}==${segment.quote.replace(/\s+/g, " ").trim().replace(/[*_=]/g, "\\$&")}==`).join("\n\n");
     }
   }
 }
@@ -357,7 +365,10 @@ function bodyHtml(note: Note): string {
         // P11-08: the words in a paragraph of their own, in the highlight's colour.
         const spot = readHighlight(b);
         const words = highlightWords(b);
-        if (spot && words) out.push(`<p><mark style="${highlightStyle(spot.colour)}">${esc(words)}</mark></p>\n`);
+        if (spot && words) for (const segment of highlightSegments(spot)) {
+          const tag = segment.kind === "heading" ? "h3" : "p";
+          out.push(`<${tag}><mark style="${highlightStyle(spot.colour)}">${esc(segment.quote.replace(/\s+/g, " ").trim())}</mark></${tag}>\n`);
+        }
         break;
       }
     }

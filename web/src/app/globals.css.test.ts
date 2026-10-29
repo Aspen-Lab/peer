@@ -440,22 +440,22 @@ describe("globals.css — the reader's three panes (P11-10)", () => {
     expect(ruleOf(".reader-rail-button[hidden]")).toMatch(/display:\s*none;/);
   });
 
-  it("the dividers are 12px of col-resize hit area with a 1px line in the strong border token, the accent on hover, focus and drag", () => {
+  it("the dividers are 12px of col-resize hit area with a 2px muted-text line, the accent on hover, focus and drag", () => {
     expect(ruleOf(".reader-divider")).toMatch(/cursor:\s*col-resize;/);
     expect(ruleOf(".reader-divider")).toMatch(/touch-action:\s*none;/);
     const hit = ruleOf(".reader-divider,\n.reader-divider-rest");
     expect(hit).toMatch(/width:\s*12px;/);
     expect(hit).toMatch(/align-self:\s*stretch;/);
     const line = ruleOf(".reader-divider::before,\n.reader-divider-rest::before");
-    expect(line).toMatch(/width:\s*1px;/);
-    expect(line).toMatch(/background:\s*var\(--color-border-strong\);/);
+    expect(line).toMatch(/width:\s*2px;/);
+    expect(line).toMatch(/background:\s*var\(--color-text-muted\);/);
     const lit = css.slice(css.indexOf(".reader-divider:hover::before"));
     expect(lit.slice(0, lit.indexOf("\n}") + 2)).toMatch(/\.reader-divider\[data-dragging\]::before[^}]*background:\s*var\(--color-accent\);/);
   });
 
-  it("the centre's content is capped at 38em and centred, and the prose measures are lifted inside it", () => {
+  it("the centre's content is capped at scaled 38em and centred, and the prose measures are lifted inside it", () => {
     const inner = ruleOf(".reader-centre-inner");
-    expect(inner).toMatch(/max-width:\s*38em;/);
+    expect(inner).toMatch(/max-width:\s*calc\(38em \* var\(--reading-scale, 1\)\);/);
     expect(inner).toMatch(/margin-inline:\s*auto;/);
     expect(ruleOf(".reader-centre .measure,\n.reader-centre .measure-paper")).toMatch(/max-width:\s*none;/);
     expect(ruleOf(".reader-centre")).toMatch(/min-width:\s*0;/);

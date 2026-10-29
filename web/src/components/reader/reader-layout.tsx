@@ -1,5 +1,12 @@
 "use client";
 
+// P12-07/197: `useSpread` now compares actual viewport room with a scaled
+// 476px text budget plus the rail, margin and real centre insets. Below that
+// budget the one-column reader keeps a registered complementary bottom margin.
+// The historical P11 layout notes below describe the former1024px boundary.
+// P12-15: the shell's centre ancestry now stays mounted in both modes. Only
+// side furniture and narrow preamble/navigation change; native Ranges survive.
+
 // Arranges the reader's blocks — it renders none of them. Below 1024 css px the children come back as a fragment, in one column; from it
 // they are placed in the three-pane shell (`reader-shell.tsx`, P11-10): the left pane (the reading controls in its header row beside the pin
 // button; the title, the commands and the Summary / Paper digestion strip in its fixed zone; the map, then the plate and the details in its scroll zone), the centre (the common
@@ -46,13 +53,15 @@
 // 64rem remounts the blocks (the authors toggle resets); a window resize
 // across the breakpoint is rare and gets no transition.
 
-import { useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useKeepPlace } from "@/lib/reader/keep-place";
 import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { TABPANEL_ID, tabId } from "./reader-tabs";
 import { ReaderShell } from "./reader-shell";
 import { ReadingControls } from "./reading-controls";
-import { SPREAD_QUERY } from "./spread";
 import type { ReaderTab } from "./use-reader-tab";
+import { railMinimumWidth } from "./pane-layout";
+import { ResponsiveMargin } from "./responsive-margin";
 
 /** The id of the wrapper that holds the blocks both tabs share. */
 export const COMMON_ID = "reader-common";
@@ -104,24 +113,16 @@ interface ReaderLayoutProps {
   next: ReactNode;
 }
 
-function subscribe(onChange: () => void) {
-  const media = window.matchMedia(SPREAD_QUERY);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-}
-
 /**
- * ≥ 64rem (1024 css px, the three panes), by the window. Safe to read on the first render: `Reader` mounts
+ * Comfortable room for a rail, text and margin at the current reading step. Safe to read on the first render: `Reader` mounts
  * only once the paper is known, which is after `StoreHydrator` rehydrates
  * (all stores are `skipHydration`) or after the by-id fetch — never during
  * SSR or hydration. The server snapshot is the one-column page regardless.
  */
 export function useSpread(): boolean {
-  return useSyncExternalStore(
-    subscribe,
-    () => window.matchMedia(SPREAD_QUERY).matches,
-    () => false,
-  );
+  const readingScale = useResolvedReadingScale();
+  const width = useSyncExternalStore(subscribeResize, () => document.documentElement.clientWidth, () => 0);
+  return width >= railMinimumWidth(readingScale);
 }
 
 function subscribeResize(onChange: () => void) {
@@ -176,6 +177,10 @@ export function usePageZoom(): number {
 const ZONE_INSET = "px-1.5";
 
 export function ReaderLayout(p: ReaderLayoutProps) {
+  // P12-15: the owner outlives both structures. Its last stable logical token
+  // survives CSS reflow, the temporary shell and native clamp event ordering.
+  const owner = useRef<HTMLDivElement | null>(null);
+  useKeepPlace(owner, { responsive: true });
   // S15/S21: read here, not threaded as a prop from page.tsx — this file
   // already self-contains its other layout-affecting state (`useSpread`),
   // so the reading-size scale follows the same shape. Sets --reading-scale
@@ -192,54 +197,43 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   const tail = tabbed || (p.map !== undefined && p.map !== null);
   // Built from the slot alone — the tab is not read here, on purpose (see the header).
   const common = p.common ? (
-    <div id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
+    <div key="common" id={COMMON_ID} className="reading-scaled scroll-mt-20" style={readingScaleStyle}>{p.common}</div>
   ) : null;
   const blocks = (
-    <>
+    <Fragment key="panel">
       <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
       <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
-    </>
+    </Fragment>
   );
 
-  if (!p.spread) {
-    // One column: the blocks in reading order. `words` and `additions` each get
-    // a thin scale wrapper of their own — the decision and the strip are not scaled.
-    const panel = tabbed ? (
-      // `flow-root`: the first block's own top gap (the map's 24px, a band's 48px) stays inside the panel
-      // instead of collapsing out through it, so the panel's box begins at the strip's foot (P9-04, X3).
-      <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 flow-root">{blocks}</div>
-    ) : (
-      blocks
-    );
-    return (
-      <>
+  const panel = tabbed ? (
+    <div key="panel" role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined}
+      className={p.spread ? "scroll-mt-20 flex flex-col" : "scroll-mt-20 flow-root"}>{blocks}</div>
+  ) : blocks;
+  const wrap = (children: ReactNode) => (
+    <div data-reader-layout="" ref={owner} style={{ display: "contents" }}>
+      {children}
+    </div>
+  );
+  // P12-15: the SAME keyed centre ancestry stands in both modes. Removing or
+  // reparenting it changes native Range endpoints even when text nodes survive.
+  const preamble = (
+    <>
         {p.plate}
         {p.title}
         {p.decision}
         {p.details}
         {p.progress}
-        {common}
-        {/* P9-04 (X3): the strip stands directly above the panel it switches (`aria-controls`),
-            after the blocks both tabs share — not four screens above it. */}
+    </>
+  );
+  const navigation = (
+    <>
         {p.tabs}
-        {/* P10-04 (review 3.1): the map, directly under the strip it stands with and above the panel it
-            helps the reader move through; outside the panel, so it shows under both tabs. */}
         {p.map}
-        {panel}
-        {p.next}
-      </>
-    );
-  }
-
-  // The three panes (P11-16). The tabpanel is a flex column, as the old spread's was, so the first block's own top gap stays inside it.
-  const panel = tabbed ? (
-    <div role="tabpanel" id={TABPANEL_ID} aria-labelledby={p.tab ? tabId(p.tab) : undefined} className="scroll-mt-20 flex flex-col">
-      {blocks}
-    </div>
-  ) : (
-    blocks
+    </>
   );
 
+  // The three panes (P11-16). The tabpanel is a flex column, as the old spread's was, so the first block's own top gap stays inside it.
   // The left pane. The shell's header row holds the pin and the collapse button, and the reading controls beside it (`header`); the fixed
   // zone is the title, the commands, the report's progress while one stands, and the strip. With nothing to float — no strip, no map — the pane scrolls as one.
   // The pane is a window high at most and the fixed zone must leave the map room, so the blocks' own gaps — made for a page — are
@@ -262,8 +256,10 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     </>
   );
 
-  return (
-    <ReaderShell
+  return wrap(
+    <><ReaderShell
+      side={p.spread}
+      keepReadingPlace={false}
       header={<ReadingControls spread />}
       left={
         tail
@@ -283,12 +279,15 @@ export function ReaderLayout(p: ReaderLayoutProps) {
       centre={
         // A flex column, as the old reading column was; the first block's own top gap is dropped, so whatever opens the column — the claim's
         // band, the skim deck, a TL;DR — starts level with the top of the left pane.
-        <div className="flex flex-col [&>:first-child>:first-child]:mt-0 [&>:first-child>:first-child>:first-child]:mt-0">
+        <div key="reading-content" className={p.spread ? "flex flex-col [&>:first-child>:first-child]:mt-0 [&>:first-child>:first-child>:first-child]:mt-0" : undefined}>
+          {!p.spread ? <Fragment key="preamble">{preamble}</Fragment> : null}
           {common}
+          {!p.spread ? <Fragment key="navigation">{navigation}</Fragment> : null}
           {panel}
-          <div>{p.next}</div>
+          <div key="next">{p.next}</div>
         </div>
       }
-    />
+    /><ResponsiveMargin side={p.spread} /></>
   );
 }
+

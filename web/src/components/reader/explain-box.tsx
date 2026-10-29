@@ -89,7 +89,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { setExplainOffer } from "@/lib/reader/explain-offer";
-import { EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
+import { explainRequestRange, explainTarget, sameExplainTarget } from "@/lib/reader/explain-range";
+import { CARD_CONTENT_MIN_PX, EXPLAIN_WINDOW_ID, WINDOW_HEADER_PX, stackFrameIn, stackLayout, useWindows, type FloatingWindow } from "@/lib/reader/windows";
 import { placeInMargin, useMarginStore, type MarginRect } from "@/lib/reader/margin";
 import { isPageBlockId } from "@/lib/notes/anchor-blocks";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
@@ -121,6 +122,8 @@ import {
 import { EvidenceQuote } from "./evidence-quote";
 import { isFrontCard } from "./front-escape";
 import { MarginCardHeader } from "./margin-card";
+import { useMarginStack } from "./margin-stack-scroll";
+import { CardDivider } from "./card-divider";
 import { asItems, firstAnswerMessage, keyToSend, postExplain, moreReply, replyPair, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection, ExplainSource, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
@@ -349,16 +352,16 @@ interface StackView {
 
 function readStack(): StackView {
   const { windows, origin } = useWindows.getState();
-  const ordered = [...windows].sort((a, b) => a.order - b.order);
+  const ordered = windows;
   const cards: FloatingWindow[] = ordered.some((w) => w.id === EXPLAIN_WINDOW_ID) ? ordered : [...ordered, { id: EXPLAIN_WINDOW_ID, kind: "explain", title: EXPLAIN.title, order: 0 }];
-  return { windows: cards.map((w, i) => ({ ...w, order: i + 1 })), origin, rect: useMarginStore.getState().rect };
+  return { windows: cards, origin, rect: useMarginStore.getState().rect };
 }
 
 /** The box alone in the stack follows its own paragraph, and the origin it pushes to the store is not news to it. */
 const aloneInStack = (windows: readonly FloatingWindow[]) => windows.length === 1 && windows[0].id === EXPLAIN_WINDOW_ID;
 
 /** The same stack as far as laying it out goes: the same cards of the same kinds in the same order. Its own registering changes nothing. */
-const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind);
+const sameCards = (a: readonly FloatingWindow[], b: readonly FloatingWindow[]) => a.length === b.length && a.every((w, i) => w.id === b[i].id && w.kind === b[i].kind && (a.length <= 1 || (w.order === b[i].order && w.share === b[i].share && w.minimum === b[i].minimum)));
 
 /** The band the card stands in: the margin's rect, else the masthead's foot down to the legend's strip at the right edge, 360 px wide. */
 function bandOf(rect: MarginRect | null, viewport: Viewport): MarginRect {
@@ -538,9 +541,12 @@ export async function requestExplanation(args: {
 }): Promise<AskResult> {
   const { paper, selection, sectionId, llmOverride } = args;
   try {
+    const projected = explainRequestRange(selection);
+    if (!projected) return "unavailable";
     const response = await postExplain(paper.id, {
       paper,
-      passage: selection.passage.length > EXPLAIN_PASSAGE_CHARS ? explainPassage(selection.passage) : selection.passage,
+      passage: projected.passage.length > EXPLAIN_PASSAGE_CHARS ? explainPassage(projected.passage) : projected.passage,
+      ...(projected.range ? { range: projected.range } : {}),
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [],
@@ -647,6 +653,7 @@ export function ExplainCard({
   inputRef,
   behind,
   onRaise,
+  compact = false,
 }: {
   passage: string;
   /** The heading of the section the passage sits in. */
@@ -676,6 +683,7 @@ export function ExplainCard({
    *  the start (O-7), the title and the passage's opening words; a press on it raises the card (`onRaise`). */
   behind?: boolean;
   onRaise?: () => void;
+  compact?: boolean;
 }) {
   const asking = canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
@@ -718,25 +726,31 @@ export function ExplainCard({
       role="region"
       aria-label={EXPLAIN.card}
       data-explain-card=""
+      data-margin-id={dock ? EXPLAIN_WINDOW_ID : undefined}
+      data-margin-compact={compact || undefined}
       {...(sheet ? { "data-explain-sheet": "" } : {})}
       {...(dock ? { "data-explain-dock": "", "data-margin-card": "explain" } : {})}
       ref={cardRef}
       // The container can take the focus (never in the tab order), so a script can hand it the focus. It is no control, so it draws no ring.
       tabIndex={-1}
       style={style}
+      onFocusCapture={() => { if (compact && !isFrontCard(useWindows.getState().windows, EXPLAIN_WINDOW_ID)) onRaise?.(); }}
+      onPointerDownCapture={() => { if (compact && !isFrontCard(useWindows.getState().windows, EXPLAIN_WINDOW_ID)) onRaise?.(); }}
       // P9-20 (A P9-W2's N4): the quotes in this 360 px window (and the phone's sheet) are set ragged-right, not justified: the body's
       // `reading-justify` opened word gaps 4.4 times a space at this measure. The override is scoped to the window; the paper's own
       // column keeps its justification (the design).
-      className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 outline-none [&_.reading-justify]:text-left ${
-        dock ? "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
+      // P12-81 (A P12-72's O2): the card is the one thing that scrolls, and a wheel past its end stays in it (`overscroll-contain`, as the
+      // sticky note's body, the notes window and the figure card's caption have), so it does not chain on to the page.
+      className={`${compact ? "absolute left-0 w-full p-2" : "fixed p-4"} z-[70] overflow-y-auto overscroll-contain border border-border-strong bg-surface outline-none [&_.reading-justify]:text-left ${
+        dock ? compact ? "block" : "flex flex-col border-r-0" : `shadow-card-hover ${sheet ? "rounded-t-lg border-b-0" : "rounded-lg"}`
       }`}
     >
       {/* The card is what scrolls; its header stays at the top and its input at the foot (sticky, offset by the card's own padding,
           which a sticky box would otherwise stop short of). P10-08 (review 8.4, 8.5; the owner: the top-left close "要改成一个大大的X，并高亮"):
           Close is a large X in the accent colour at the header's top-left — 36 px (44 where there is no hover), the page's own accent, a
           button the keyboard reaches — with the window's title beside it; the passage's quote is under both. */}
-      <div className="sticky -top-4 z-10 -mx-4 -mt-4 border-b border-border bg-surface px-4 pb-3 pt-4">
-        <div className="flex items-center gap-3">
+      <div className={compact ? "contents" : "sticky -top-4 z-10 -mx-4 -mt-4 border-b border-border bg-surface px-4 pb-3 pt-4"}>
+        <div data-margin-fixed={compact ? "" : undefined} className={compact ? "sticky -top-2 z-10 -mx-2 -mt-2 flex h-10 shrink-0 items-center gap-3 border-b border-border bg-surface px-2" : "flex items-center gap-3"}>
           <button
             type="button"
             data-explain-close=""
@@ -748,15 +762,15 @@ export function ExplainCard({
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
-          <p className="min-w-0 flex-1 font-mono text-caption text-heading">{EXPLAIN.title}</p>
+          {compact ? <button type="button" data-explain-header="" onClick={onRaise} className="h-10 min-w-0 flex-1 text-left font-mono text-caption text-heading">{EXPLAIN.title}</button> : <p className="min-w-0 flex-1 font-mono text-caption text-heading">{EXPLAIN.title}</p>}
         </div>
         <div className="mt-3 min-w-0">
           {source === undefined || source === "paper" ? (
-            <EvidenceQuote text={previewOf(passage)} where={heading} />
+            <EvidenceQuote text={compact ? passage : previewOf(passage)} where={heading} />
           ) : (
             <>
               <p className="annotation text-text-faint">{source === "summary" ? EXPLAIN.fromSummary : EXPLAIN.fromAnswer}</p>
-              <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-2">{previewOf(passage)}</p>
+              <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-2">{compact ? passage : previewOf(passage)}</p>
             </>
           )}
         </div>
@@ -814,7 +828,7 @@ export function ExplainCard({
         // The control row: the input, then Send. (P10-08, review 8.6: the web-search toggle that stood at its start is gone.)
         <div
           data-explain-controls=""
-          className={`sticky -bottom-4 -mx-4 -mb-4 ${dock ? "mt-auto" : "mt-4"} flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
+          className={`${compact ? "static mt-4" : `sticky -bottom-4 -mx-4 -mb-4 ${dock ? "mt-auto" : "mt-4"}`} flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
         >
           <textarea
             ref={inputRef}
@@ -891,13 +905,14 @@ export interface ExplainBoxProps {
   onSayMore?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string) => Promise<ReplyResult>;
   /** Called when a passage whose thread is full is opened again: the page drops that thread. */
   onResetThread?: (target: SelectionTarget) => void;
+  onUnavailable?: (reason: string) => void;
   /** Filled with the box's `open`, which does what the button's click does on the
    *  current selection — the page's `e` key calls it. With the box already open
    *  it moves to the input instead. */
   openRef?: { current: (() => void) | null };
 }
 
-export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
+export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, onUnavailable, openRef }: ExplainBoxProps) {
   // P11-42 rule 2 (ruling §1h.139 (b)): a selection in a figure's caption or a section's heading is this box's as a paragraph's is (P11-26 rule 4 kept it out, because the
   // explain route could not find such a passage; it can now, `locatePassage` with `blocks`): the thumb bar's cell, `e` and the selection's button are offered for it.
   const target = given;
@@ -932,14 +947,14 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // in the card collapses it). P8-02: the dock, from 1024 px, is not closed by a new selection — it
   // stays, and the reader takes the new passage into it with "Explain this" or `e`. Derived, so the
   // stale card never paints.
-  const stale = session !== null && target !== null && target.passage !== session.selection.passage && viewport.width < DOCK_MIN_VIEWPORT_PX;
+  const stale = session !== null && target !== null && !sameExplainTarget(target, session.selection) && stack.rect === null && viewport.width < DOCK_MIN_VIEWPORT_PX;
   const open = stale ? null : session;
   if (stale) setSession(null);
 
   // The selection the open window explains (null with none open), and the one the selection buttons and `e`
   // would take into it: the reader's current selection, when it is not the passage already there.
   const placed = open?.selection ?? null;
-  const offered = target !== null && target.passage !== placed?.passage ? target : null;
+  const offered = target !== null && (placed === null || !sameExplainTarget(target, placed)) ? target : null;
   // P9-03b: the selection the window stands level with: the settled one, else the last one it followed (derived while
   // rendering, like `stale`, so the move is in the same paint as the selection).
   if (target !== null && target !== followed) setFollowed(target);
@@ -1001,7 +1016,8 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   // From 1024 px the box stands in the margin (P11-14: one card of the margin's stack). Nothing is reserved for it and nothing moves
   // when it opens or closes: the margin is a track of the reader's shell, so the paper's words stay where they are and there is no
   // reflow to hold the selection against (P7-15's measure-before / measure-after and its scroll are retired with the reserve).
-  const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
+  const docked = open !== null && (stack.rect !== null || viewport.width >= DOCK_MIN_VIEWPORT_PX);
+  const marginStack = useMarginStack(EXPLAIN_WINDOW_ID, cardRef, stack.rect, docked, { windows: stack.windows, rect: stack.rect, bottom: columnBottomPx(viewport.height, legendOf(viewport)) });
   // P9-17 (ruling §1h.57): the window's whole height must be in view, so its height is read after each commit while the dock
   // stands: `scrollHeight` (the content, whatever `max-height` clips) and the border. It does not depend on where the window is,
   // so the move it causes settles at once. After every commit on purpose: whatever changes what the card holds — a reply, a draft,
@@ -1018,6 +1034,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!docked || !card) return;
+    if (marginStack.split) return;
     const height = card.scrollHeight + (card.offsetHeight - card.clientHeight);
     if (!Number.isFinite(height)) return;
     const write = settleHeight(heightGuard.current, cardHeight, height, readerKey);
@@ -1090,18 +1107,20 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   const term = placed ? definingTerm(terms, placed.passage) : null;
   const offeredTerm = offered ? definingTerm(terms, offered.passage) : null;
   const next = offered !== null && (offeredTerm !== null || canAsk) ? offered : null;
-  const asked = (selection: ExplainSelection): SelectionTarget => ({
-    sectionIndex: selection.sectionIndex,
-    paragraphIndex: selection.paragraphIndex,
-    passage: selection.passage,
-    ...(selection.source !== undefined ? { source: selection.source } : {}),
-    ...(selection.paragraphId !== undefined ? { paragraphId: selection.paragraphId } : {}),
-  });
+  const asked = explainTarget;
 
   // What the button's click does — and what `e` does through `openRef`: explain `selection` (the
   // current one). With a window already open the session is replaced in place — never null on the way.
   const start = (selection: ExplainSelection) => {
-    if (!canAsk) {
+    if (selection.selectionStillHolds && !selection.selectionStillHolds()) {
+      onUnavailable?.("This Explain selection changed. Select the text again.");
+      return;
+    }
+    if (selection.explainUnavailableReason && !definingTerm(terms, selection.passage)) {
+      onUnavailable?.(selection.explainUnavailableReason);
+      return;
+    }
+    if (!canAsk || selection.explainUnavailableReason) {
       setSession({ selection, status: { kind: "none" }, ...noThread });
       return;
     }
@@ -1119,7 +1138,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       .catch((): AskResult => "unavailable")
       .then((result) =>
         setSession((current) =>
-          current !== null && current.selection.passage === selection.passage
+          current !== null && sameExplainTarget(current.selection, selection)
             ? { ...current, status: typeof result === "string" ? { kind: result } : { kind: "answer", answer: result } }
             : current,
         ),
@@ -1142,7 +1161,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       .catch((): ReplyResult => "unavailable")
       .then((result) =>
         setSession((current) => {
-          if (current === null || current.selection.passage !== selection.passage) return current;
+          if (current === null || !sameExplainTarget(current.selection, selection)) return current;
           if (typeof result === "string") return { ...current, reply: "failed" };
           return { ...current, reply: "idle", draft: "", turns: [...current.turns, ...replyPair(message, result)] };
         }),
@@ -1166,7 +1185,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       .catch((): ReplyResult => "unavailable")
       .then((result) =>
         setSession((current) => {
-          if (current === null || current.selection.passage !== selection.passage) return current;
+          if (current === null || !sameExplainTarget(current.selection, selection)) return current;
           if (typeof result === "string") return { ...current, reply: "failed" };
           return { ...current, reply: "idle", turns: [...current.turns, ...moreReply(result)] };
         }),
@@ -1196,7 +1215,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   const replyState = open?.reply;
   const answered = open?.status.kind === "answer";
   const turnCount = open?.turns.length ?? 0;
-  const sheet = open !== null && viewport.width < PHONE_WIDTH;
+  const sheet = open !== null && !docked && viewport.width < PHONE_WIDTH;
 
   // The page's `e` key opens the box through this, as the button does.
   useEffect(() => {
@@ -1306,7 +1325,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
   if (!open || levelWith === null) return null;
   // P9-17: the whole window stays in view (ruling §1h.57) — its measured height, and at least what a window that holds a passage
   // needs to show its header, its controls and two lines of the answer (ruling §1h.56).
-  const basePlace = placePanel(levelWith.bounds, viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
+  const basePlace = placePanel(levelWith.bounds, docked ? { ...viewport, width: Math.max(viewport.width, DOCK_MIN_VIEWPORT_PX) } : viewport, paragraphTop, Math.max(cardHeight ?? 0, DOCK_THREAD_FLOOR_PX));
   // From 1024 px the card is a row of the margin's stack: its top, its height (the whole room while it is in front — it is as tall as its
   // content up to that and scrolls inside — or a header's while another card is in front) and its z come from the one stack layout the
   // stickies and the notes window use, in the margin's own left and width (a page without the shell: the right edge, 360 px).
@@ -1323,7 +1342,7 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
         top: row.top,
         maxHeight: row.height,
         zIndex: row.z,
-        ...(behind ? { height: WINDOW_HEADER_PX } : {}),
+        ...(stack.windows.length > 1 ? { height: row.height } : behind ? { height: WINDOW_HEADER_PX } : {}),
       };
     }
   }
@@ -1340,7 +1359,13 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
           ...(onSayMore ? { onSayMore: sayMore } : {}),
         }
       : undefined;
-  return (
+  const splitRowIndex = marginStack.rows.findIndex((r) => r.id === EXPLAIN_WINDOW_ID);
+  const splitRow = marginStack.rows[splitRowIndex];
+  const splitNext = marginStack.rows[splitRowIndex + 1];
+  const splitMine = marginStack.windows[splitRowIndex];
+  const splitOther = marginStack.windows[splitRowIndex + 1];
+  const compact = place.kind === "dock" && marginStack.split;
+  return marginStack.portal(<>
     <ExplainCard
       passage={open.selection.passage}
       heading={heading}
@@ -1355,9 +1380,11 @@ export function ExplainBox({ target: given, terms, canAsk, onAsk, cached, readin
       source={open.selection.source}
       cardRef={behind ? undefined : cardRef}
       inputRef={inputRef}
-      style={styleOf(place)}
+      style={compact && splitRow ? { ...styleOf(place), position: "absolute", left: 0, top: splitRow.top - marginStack.bandTop, width: "100%", height: splitRow.height, maxHeight: splitRow.height } : styleOf(place)}
+      compact={compact}
       behind={behind}
       onRaise={raiseSelf}
     />
-  );
+    {compact && splitRow && splitNext && splitMine && splitOther && <CardDivider above={EXPLAIN_WINDOW_ID} below={splitNext.id} top={splitRow.top + splitRow.height - marginStack.bandTop} value={splitRow.height} pairHeight={splitRow.height + splitNext.height} min={splitMine.minimum ?? CARD_CONTENT_MIN_PX} max={splitRow.height + splitNext.height - (splitOther.minimum ?? CARD_CONTENT_MIN_PX)} />}
+  </>);
 }

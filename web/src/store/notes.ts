@@ -12,13 +12,14 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
+import type { Block, Citable, HighlightColourId, Note, PassageSegment } from "@/lib/notes/types";
 import { anchorBlocks, anchorTextOnShow, blockAt, isPageBlockId, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import {
   citedKeys,
   highlightBlock,
   type NoteAnchorMap,
   readHighlight,
+  highlightSegments,
   stickyBlocks,
   stickyParagraphs,
   stickyQuote,
@@ -32,6 +33,8 @@ import { MATH_CLOSE, MATH_OPEN } from "@/lib/text/math";
 
 /** U+2060: the word joiner a note's tag opens with (`NoteTag`), which allows no line break before the tag. */
 const TAG_JOINER = "\u2060";
+/** Session-only deletion intent, so an old editor snapshot cannot revive a group. */
+const removedHighlightGroups = new Set<string>();
 
 /**
  * P10-24 (X-B2′, BACKLOG-87): a passage without a note tag's text. A browser's selection reads the tag's `<sup>` as text —
@@ -105,6 +108,7 @@ export function anchorHolds(text: string, spot: { start: number; end: number; qu
 
 /** One anchor's repair: where it stood (`was`, to know it is still the stored one) and where its words stand now. */
 export interface AnchorFix {
+  segmentIndex?: number;
   /** The sticky's heading id — or, P11-07, a highlight's block id. */
   id: string;
   was: { paragraphId: string; start: number; end: number };
@@ -159,10 +163,10 @@ export function resolveAnchors(
       }
       const there = paragraphAnchorId(found.section, found.paragraph);
       put(there, { ...spot, start: found.start, end: found.end });
-      fixes.push({ id: spot.id, was: { paragraphId, start, end }, paragraphId: there, start: found.start, end: found.end });
+      fixes.push({ id: spot.id, ...(spot.segmentIndex !== undefined ? { segmentIndex: spot.segmentIndex } : {}), was: { paragraphId, start, end }, paragraphId: there, start: found.start, end: found.end });
     }
   }
-  return { map, fixes, lost };
+  return { map, fixes, lost: [...new Set(lost)] };
 }
 
 /**
@@ -277,6 +281,7 @@ function mergeParagraphs(base: string, mine: string, theirs: string): string {
 export function withoutSticky(blocks: readonly Block[], headerId: string): readonly Block[] {
   const span = stickySpan(blocks, headerId);
   if (!span) return blocks;
+  if (blocks[span.start].stickySaved) return blocks;
   if (blocks.slice(span.start + 1, span.end).some((b) => b.text.trim() !== "")) return blocks;
   return [...blocks.slice(0, span.start), ...blocks.slice(span.end)];
 }
@@ -287,12 +292,83 @@ export function withoutSticky(blocks: readonly Block[], headerId: string): reado
  * is taken out of it again (never one that has words by then). Not kept across a reload: a reload shows the note as stored.
  */
 const removedEmpty = new Set<string>();
+const removedStickies = new Set<string>();
+
+function withoutDeletedStickies(blocks: readonly Block[]): Block[] {
+  let kept = blocks.slice();
+  for (const id of removedStickies) {
+    const span = stickySpan(kept, id);
+    if (span) kept.splice(span.start, span.end - span.start);
+    kept = kept.filter((b) => b.stickyId !== id);
+  }
+  return kept;
+}
+
+/** Three-way reconciliation is by stable block id; list structure never becomes plain paragraphs. */
+function mergeStickyContent(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Block[] {
+  const before = new Map(base.map((b) => [b.id, b]));
+  const own = new Map(mine.map((b) => [b.id, b]));
+  const same = (a: Block, b: Block) => JSON.stringify(a) === JSON.stringify(b);
+  const out: Block[] = [];
+  for (const t of theirs) {
+    const b = before.get(t.id);
+    const m = own.get(t.id);
+    if (!m) { if (!b || !same(b, t)) out.push(t); continue; }
+    if (!b || same(b, m)) out.push(t);
+    else if (same(b, t)) out.push(m);
+    else {
+      const metadata = (x: Block) => JSON.stringify({ ...x, text: "", stickyId: undefined });
+      const kept = metadata(m) === metadata(b) ? t : metadata(t) === metadata(b) ? m : t;
+      out.push({ ...kept, text: mergeText(b.text, m.text, t.text) });
+    }
+  }
+  for (let i = 0; i < mine.length; i++) {
+    const m = mine[i];
+    if (before.has(m.id) || out.some((b) => b.id === m.id)) continue;
+    const at = i > 0 ? out.findIndex((b) => b.id === mine[i - 1].id) : -1;
+    out.splice(at + 1, 0, m);
+  }
+  return out;
+}
+
+/**
+ * P12-65 (M1a): the blocks an editor holds for the whole note (`mine`), grown from `base` — the blocks it started from or last
+ * wrote — over a store that has moved on since (`theirs`: a sticky wrote its words, a highlight was made). By block id, as the
+ * sticky's own write does (`mergeStickyContent`): a block only the store changed keeps the store's version, a block only the
+ * editor changed keeps the editor's, a block both changed has the words of both. A save never puts a stale copy over a newer one.
+ * When the store is still what the editor started from nobody wrote meanwhile: the editor's blocks, exactly as they are. Else the
+ * editor's own order stands for the blocks it holds (a block it moved stays where it put it) and a block only the store holds
+ * (another writer's) sits after its neighbour. A block the editor deleted and the store left alone is gone; one the store changed
+ * stays. Pure.
+ */
+export function mergeWholeNote(base: readonly Block[], mine: readonly Block[], theirs: readonly Block[]): Block[] {
+  if (JSON.stringify(base) === JSON.stringify(theirs)) return mine.slice();
+  const merged = mergeStickyContent(base, mine, theirs);
+  const held = new Set(mine.map((b) => b.id));
+  const byId = new Map(merged.map((b) => [b.id, b]));
+  const out = mine.filter((b) => byId.has(b.id)).map((b) => byId.get(b.id)!);
+  merged.forEach((b, i) => {
+    if (held.has(b.id)) return;
+    const prev = i > 0 ? merged[i - 1].id : null;
+    const at = prev === null ? -1 : out.findIndex((x) => x.id === prev);
+    out.splice(at + 1, 0, b);
+  });
+  return out;
+}
 
 interface NotesState {
+  /** Explicit editor undo; keeps the same group identity and ranges. */
+  restoreHighlightGroup: (noteId: string, block: Block) => void;
+  /** One block/identity, all actual ranges validated before the atomic write. */
+  addHighlightGroup: (noteId: string, at: { paperId: string; segments: readonly (PassageSegment & { paragraphText: string })[]; colour?: HighlightColourId }) => { id: string; created: boolean } | null;
   notes: Record<string, Note>;
   add: (note: Note) => void;
-  /** Write the editor's state back. Stamps `updatedAt`. */
-  save: (id: string, patch: Partial<Pick<Note, "title" | "blocks" | "sources">>, at?: string) => void;
+  /** Write the editor's state back. Stamps `updatedAt`.
+   *  P12-65 (M1a): `base` is the blocks the saver started from or last wrote; given with `blocks`, the blocks are merged by id
+   *  into what the store holds now (`mergeWholeNote`) rather than replacing it, so a copy that went stale while another writer
+   *  wrote is never put over the newer one. Without `base` the blocks replace the store's, as before: the callers that have none
+   *  are the rail's title save (no blocks) and the fixtures of the tests. The editor's saves and the notes window's seed carry one. */
+  save: (id: string, patch: Partial<Pick<Note, "title" | "blocks" | "sources">>, at?: string, base?: readonly Block[]) => void;
   remove: (id: string) => void;
   /** P10-09a: the paper's own note — made from its template the first time, without navigating — and its id.
    *  Both "Take notes" paths (a sticky, the notes window) call it. */
@@ -305,6 +381,7 @@ interface NotesState {
       paperId: string;
       paragraphId: string;
       passage: string;
+      segments?: PassageSegment[];
       /** P10-09f: the paragraph's text as the body renders it; the anchor then records where the passage stands in it. */
       paragraphText?: string;
     },
@@ -314,6 +391,9 @@ interface NotesState {
    *  into the same blocks meanwhile — the two are merged block by block (`mergeText`) rather than the writer's text
    *  replacing the other's words. */
   setStickyText: (noteId: string, headerId: string, text: string, base?: string) => void;
+  setStickyBlocks: (noteId: string, headerId: string, blocks: readonly Block[], base?: readonly Block[]) => void;
+  saveSticky: (noteId: string, headerId: string) => void;
+  removeSticky: (noteId: string, headerId: string) => void;
   /** P10-09c / P10-29: take a sticky out of the note when it holds no words — its heading and anchor with it, so the paper has
    *  no tag for a note that says nothing. A sticky with words stays. The number is not freed (`stickyCount` stands). */
   removeEmptySticky: (noteId: string, headerId: string) => void;
@@ -352,14 +432,27 @@ interface NotesState {
  */
 export function repairAnchors(fixes: readonly AnchorFix[]): void {
   if (fixes.length === 0) return;
-  const byId = new Map(fixes.map((fix) => [fix.id, fix]));
+  const byId = new Map(fixes.map((fix) => [`${fix.id}:${fix.segmentIndex ?? "primary"}`, fix]));
   useNotesStore.setState((s) => {
     let changed = false;
     const notes: Record<string, Note> = {};
     for (const [key, note] of Object.entries(s.notes)) {
       let touched = false;
       const blocks = note.blocks.map((b) => {
-        const fix = (b.type === "h3" && b.anchor) || (b.type === "highlight" && b.highlight) ? byId.get(b.id) : undefined;
+        if (b.type === "highlight" && b.highlight?.segments) {
+          let repaired = false;
+          const segments = b.highlight.segments.map((segment, index) => {
+            const fix = byId.get(`${b.id}:${index}`);
+            if (!fix || segment.paragraphId !== fix.was.paragraphId || segment.start !== fix.was.start || segment.end !== fix.was.end) return segment;
+            if (segment.paragraphId === fix.paragraphId && segment.start === fix.start && segment.end === fix.end) return segment;
+            repaired = true;
+            return { ...segment, paragraphId: fix.paragraphId, start: fix.start, end: fix.end };
+          });
+          if (!repaired) return b;
+          touched = true;
+          return { ...b, highlight: { ...b.highlight, ...segments[0], segments } };
+        }
+        const fix = (b.type === "h3" && b.anchor) || (b.type === "highlight" && b.highlight) ? byId.get(`${b.id}:primary`) : undefined;
         if (!fix) return b;
         // P11-07: a highlight is repaired in its own field, by the same rule.
         if (b.type === "highlight" && b.highlight) {
@@ -422,16 +515,71 @@ export const useNotesStore = create<NotesState>()(
   persist(
     (set, get) => ({
       notes: {},
+      restoreHighlightGroup: (noteId, block) => {
+        const spot = readHighlight(block);
+        if (!spot?.segments || !get().notes[noteId]) return;
+        removedHighlightGroups.delete(block.id);
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note || note.blocks.some((b) => b.id === block.id)) return s;
+          return { notes: { ...s.notes, [noteId]: { ...note, blocks: [...note.blocks, block], updatedAt: new Date().toISOString() } } };
+        });
+      },
+      addHighlightGroup: (noteId, at) => {
+        const note = get().notes[noteId];
+        if (!note || at.segments.length === 0) return null;
+        const segments: PassageSegment[] = [];
+        for (const segment of at.segments) {
+          const { paragraphText, ...range } = segment;
+          const source = range.source ?? (parseAnchorId(range.paragraphId) ? "paper" : range.paragraphId === "answers-block" ? "answer" : "summary");
+          if (!["paper", "summary", "answer"].includes(source) || (range.kind !== undefined && !["paragraph", "heading", "caption"].includes(range.kind))) return null;
+          if (source === "paper" ? !parseAnchorId(range.paragraphId) : !isPageBlockId(range.paragraphId)) return null;
+          // Exact offsets are evidence, not a hint: never choose another repeated occurrence.
+          if (typeof paragraphText !== "string" || !range.paragraphId || !range.quote.trim() || !anchorHolds(paragraphText, range)
+            || paragraphText.slice(range.start, range.end).replace(/\s+/g, " ").trim() !== range.quote) return null;
+          segments.push(range);
+        }
+        const sameRanges = (b: Block) => {
+          const spot = readHighlight(b);
+          if (!spot || spot.paperId !== at.paperId) return false;
+          const old = highlightSegments(spot);
+          return old.length === segments.length && old.every((s, i) => s.paragraphId === segments[i].paragraphId && s.start === segments[i].start && s.end === segments[i].end && s.quote === segments[i].quote);
+        };
+        const twin = note.blocks.find(sameRanges);
+        if (twin) return { id: twin.id, created: false };
+        const made = highlightBlock({ paperId: at.paperId, ...segments[0], colour: isHighlightColour(at.colour) ? at.colour : DEFAULT_HIGHLIGHT_COLOUR, segments });
+        set((s) => {
+          const current = s.notes[noteId];
+          return current ? { notes: { ...s.notes, [noteId]: { ...current, blocks: [...current.blocks, made], updatedAt: new Date().toISOString() } } } : s;
+        });
+        return { id: made.id, created: true };
+      },
       add: (note) => set((s) => ({ notes: { ...s.notes, [note.id]: note } })),
-      save: (id, patch, at = new Date().toISOString()) =>
+      save: (id, patch, at = new Date().toISOString(), base) =>
         set((s) => {
           const note = s.notes[id];
           if (!note) return s;
+          if (patch.blocks && base) patch = { ...patch, blocks: mergeWholeNote(base, patch.blocks, note.blocks) };
+          if (patch.blocks) {
+            // Group metadata changes only through its explicit actions. An editor
+            // snapshot may predate a new group or its latest colour/repair.
+            const current = new Map(note.blocks.filter((b) => b.type === "highlight" && b.highlight?.segments).map((b) => [b.id, b]));
+            const blocks = patch.blocks.filter((b) => !removedHighlightGroups.has(b.id)).map((b) => {
+              const group = current.get(b.id);
+              current.delete(b.id);
+              return group ?? b;
+            });
+            blocks.push(...current.values());
+            patch = { ...patch, blocks };
+          }
           if (patch.blocks && removedEmpty.size > 0) {
             let blocks: readonly Block[] = patch.blocks;
             for (const headerId of removedEmpty) blocks = withoutSticky(blocks, headerId);
             if (blocks !== patch.blocks) patch = { ...patch, blocks: [...blocks] };
           }
+          if (patch.blocks && removedStickies.size > 0) patch = { ...patch, blocks: withoutDeletedStickies(patch.blocks) };
+          if (patch.blocks) patch = { ...patch, blocks: patch.blocks.map((b) =>
+            note.blocks.some((old) => old.id === b.id && old.stickySaved) && !b.stickySaved ? { ...b, stickySaved: true } : b) };
           return { notes: { ...s.notes, [id]: { ...note, ...patch, updatedAt: at } } };
         }),
       remove: (id) =>
@@ -458,7 +606,9 @@ export const useNotesStore = create<NotesState>()(
         // P11-27: the words of a heading or a caption are not in the paragraph lookup the callers make; the body on show has them.
         const text = at.paragraphText ?? anchorTextOnShow(at.paragraphId);
         const place = text === undefined ? null : locatePassage(text, passage);
-        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: at.paragraphId, quote: stickyQuote(passage), n, ...(place ?? {}) });
+        const primary = at.segments?.[0];
+        const { header, blocks } = stickyBlocks({ paperId: at.paperId, paragraphId: primary?.paragraphId ?? at.paragraphId, quote: stickyQuote(primary?.quote ?? passage), n,
+          ...(primary ? { start: primary.start, end: primary.end, segments: at.segments } : place ?? {}) });
         set((s) => {
           const current = s.notes[noteId];
           if (!current) return s;
@@ -482,6 +632,32 @@ export const useNotesStore = create<NotesState>()(
           if (blocks.length === note.blocks.length && blocks.every((b, i) => b === note.blocks[i])) return s;
           return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
         }),
+      setStickyBlocks: (noteId, headerId, content, base) => set((s) => {
+        const note = s.notes[noteId];
+        if (!note || removedStickies.has(headerId)) return s;
+        const span = stickySpan(note.blocks, headerId);
+        if (!span) return s;
+        const theirs = note.blocks.slice(span.start + 1, span.end);
+        const next = base ? mergeStickyContent(base, content, theirs) : content.slice();
+        const owned = next.map((b) => ({ ...b, anchor: undefined, highlight: undefined, stickyId: headerId }));
+        const blocks = [...note.blocks.slice(0, span.start + 1), ...owned, ...note.blocks.slice(span.end)];
+        if (JSON.stringify(blocks) === JSON.stringify(note.blocks)) return s;
+        return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
+      }),
+      saveSticky: (noteId, headerId) => set((s) => {
+        const note = s.notes[noteId];
+        if (!note || removedStickies.has(headerId)) return s;
+        return { notes: { ...s.notes, [noteId]: { ...note, blocks: note.blocks.map((b) => b.id === headerId ? { ...b, stickySaved: true } : b), updatedAt: new Date().toISOString() } } };
+      }),
+      removeSticky: (noteId, headerId) => set((s) => {
+        const note = s.notes[noteId];
+        if (!note) return s;
+        const span = stickySpan(note.blocks, headerId);
+        if (!span) return s;
+        removedStickies.add(headerId);
+        const blocks = [...note.blocks.slice(0, span.start), ...note.blocks.slice(span.end)];
+        return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };
+      }),
       removeEmptySticky: (noteId, headerId) =>
         set((s) => {
           const note = s.notes[noteId];
@@ -538,6 +714,7 @@ export const useNotesStore = create<NotesState>()(
         set((s) => {
           const note = s.notes[noteId];
           if (!note) return s;
+          if (note.blocks.some((b) => b.id === blockId && b.type === "highlight" && b.highlight?.segments)) removedHighlightGroups.add(blockId);
           const blocks = note.blocks.filter((b) => !(b.id === blockId && b.type === "highlight"));
           if (blocks.length === note.blocks.length) return s;
           return { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } };

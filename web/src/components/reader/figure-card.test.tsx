@@ -360,6 +360,19 @@ function settle() {
   for (let i = 0; i < 4; i += 1) stagedRuntime.event(() => {});
 }
 
+// P12-04 harness adaptation: the shared scroll track adds a stable portal/fragment
+// around the same view; all zoom, image, pan and focus assertions stay unchanged.
+function cardViewIn(node: ReactNode): ReactElement<FigureCardViewProps> {
+  if (Array.isArray(node)) {
+    for (const child of node) { const found = cardViewIn(child); if (found) return found; }
+  } else if (node && typeof node === "object" && "props" in node) {
+    const element = node as ReactElement<{ children?: ReactNode }>;
+    if (element.type === FigureCardView) return element as ReactElement<FigureCardViewProps>;
+    return cardViewIn(element.props.children);
+  }
+  return undefined as unknown as ReactElement<FigureCardViewProps>;
+}
+
 function mount(over: Partial<FigureCardProps> = {}): Run {
   const surface = new Surface();
   const box = { clientWidth: 344, clientHeight: 500 };
@@ -370,7 +383,7 @@ function mount(over: Partial<FigureCardProps> = {}): Run {
     () => FigureCard(state.props),
     (output) => {
       // React calls a ref when its element comes onto the page and with null when it leaves.
-      const element = output as ReactElement<FigureCardViewProps>;
+      const element = cardViewIn(output);
       const shown = state.props.front;
       if (shown && !run.boxOn) {
         run.boxOn = true;
@@ -396,7 +409,7 @@ function mount(over: Partial<FigureCardProps> = {}): Run {
       return state.props;
     },
     get view() {
-      return (mounted.value as ReactElement<FigureCardViewProps>).props;
+      return cardViewIn(mounted.value).props;
     },
     act: (handler) => {
       stagedRuntime.event(handler);

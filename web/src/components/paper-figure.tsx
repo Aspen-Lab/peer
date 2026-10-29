@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FigureStatus } from "@/lib/figures/extract";
 import { ApiError, apiFetch } from "@/lib/api";
 import { claimsUploadId } from "@/lib/papers/upload-id";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 
 type Variant = "hero" | "compact";
 
@@ -105,7 +106,7 @@ async function fetchFigure(
   // `v` is part of the URL the route's day-long edge cache keys on; bump it
   // when what the route returns for the same paper changes (12: a PDF figure
   // the page printed stretched is now un-stretched to its own proportions).
-  const version = "12";
+  const version = `12-${FIGURE_EXTRACTION_REVISION}`;
   // P0-10 (§1e.10, A's F7): an upload's figure request is a POST. Its
   // `query` is Peer's words about the private paper and its title is the
   // PDF's own; in a GET both sat in the URL, and the server's request log
@@ -248,6 +249,7 @@ function failureState(key: string, err: unknown): FigureState {
  */
 export function buildFigureRequestKey(args: ResolveFigureArgs): string {
   return [
+    FIGURE_EXTRACTION_REVISION,
     args.itemId,
     args.url ?? "",
     args.doi ?? "",

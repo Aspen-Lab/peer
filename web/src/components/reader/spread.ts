@@ -18,6 +18,8 @@
 
 /** The three-pane shell's width: 64rem, 1024 css px at the browser's 16px root — `SHELL_MIN_VIEWPORT_PX` (`pane-layout.ts`), and the explain
  *  dock's minimum (`DOCK_MIN_VIEWPORT_PX`); a test holds the three together. It was 80rem, the old two-column spread's xl. */
+// Compatibility reference for legacy callers/tests. Active reader placement is
+// scale-aware `useSpread`/`railMinimumWidth`, not this old media query.
 export const SPREAD_QUERY = "(min-width: 64rem)";
 
 /** The reader's horizontal inset. The vertical half moved to

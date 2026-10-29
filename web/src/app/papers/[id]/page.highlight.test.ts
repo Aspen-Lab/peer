@@ -31,7 +31,7 @@ const WRAPPED = ["newHere", "proposal", "method", "results", "forYou", "glance",
 // ── Rule 1 ─────────────────────────────────────────────────────────────────
 
 const USE_HIGHLIGHT =
-  "const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });";
+  "const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onUnavailable: (reason) => showToast(reason) });";
 const KEYS = "...(hasBody ? selectionActions(() => explainTarget, { note: takeNote, highlight }) : {}),";
 
 function rule1Problems(source: string): string[] {
@@ -50,7 +50,7 @@ function rule1Problems(source: string): string[] {
   const gate = between(bar, "canHighlight={", "}");
   if (/canExplain|canAsk|explainCanAsk|selectionCanExplain|profile|key/i.test(gate)) problems.push("Highlight is gated by the page's ability to explain: it needs no key");
   // Explain and take-notes stay as they were.
-  if (!bar.includes("canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })}")) problems.push("the toolbar's explain gate moved");
+  if (!bar.includes("canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.unavailableReason ? null : explainTarget?.passage ?? null })}")) problems.push("the toolbar's explain gate moved");
   if (!bar.includes("onTakeNote={takeNote}")) problems.push("the toolbar's take-note action moved");
   // `h` and the phone's Highlight cell call the registered action.
   if (!p.includes(KEYS)) problems.push("the h key (and the phone's Highlight cell) is not registered with the page's highlight action");

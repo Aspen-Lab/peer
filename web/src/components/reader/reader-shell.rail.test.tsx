@@ -181,20 +181,21 @@ describe("the first visit (D6, amended by ruling §1h.115 item 4): pinned at eve
 
   // Re-aimed: was "is the rail below 1144, with the margin and the centre keeping their widths". The owner's laptop at 125 % is 1093
   // css px, where the rail hid the title, the commands and the map on arrival.
-  it("is pinned below 1144 too, the margin and then the pane giving way: 320 · 309 at 1093, 280 · 280 at 1024; both dividers stand", () => {
+  // P12-07/197: comfort supersedes the old always-pinned1024 expectation.
+  it("keeps 476px of text: pinned289/280 at1093 and a temporary rail at1024", () => {
     env.win.innerWidth = 1093;
     const at1093 = open().look();
     expect(at1093.state).toBe("pinned");
     expect(at1093.pane.props.inert).toBe(false);
     expect(at1093.rail.props.hidden).toBe(true);
-    expect(at1093.vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "309px" });
+    expect(at1093.vars).toMatchObject({ "--left-pane-w": "289px", "--margin-w": "280px" });
     expect(at1093.dividers.map((d) => d.props.pane)).toEqual(["left", "margin"]);
 
     env.win.innerWidth = 1024;
     const at1024 = open().look();
-    expect(at1024.state).toBe("pinned");
-    expect(at1024.vars).toMatchObject({ "--left-pane-w": "280px", "--margin-w": "280px" });
-    expect(at1024.dividers.map((d) => d.props.pane)).toEqual(["left", "margin"]);
+    expect(at1024.state).toBe("rail");
+    expect(at1024.vars).toMatchObject({ "--left-pane-w": "320px", "--margin-w": "360px" });
+    expect(at1024.dividers.map((d) => d.props.pane)).toEqual(["margin"]);
     // Nothing is written: the first visit's pin is the shell's answer, not a choice the reader made.
     expect(useReaderPanesStore.getState()).toMatchObject({ leftPinned: undefined, leftWidth: undefined, marginWidth: undefined });
   });
@@ -210,11 +211,11 @@ describe("the first visit (D6, amended by ruling §1h.115 item 4): pinned at eve
     }
   });
 
-  it("a first visit that resizes from 1440 down to 1024 stays pinned all the way", () => {
+  it("a first visit keeps pin preference and temporarily reveals a rail at1024", () => {
     const page = open();
     for (const width of [1280, 1143, 1093, 1024]) {
       env.resizeTo(width);
-      expect(page.look().state).toBe("pinned");
+      expect(page.look().state).toBe(width >= 1044 ? "pinned" : "rail");
     }
   });
 
@@ -233,7 +234,7 @@ describe("a window too narrow for the remembered widths", () => {
     useReaderPanesStore.setState({ leftPinned: true, leftWidth: 400, marginWidth: 450 });
     env.win.innerWidth = 1024;
     const page = open();
-    expect(page.look().vars).toMatchObject({ "--left-pane-w": "280px", "--margin-w": "280px" });
+    expect(page.look().vars).toMatchObject({ "--left-pane-w": "400px", "--margin-w": "450px" });
     expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: 450 });
 
     env.resizeTo(1920);
@@ -241,17 +242,17 @@ describe("a window too narrow for the remembered widths", () => {
     expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: 450 });
   });
 
-  it("hands each divider the room the other pane leaves, so the centre keeps its 440 px", () => {
+  it("hands each divider the scaled centre budget as well as the other pane", () => {
     useReaderPanesStore.setState({ leftPinned: true });
     const [left, margin] = open().look().dividers;
-    expect(left.props.room).toEqual({ viewport: 1440, other: 360 });
-    expect(margin.props.room).toEqual({ viewport: 1440, other: 320 });
+    expect(left.props.room).toEqual({ viewport: 1440, other: 360, centreMinimum: 500 });
+    expect(margin.props.room).toEqual({ viewport: 1440, other: 320, centreMinimum: 500 });
   });
 
   it("the margin's room is the rail's 48 px when the left pane is the rail", () => {
     useReaderPanesStore.setState({ leftPinned: false });
     const [margin] = open().look().dividers;
-    expect(margin.props.room).toEqual({ viewport: 1440, other: 48 });
+    expect(margin.props.room).toEqual({ viewport: 1440, other: 48, centreMinimum: 500 });
   });
 });
 

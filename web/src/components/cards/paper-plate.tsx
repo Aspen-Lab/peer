@@ -8,7 +8,7 @@
 import { useState } from "react";
 import type { Paper } from "@/types";
 import { useResolvedFigure, type FigureState } from "@/components/paper-figure";
-import { FigureLightbox } from "@/components/reader/figure-lightbox";
+import { MarginFigure } from "@/components/reader/margin-figure";
 
 /**
  * Card venue label. OpenAlex returns the repository plus its host institution —
@@ -352,11 +352,11 @@ export function PaperPlate({
     >
       {showFigure ? (
         lightbox ? (
-          // S12, Ruling 15: the reading page's own hero, opted in. Same
+          // P12-09: the reading page's own hero joins the shared margin route. Same
           // image classes, same cached-image/load/error handling as the
-          // plain branch below, composed through FigureLightbox's
+          // plain branch below, composed through MarginFigure's
           // passthrough props rather than duplicated.
-          <FigureLightbox
+          <MarginFigure
             src={src as string}
             alt={imageAlt ?? caption ?? ""}
             caption={caption}

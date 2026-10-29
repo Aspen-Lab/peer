@@ -33,6 +33,7 @@
 
 import { MAP } from "@/components/reader/copy";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type ReadingMap, type ReadingMapSection, type ReadingRole, type RouteSection, type RouteTier } from "./reading-map";
+import { unheadedTrunk } from "./reading-roles";
 
 /** The five parts a model may name. `experimental` is materials, instruments, procedures,
  *  data processing and statistics, wherever in the section they stand. */
@@ -58,69 +59,16 @@ export interface GuidePart {
 export interface GuidePartition {
   sectionId: string;
   parts: GuidePart[];
+  /** P12-48: set only on the split `closingPartition` makes of a headed paper's last evidence row (rule set B): the
+   *  rules', not the model's. `partitionedMap` draws it as the row it divides — the row's own heading on the first
+   *  part, the role's own label on the closing — and checks it against the map rather than against the unheaded rule. */
+  closing?: true;
 }
 
-/** The section a model may partition: its id, its place among the sections it was found in, and its size. */
-export interface Trunk {
-  sectionId: string;
-  sectionIndex: number;
-  paragraphCount: number;
-}
-
-/**
- * The rule's three numbers (B P10-05 §1.3). `share`: the trunk holds at least this fraction of all
- * the words — set by reasoning (a Nature-style article's Methods can be near half of the words, so
- * 0.7 would miss the real thing); nothing headed in the fixtures goes above 10 %. `paragraphs`:
- * fewer cannot make two parts of more than a paragraph or two. `placedRows`: a paper with three
- * recognised headings is mapped by its own headings; the partition is for the text they do not cover.
- */
-export const TRUNK = { share: 0.5, paragraphs: 8, placedRows: 2 } as const;
-
-/** Buckets that are not "placed" for the rule: nothing recognised, or end matter. */
-const NOT_PLACED = new Set(["body", "abstract", "references", "acknowledgments", "supplementary"]);
-
-/** The map's own count (`wordCount` in `reading-map.ts`, §1f.3). */
-function wordsOf(paragraphs: readonly string[]): number {
-  let words = 0;
-  for (const paragraph of paragraphs) words += paragraph.split(/\s+/).length;
-  return words;
-}
-
-/**
- * The section a model may partition, or null. `sections` is `readableSections(doc)` (its `id`,
- * `section.canonical` and `paragraphs`) on the server and `reading.body` in the browser.
- *
- * The trunk is the `body` section with the most words (the earlier on a tie). The paper is
- * unheaded when the trunk holds at least half of all the words and at least eight paragraphs, and
- * at most two other sections have a placed bucket. A paper with headings of its own — even six
- * unplaced sub-headings among fifteen rows — has no such section, and is mapped by them.
- */
-export function unheadedTrunk(
-  sections: ReadonlyArray<{ id: string; canonical: string; paragraphs: readonly string[] }>,
-): Trunk | null {
-  let all = 0;
-  let placed = 0;
-  let best = -1;
-  let bestWords = -1;
-  sections.forEach((section, index) => {
-    const words = wordsOf(section.paragraphs);
-    all += words;
-    if (section.canonical === "body") {
-      if (words > bestWords) {
-        best = index;
-        bestWords = words;
-      }
-    } else if (!NOT_PLACED.has(section.canonical)) {
-      placed += 1;
-    }
-  });
-  if (best < 0) return null;
-  const trunk = sections[best];
-  if (trunk.paragraphs.length < TRUNK.paragraphs) return null;
-  if (bestWords < TRUNK.share * all) return null;
-  if (placed > TRUNK.placedRows) return null;
-  return { sectionId: trunk.id, sectionIndex: best, paragraphCount: trunk.paragraphs.length };
-}
+// P12-48: the rule and its three numbers moved to `reading-roles.ts` (the module `readingMapOf` calls, which asks
+// it whether a paper is one large unheaded section without importing this one, which imports the map). They are
+// the same rule with the same numbers; the partition reads and re-exports them.
+export { TRUNK, unheadedTrunk, type Trunk } from "./reading-roles";
 
 // ── The sanitizer ──────────────────────────────────────────────────────
 
@@ -232,6 +180,9 @@ export interface MapPart {
   role: PartitionRole;
   from: number;
   to: number;
+  /** P12-48: set on both rows of the closing split (rule set B), not on the model's parts. An inferred role is shown
+   *  exactly like a named one (§1h.424 (a)): a view draws these rows by their role, not under "Peer's reading". */
+  closing?: true;
 }
 
 /** A map row, and, for a group row, where it stands. */
@@ -280,6 +231,7 @@ export function partitionedMap(map: ReadingMap, body: BodyLike | undefined, part
   if (!partition || !body) return map;
   const at = map.sections.findIndex((row) => row.id === partition.sectionId);
   if (at < 0) return map;
+  if (partition.closing === true) return closedMap(map, body, partition, at);
   const trunk = unheadedTrunk(body);
   if (!trunk || trunk.sectionId !== partition.sectionId || trunk.sectionIndex !== at) return map;
   const row = map.sections[at];
@@ -301,6 +253,204 @@ export function partitionedMap(map: ReadingMap, body: BodyLike | undefined, part
     };
   });
   return { sections: [...map.sections.slice(0, at), ...groups, ...map.sections.slice(at + 1)], totalMinutes: map.totalMinutes };
+}
+
+// ── The closing split (P12-48; B P12-40 rule set B, ruling §1h.426) ──────────────────────────────
+
+/**
+ * The closing split's three numbers. A paper that prints no discussion or conclusion of its own ends its argument
+ * inside the last results part: the summary sits in the last paragraphs of the last evidence row. `lastParagraphs`:
+ * how far from the end of that row the closing is looked for. `abstractShare`: the fraction of the closing's long
+ * words (`longWord` letters or more) that the abstract must also use — the paragraph restates the abstract's claim.
+ */
+export const CLOSING = { lastParagraphs: 4, abstractShare: 0.2, longWord: 7 } as const;
+
+/** A paragraph that sums up: "we show / demonstrate / conclude", "in summary", "taken together", "our findings",
+ *  "overall", "in conclusion". The verbs in the forms a summary writes them ("we showed", "we have shown"). */
+const SUMMARY_CUE =
+  /\bwe (?:have )?(?:shown?|showed|demonstrate[ds]?|conclude[ds]?)\b|\bin summary\b|\btaken together\b|\bour findings\b|\boverall\b|\bin conclusion\b/i;
+
+/** A figure or a table cited by number: "Fig. 2", "Figures 2 and 3", "Table S1", "Extended Data Fig. 4". A summary
+ *  that points at a figure is a results paragraph, not the closing. */
+const FIGURE_REFERENCE = /\b(?:figs?|figures?|tables?)\b\.?\s*(?:S|ED)?\s?\d/i;
+
+/** C P12-76 (M3, c3_last): the shortest last paragraph, in words, that the outlook fallback may close a paper on. */
+const OUTLOOK_MIN_WORDS = 60;
+
+/**
+ * C P12-76 (M3, c3_last): the cues of an outlook paragraph, the one list of `closingPartition`'s fallback - a paragraph that
+ * looks ahead from the work: "holds (great) promise / potential", "paves the way", a horizon opened or widened, a scope to
+ * "broaden", "opens the door / new avenues", "we envisage". Each is a phrase and not the bare word, so the plain senses
+ * ("a soil horizon", "line broadening", "the peaks broaden with heat", "a holding potential") are not cues.
+ */
+const OUTLOOK_CUES: readonly RegExp[] = [
+  /\bholds?\s+(?:(?:great|considerable|significant|substantial|real|much|enormous|strong)\s+)?(?:promise|potential)\b/i,
+  /\bpav(?:es?|ed|ing)\s+the\s+way\b/i,
+  /\b(?:new|wider|broader|further|distant)\s+horizons?\b|\bon the horizon\b|\b(?:expand|extend|widen|open|push)(?:s|ed|ing)?\s+(?:up\s+)?(?:the|our|its|their)\s+horizons?\b/i,
+  /\bbroaden(?:s|ing)?\s+(?:the|its|our|their|this|these)\b|\b(?:to|could|can|will|may|might|would)\s+broaden\b(?!\s*[.,;:)])(?!\s+(?:with|at|as|upon|under|when|by|in|from|to|and|or|slightly|further|significantly|considerably|rapidly|again)\b)/i,
+  /\bopen(?:s|ing)?\s+(?:up\s+)?(?:the\s+(?:way|door)|new\s+(?:avenues|possibilities|opportunities|routes|directions))\b/i,
+  /\bwe envisage\b/i,
+];
+
+/** Whether a paragraph holds an outlook cue (`OUTLOOK_CUES`). */
+const looksAhead = (paragraph: string): boolean => OUTLOOK_CUES.some((cue) => cue.test(paragraph));
+
+/** The distinct words of at least `CLOSING.longWord` letters, lower-cased. */
+function longWordsOf(text: string): Set<string> {
+  return new Set(text.toLowerCase().match(new RegExp(`\\p{L}{${CLOSING.longWord},}`, "gu")) ?? []);
+}
+
+/** Whether a paragraph is the closing: a summary cue, no figure or table reference, and at least
+ *  `CLOSING.abstractShare` of its long words among the echo's (the abstract's). A paragraph with no long word is not. */
+function isClosing(paragraph: string, abstractWords: ReadonlySet<string>): boolean {
+  if (!SUMMARY_CUE.test(paragraph) || FIGURE_REFERENCE.test(paragraph)) return false;
+  const own = longWordsOf(paragraph);
+  if (own.size === 0) return false;
+  let shared = 0;
+  for (const word of own) if (abstractWords.has(word)) shared += 1;
+  return shared / own.size >= CLOSING.abstractShare;
+}
+
+/** C P12-85: the shortest paragraph, in words, that the echo's fallback takes as the setup part's announcement; a shorter one is a fragment. */
+const ECHO_MIN_WORDS = 40;
+
+/**
+ * The words the closing must echo. The paper's abstract when the reading has one (a long word in it); else the last
+ * paragraph of the paper's setup part before `before` that has at least `ECHO_MIN_WORDS` words - the paper's own
+ * announcement of what it shows (P12-63, rule 2; ruling §1h.436 (c)): a Nature-style article prints no abstract in its
+ * text, and its introduction ends on "here we show ...". The part's last paragraph is skipped where it is shorter: a
+ * figure's caption read whole leaves the part ending in fragments of the figure's text (axis labels, a legend), which
+ * announce nothing (C P12-85, §1h.464). A part with no paragraph that long gives its longest one (the later of two equals).
+ * The setup part is the last introduction row before `before` that holds a paragraph, or, where the paper names no
+ * introduction, the last row of role setup there. Neither gives a word: no echo, and no split.
+ */
+function echoOf(abstract: string | null | undefined, map: ReadingMap, body: BodyLike, before: number): Set<string> {
+  const stated = longWordsOf(abstract ?? "");
+  if (stated.size > 0) return stated;
+  let introduction = -1;
+  let setup = -1;
+  for (let k = 0; k < before; k++) {
+    const row = map.sections[k];
+    if (row.role !== "setup" || body[k].paragraphs.length === 0) continue;
+    setup = k;
+    if (row.canonical === "introduction") introduction = k;
+  }
+  const from = introduction >= 0 ? introduction : setup;
+  if (from < 0) return stated;
+  const paragraphs = body[from].paragraphs;
+  const counts = paragraphs.map((paragraph) => paragraph.trim().split(/\s+/).length);
+  let echo = paragraphs.length - 1;
+  for (let k = paragraphs.length - 1; k >= 0; k--) {
+    if (counts[k] >= ECHO_MIN_WORDS) {
+      echo = k;
+      break;
+    }
+    if (counts[k] > counts[echo]) echo = k;
+  }
+  return longWordsOf(paragraphs[echo]);
+}
+
+/**
+ * Rule set B's closing split: the partition of the last evidence row of a paper that names no discussion or
+ * conclusion, at the first of its last `CLOSING.lastParagraphs` paragraphs that has (a) a summary cue, (b) no figure
+ * or table reference and (c) at least `CLOSING.abstractShare` of its long words among the echo's long words — or
+ * null. The echo is the abstract, and, where the paper prints none, the last paragraph of its setup part (`echoOf`).
+ * Failing that (C P12-76, M3): the row's last paragraph is the closing when it has at least `OUTLOOK_MIN_WORDS` words and holds
+ * an outlook cue (`OUTLOOK_CUES`), whatever it cites and however little it echoes - the unheaded closing of a paper whose last
+ * results paragraph looks ahead. The row is divided in two, the paragraphs before the closing and the closing to the row's end; the first
+ * keeps the paper's own heading and role, the second is a row of the role interpretation under the role's own label
+ * (`partitionedMap` draws both). The body is not touched.
+ *
+ * `map` and `body` are the reading's (`PaperReading.map` and `.body`, row k ↔ body section k) and `abstract` the
+ * paper's abstract as one text; with no abstract (nothing with a long word in it) and no setup part to take the echo
+ * from there is no split. Null as well when the map names a discussion or a conclusion, when it already carries a
+ * partition, when there is no evidence row, when that row is the unheaded paper's trunk (the model's), has rows
+ * under it, or would leave nothing above the closing (the closing is never the whole row).
+ */
+export function closingPartition(
+  map: ReadingMap,
+  body: BodyLike | undefined,
+  abstract: string | null | undefined,
+): GuidePartition | null {
+  if (!body || body.length !== map.sections.length) return null;
+  if (map.sections.some((row) => row.canonical === "discussion" || row.canonical === "conclusion" || partOf(row) !== undefined)) return null;
+
+  let at = -1;
+  map.sections.forEach((row, k) => {
+    if (row.role === "evidence") at = k;
+  });
+  if (at < 0) return null;
+  const row = map.sections[at];
+  const text = body[at].paragraphs;
+  if (body[at].id !== row.id || row.paragraphs.length !== text.length) return null;
+  if (map.sections.some((other) => other.parentId === row.id)) return null;
+  if (unheadedTrunk(body)?.sectionId === row.id) return null;
+  const echo = echoOf(abstract, map, body, at);
+  if (echo.size === 0) return null;
+
+  for (let k = Math.max(1, text.length - CLOSING.lastParagraphs); k < text.length; k++) {
+    if (isClosing(text[k], echo)) {
+      return {
+        sectionId: row.id,
+        closing: true,
+        parts: [
+          { role: "results", fromParagraph: 0, toParagraph: k - 1 },
+          { role: "conclusion", fromParagraph: k, toParagraph: text.length - 1 },
+        ],
+      };
+    }
+  }
+  // C P12-76 (M3, c3_last; ruled a judgement call, §1h.437 (a)): no paragraph of the window passed the three tests. A paper that
+  // names no discussion or conclusion may still end its results on a paragraph that looks ahead (a Nature-style article's last
+  // main-text paragraph), which cites a figure and restates little of the announcement. Its last paragraph is the closing when it
+  // has at least `OUTLOOK_MIN_WORDS` words and holds an outlook cue, whatever it cites and however little it echoes. Tier 0 only:
+  // the structure review (Tier 1) is the better owner of this call and can replace it.
+  const last = text.length - 1;
+  if (last >= 1 && text[last].trim().split(/\s+/).length >= OUTLOOK_MIN_WORDS && looksAhead(text[last])) {
+    return {
+      sectionId: row.id,
+      closing: true,
+      parts: [
+        { role: "results", fromParagraph: 0, toParagraph: last - 1 },
+        { role: "conclusion", fromParagraph: last, toParagraph: last },
+      ],
+    };
+  }
+  return null;
+}
+
+/**
+ * The map with the row a closing partition divides replaced, in the same place, by two rows (the model partition's
+ * machinery, `partitionedMap`'s): `<id>~0`, the row as the paper has it over the paragraphs before the closing (its
+ * heading, bucket, role, page, level and parent), and `<id>~1`, the closing — the role's own label for a heading,
+ * role interpretation, level 1, no page. Both carry the `part` record (anchors, gists and route marks read it) with
+ * `closing` set. Words and minutes are counted again from the paragraphs; the totals are unchanged and the body is
+ * not touched. The map is returned as it was when the partition does not apply to it (the checks `closingPartition`
+ * makes, run again on the map and body it is given).
+ */
+function closedMap(map: ReadingMap, body: BodyLike, partition: GuidePartition, at: number): ReadingMap {
+  const row = map.sections[at];
+  const text = body[at]?.paragraphs;
+  if (!text || body.length !== map.sections.length || body[at].id !== row.id || row.paragraphs.length !== text.length) return map;
+  if (partition.parts.length !== 2 || !covers(partition, text.length)) return map;
+  const [first, last] = partition.parts;
+  if (first.role !== "results" || last.role !== "conclusion" || row.role !== "evidence") return map;
+  if (map.sections.some((other) => other.canonical === "discussion" || other.canonical === "conclusion" || other.parentId === row.id || partOf(other) !== undefined)) return map;
+  if (unheadedTrunk(body)?.sectionId === row.id) return map;
+
+  const rows = partition.parts.map((part, n): PartitionedSection => {
+    const words = text.slice(part.fromParagraph, part.toParagraph + 1).reduce((sum, paragraph) => sum + paragraph.split(/\s+/).length, 0);
+    const shared = {
+      words,
+      minutes: words > 0 ? Math.max(1, Math.ceil(words / WORDS_PER_MINUTE)) : 0,
+      paragraphs: row.paragraphs.filter((line) => line.index >= part.fromParagraph && line.index <= part.toParagraph),
+      part: { sectionId: row.id, sectionIndex: at, role: part.role, from: part.fromParagraph, to: part.toParagraph, closing: true as const },
+    };
+    return n === 0
+      ? { ...row, id: `${row.id}~0`, ...shared }
+      : { id: `${row.id}~1`, heading: MAP.parts.labels.conclusion, canonical: "conclusion", role: PART_ROLE.conclusion, level: 1, ...shared };
+  });
+  return { sections: [...map.sections.slice(0, at), ...rows, ...map.sections.slice(at + 1)], totalMinutes: map.totalMinutes };
 }
 
 // ── The route fold (P10-07b; B P10-05 §4) ────────────────────────────────

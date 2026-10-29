@@ -67,6 +67,7 @@ export interface PaneRange {
 export interface PaneRoom {
   viewport: number;
   other: number;
+  centreMinimum?: number;
 }
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
@@ -85,7 +86,7 @@ export function defaultPanePx(pane: PaneName, viewport?: number): number {
 export function paneRange(pane: PaneName, room?: PaneRoom): PaneRange {
   const own: PaneRange = pane === "left" ? { min: LEFT_MIN_PX, max: LEFT_MAX_PX } : { min: MARGIN_MIN_PX, max: MARGIN_MAX_PX };
   if (!room || !finite(room.viewport) || !finite(room.other)) return own;
-  const left = Math.floor(room.viewport - room.other - 2 * DIVIDER_PX - CENTRE_MIN_PX);
+  const left = Math.floor(room.viewport - room.other - 2 * DIVIDER_PX - (room.centreMinimum ?? CENTRE_MIN_PX));
   return { min: own.min, max: Math.max(own.min, Math.min(own.max, left)) };
 }
 
@@ -124,6 +125,7 @@ export function stepPane(pane: PaneName, width: number, key: string, shift: bool
 /** What the reader remembered, and the window. Any of the three may be absent. */
 export interface PaneRequest {
   viewport: number;
+  centreMinimum?: number;
   /** The left pane's remembered width. */
   left?: number;
   /** The margin's remembered width. */
@@ -165,9 +167,10 @@ export function fitPanes(request: PaneRequest): PaneFit {
   const wantLeft = clampPane("left", finite(request.left) ? request.left : defaultPanePx("left", viewport));
   const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : MARGIN_DEFAULT_PX);
   const wantPinned = request.leftPinned ?? true;
+  const centreMinimum = request.centreMinimum ?? CENTRE_MIN_PX;
 
   if (wantPinned) {
-    let over = wantLeft + wantMargin + CENTRE_MIN_PX + gutters - viewport;
+    let over = wantLeft + wantMargin + centreMinimum + gutters - viewport;
     const margin = wantMargin - Math.min(Math.max(over, 0), wantMargin - MARGIN_MIN_PX);
     over -= wantMargin - margin;
     const left = wantLeft - Math.min(Math.max(over, 0), wantLeft - LEFT_MIN_PX);
@@ -177,7 +180,7 @@ export function fitPanes(request: PaneRequest): PaneFit {
     }
   }
 
-  const over = RAIL_PX + wantMargin + CENTRE_MIN_PX + gutters - viewport;
+  const over = RAIL_PX + wantMargin + centreMinimum + gutters - viewport;
   const margin = wantMargin - Math.min(Math.max(over, 0), wantMargin - MARGIN_MIN_PX);
   return {
     left: wantLeft,
@@ -187,4 +190,16 @@ export function fitPanes(request: PaneRequest): PaneFit {
     pinned: false,
     forced: wantPinned,
   };
+}
+
+/** P12-07: the calibrated text measure, plus the centre's two 12px insets.
+ * Reading scale changes the text budget, never the font to squeeze in panes.
+ * (P12-89, ruling §1h.476: the centre's insets are 12px on the left and 20px on the right since then — `.reader-centre`, `globals.css`, the gutter the "Open your notes" tab stands
+ * in — so the two sum to 32, not 24, and the text column at this minimum is 8px under the budget: 468px at 1x. The number below is the ruling's to change, not this comment's.) */
+export function readingCentreMinimum(scale: number): number {
+  return Math.ceil(476 * scale + 24);
+}
+
+export function railMinimumWidth(scale: number): number {
+  return RAIL_PX + MARGIN_MIN_PX + 2 * DIVIDER_PX + readingCentreMinimum(scale);
 }

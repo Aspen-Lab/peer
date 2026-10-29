@@ -1,0 +1,146 @@
+name: P12 native Linux gates
+
+on:
+  push:
+    branches: [update-on-paper-digest]
+    paths: [.github/workflows/p12-gates.yml, 'web/**']
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Exact approved-branch base SHA; empty uses dispatch head
+        type: string
+        required: false
+      patch:
+        description: Optional compressed manager-reviewed web-only verification patch
+        type: string
+        required: false
+      patch_encoding:
+        description: Public patch transport (gzip/base64, br/base64, or br85)
+        type: string
+        default: gzip
+        required: false
+      patch_context:
+        description: Unified patch context (3 or 0), exact base and output tree still required
+        type: string
+        default: '3'
+        required: false
+      expected_web_tree:
+        description: Required web tree SHA when verifying a patch
+        type: string
+        required: false
+      repeat_groups:
+        description: Optional approved test groups (07,08,12,16,19,21,28,place), unchanged tests three times
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p12-gates-${{ github.sha }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  gates:
+    if: github.ref == 'refs/heads/update-on-paper-digest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: America/Chicago
+      NEXT_TELEMETRY_DISABLED: '1'
+      NO_COLOR: '1'
+      FORCE_COLOR: '0'
+    steps:
+      - name: Install verified Node 22
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLO https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.xz
+          curl -fsSLO https://nodejs.org/dist/v22.23.4/SHASUMS256.txt
+          grep ' node-v22.23.4-linux-x64.tar.xz$' SHASUMS256.txt | sha256sum -c -
+          tar -xf node-v22.23.4-linux-x64.tar.xz
+          echo "$RUNNER_TEMP/node-v22.23.4-linux-x64/bin" >> "$GITHUB_PATH"
+      - name: Read exact public source and optional verification tree
+        shell: bash
+        env:
+          BASE_SHA: ${{ inputs.base }}
+          PATCH_B64: ${{ inputs.patch }}
+          PATCH_ENCODING: ${{ inputs.patch_encoding }}
+          PATCH_CONTEXT: ${{ inputs.patch_context }}
+          EXPECTED_WEB_TREE: ${{ inputs.expected_web_tree }}
+        run: |
+          set -euo pipefail
+          git init --initial-branch=update-on-paper-digest peer
+          git -C peer remote add origin https://github.com/Aspen-Lab/peer.git
+          git -C peer -c core.autocrlf=false fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+          base="${BASE_SHA:-$GITHUB_SHA}"
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]]
+          git -C peer merge-base --is-ancestor "$base" origin/update-on-paper-digest
+          git -C peer checkout --detach "$base"
+          cd peer
+          if [ -n "$PATCH_B64" ]; then
+            [[ "$EXPECTED_WEB_TREE" =~ ^[0-9a-f]{40}$ ]]
+            git show "$GITHUB_SHA:.github/p12-patch-codec.cjs" > "$RUNNER_TEMP/p12-patch-codec.cjs"
+            node -e 'const f=require("node:fs"),z=require("node:zlib"),e=process.env.PATCH_ENCODING||"gzip";if(!["gzip","br","br85"].includes(e))process.exit(1);const b=e==="br85"?require(process.env.RUNNER_TEMP+"/p12-patch-codec.cjs").decode85(process.env.PATCH_B64):Buffer.from(process.env.PATCH_B64,"base64");f.writeFileSync(process.env.RUNNER_TEMP+"/verify.patch",e==="gzip"?z.gunzipSync(b):z.brotliDecompressSync(b))'
+            context="${PATCH_CONTEXT:-3}"
+            [[ "$context" = 3 || "$context" = 0 ]]
+            apply_args=()
+            if [ "$context" = 0 ]; then apply_args+=(--unidiff-zero); fi
+            git apply --check "${apply_args[@]}" "$RUNNER_TEMP/verify.patch"
+            git apply --index "${apply_args[@]}" "$RUNNER_TEMP/verify.patch"
+            node -e 'const c=require("node:child_process");const p=c.execFileSync("git",["diff","--cached","--name-only","-z"],{encoding:"utf8"}).split("\0").filter(Boolean);if(!p.length||p.some(x=>!x.startsWith("web/")||/(^|\/)(\.local-data|uploads|node_modules|\.env[^/]*)(\/|$)/.test(x)||/(^|\/)(package\.json|package-lock\.json)$/.test(x)))process.exit(1)'
+            tree="$(git write-tree)"
+            actual="$(git rev-parse "$tree:web")"
+            [ "$actual" = "$EXPECTED_WEB_TREE" ]
+          else
+            actual="$(git rev-parse HEAD:web)"
+          fi
+          echo "base $base"
+          echo "web tree $actual"
+      - name: Locked install
+        working-directory: peer/web
+        shell: bash
+        run: npm ci --replace-registry-host=always --registry=https://registry.npmjs.org/
+      - name: Build, typecheck, lint, full tests
+        working-directory: peer/web
+        shell: bash
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/p12-gates"
+          L="$RUNNER_TEMP/p12-gates"
+          node --version
+          npm run build > "$L/build.log" 2>&1
+          b=$?
+          npx tsc --noEmit > "$L/tsc.log" 2>&1
+          t=$?
+          npm run lint > "$L/lint.log" 2>&1
+          l=$?
+          npm test -- --maxWorkers=2 > "$L/test.log" 2>&1
+          v=$?
+          echo "build $b"
+          echo "tsc $t"
+          echo "lint $l"
+          grep 'problems' "$L/lint.log" || true
+          echo "test $v"
+          grep -E 'Test Files|^ *Tests ' "$L/test.log" || true
+          node -e 'const f=require("node:fs"),s=f.readFileSync(process.argv[1],"utf8"),m=s.match(/\d+ problems \((\d+) errors, (\d+) warnings?\)/);process.exit(m&&(Number(m[1])>0||Number(m[2])>144)?1:0)' "$L/lint.log"
+          w=$?
+          if [ "$b" -ne 0 ] || [ "$t" -ne 0 ] || [ "$l" -ne 0 ] || [ "$v" -ne 0 ] || [ "$w" -ne 0 ]; then
+            echo 'One or more gates failed; no passing baseline is claimed.'
+            [ "$b" -eq 0 ] || tail -n 60 "$L/build.log"
+            [ "$t" -eq 0 ] || tail -n 60 "$L/tsc.log"
+            [ "$l" -eq 0 ] || tail -n 60 "$L/lint.log"
+            [ "$v" -eq 0 ] || tail -n 100 "$L/test.log"
+            exit 1
+          fi
+      - name: Repeat selected unchanged tests three times
+        if: inputs.repeat_groups != ''
+        working-directory: peer/web
+        shell: bash
+        env:
+          P12_REPEAT_GROUPS: ${{ inputs.repeat_groups }}
+        run: |
+          set -euo pipefail
+          git show "$GITHUB_SHA:.github/p12-repeat-tests.mjs" > "$RUNNER_TEMP/p12-repeat-tests.mjs"
+          node "$RUNNER_TEMP/p12-repeat-tests.mjs"

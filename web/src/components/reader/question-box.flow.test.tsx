@@ -203,7 +203,8 @@ async function session(script: Step[]) {
       latest.view = {
         section: all.find((el) => el.type === "section")!,
         inputs: all.filter((el) => "data-ask-line" in el.props),
-        submit: all.find((el) => el.type === "button" && el.props.children === ASK.submit),
+        // P12-06 / ruling206: acknowledgement changes the label, not the guarded control.
+        submit: all.find((el) => el.type === "button" && (el.props.children === ASK.submit || el.props.children === ASK.submitted)),
       };
       const [tick, setTick] = useState(0);
       useEffect(() => {
@@ -250,7 +251,7 @@ const FIVE = [
   "Synthetic question five about x?",
 ];
 const settledOf = () => useReadingQuestionsStore.getState().byPaper[paper.id]?.settled;
-const cachedKeys = () => Object.keys(JSON.parse(localStorage.getItem("peer-paper-report-v7") ?? "{}") as Record<string, unknown>);
+const cachedKeys = () => Object.keys(JSON.parse(localStorage.getItem("peer-paper-report-v9") ?? "{}") as Record<string, unknown>);
 
 describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   beforeEach(() => {
@@ -365,7 +366,8 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   });
 
   it("Submit sends the one request, with the question; a second Submit with nothing new sends nothing", async () => {
-    await session([sleep(100), type(0, FIVE[0]), submit, sleep(150), submit, sleep(150)]);
+    const submitted: Step = (view) => expect(view.submit!.props.children).toBe(ASK.submitted);
+    await session([sleep(100), type(0, FIVE[0]), submit, sleep(150), submitted, submit, sleep(150), submitted]);
 
     expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0, 1]);
     expect(net.calls[1].questions).toEqual([FIVE[0]]);

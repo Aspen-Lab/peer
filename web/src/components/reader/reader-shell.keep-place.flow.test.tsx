@@ -306,13 +306,13 @@ describe("a separator dragged by the mouse", () => {
     expect(farthest).toBeLessThan(1);
   });
 
-  it("margin -80 (552 to 472 px)", () => {
+  it("P12-07: margin drag respects the new476px text floor", () => {
     const page = open();
     readAt(page.page, "paper-section-5-p2", 0.5);
     const before = place(page.page);
     const farthest = dragged(page, "margin", -80, before);
     expect(page.page.top()!.id).toBe(before.id);
-    expect(env.page.columnPx).toBe(472);
+    expect(env.page.columnPx).toBe(476);
     expect(farthest).toBeLessThan(1);
   });
 
@@ -378,13 +378,13 @@ describe("a separator moved by its keys", () => {
     expect(Math.abs(held(page.page, before))).toBeLessThan(1);
   });
 
-  it("End (the pane's greatest width: 552 to 416 px)", () => {
+  it("P12-07: End preserves place at the476px text floor", () => {
     const page = open();
     readAt(page.page, "paper-section-5-p2", 0.5);
     const before = place(page.page);
     stagedRuntime.event(() => page.look().left().on("onKeyDown")(key("End")));
     env.page.frame();
-    expect(env.page.columnPx).toBe(416);
+    expect(env.page.columnPx).toBe(476);
     expect(page.page.top()!.id).toBe(before.id);
     expect(Math.abs(held(page.page, before))).toBeLessThan(1);
   });
@@ -557,12 +557,17 @@ describe("the shell's one call (its source)", () => {
   const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-shell.tsx"), "utf8");
   const code = source.replace(/\/\/.*$/gm, "");
 
-  it("imports the hook from lib/reader/keep-place and calls it once, with the grid, among the shell's hooks before it returns", () => {
+  it("P12-15: one owner above responsive branches; a standalone shell keeps its existing owner without duplicating ReaderLayout", () => {
     expect(code).toMatch(/import \{ useKeepPlace \} from "@\/lib\/reader\/keep-place";/);
     expect(code.match(/useKeepPlace\(/g)).toHaveLength(1);
-    expect(code).toMatch(/\n  useKeepPlace\(grid\);\n/);
-    expect(code.indexOf("useKeepPlace(grid)")).toBeGreaterThan(code.indexOf("export function ReaderShell"));
-    expect(code.indexOf("useKeepPlace(grid)")).toBeLessThan(code.indexOf("  return (\n    <div ref={grid}"));
+    expect(code).toMatch(/\n  useKeepPlace\(grid, \{ enabled: keepReadingPlace \}\);\n/);
+    expect(code.indexOf("useKeepPlace(grid,")).toBeGreaterThan(code.indexOf("export function ReaderShell"));
+    expect(code.indexOf("useKeepPlace(grid,")).toBeLessThan(code.indexOf("  return (\n    <div ref={grid}"));
+    const layout = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
+    expect(layout.match(/useKeepPlace\(/g)).toHaveLength(1);
+    expect(layout).toContain("useKeepPlace(owner, { responsive: true })");
+    expect(layout.indexOf("useKeepPlace(owner,")).toBeLessThan(layout.indexOf("const common ="));
+    expect(layout).toMatch(/<ReaderShell\s+side=\{p.spread\}\s+keepReadingPlace=\{false\}/);
   });
 
   it("leaves the dividers alone: a drag still writes the grid's variable once a frame, and the divider makes no scroll of its own at a pointer move", () => {

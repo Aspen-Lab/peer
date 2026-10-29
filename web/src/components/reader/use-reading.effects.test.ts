@@ -18,7 +18,7 @@ import type { Paper } from "@/types";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { readingRoute } from "./reading-map";
-import { useReading } from "./use-reading";
+import { READING_VERSION, useReading } from "./use-reading";
 
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
@@ -85,7 +85,7 @@ describe("useReading with effects running — one reading request across two ope
 
     expect(fetches).toHaveLength(1);
     // P8-04: `v` first, so the private request keeps its `upload` parameter after it.
-    expect(fetches[0]).toBe("/api/papers/openalex%3AW7000000002/reading?v=14&upload=upload%3A0123456789abcdef");
+    expect(fetches[0]).toBe(`/api/papers/openalex%3AW7000000002/reading?v=${READING_VERSION}&upload=upload%3A0123456789abcdef`);
     expect(first.fromServer).toBe(true);
     expect(second.fromServer).toBe(true);
     expect(second.reading?.provenance.fullText).toBe("pdf");
@@ -100,10 +100,36 @@ describe("useReading with effects running — one reading request across two ope
     await open(standalone);
     await open(standalone);
     expect(fetches).toHaveLength(1);
-    expect(fetches[0]).toBe("/api/papers/upload%3Afedcba9876543210/reading?v=14");
+    expect(fetches[0]).toBe(`/api/papers/upload%3Afedcba9876543210/reading?v=${READING_VERSION}`);
 
     await open({ ...standalone, revision: 2 });
     expect(fetches).toHaveLength(2);
+  });
+
+  it("P12-28: reopening an existing upload misses a reading with stale figure references, then reuses the refreshed reading", async () => {
+    const { buildReadingKey } = await import("./use-reading");
+    const key = buildReadingKey(standalone.id, undefined, standalone.revision);
+    const oldReading = { ...buildReading(standalone, null), version: 14 };
+    localStorage.setItem("peer-reading-v2", JSON.stringify({ [key]: { reading: oldReading, ts: Date.now() } }));
+    serveReading("pdf");
+    expect((await open(standalone)).reading?.provenance.fullText).toBe("pdf");
+    expect(fetches).toHaveLength(1);
+    expect(fetches[0]).not.toContain("?v=14");
+    await open(standalone);
+    expect(fetches).toHaveLength(1);
+  });
+
+  it("P12-28: a version 15 reading is refreshed once after figure geometry changes", async () => {
+    const { buildReadingKey } = await import("./use-reading");
+    const key = buildReadingKey(standalone.id, undefined, standalone.revision);
+    const oldReading = { ...buildReading(standalone, null), version: 15 };
+    localStorage.setItem("peer-reading-v2", JSON.stringify({ [key]: { reading: oldReading, ts: Date.now() } }));
+    serveReading("pdf");
+    expect((await open(standalone)).reading?.provenance.fullText).toBe("pdf");
+    expect(fetches).toHaveLength(1);
+    expect(fetches[0]).toContain(`?v=${READING_VERSION}`);
+    await open(standalone);
+    expect(fetches).toHaveLength(1);
   });
 
   // P8-04: the route answers a public paper with `public, s-maxage=86400`, and the URL was the same for every
@@ -115,7 +141,7 @@ describe("useReading with effects running — one reading request across two ope
 
     await open(base);
 
-    expect(fetches).toEqual(["/api/papers/openalex%3AW7000000002/reading?v=14"]);
+    expect(fetches).toEqual([`/api/papers/openalex%3AW7000000002/reading?v=${READING_VERSION}`]);
     // The number is the one the hook accepts: the version of the reading the page builds.
     expect(fetches[0]).toContain(`?v=${buildReading(base, null).version}`);
   });

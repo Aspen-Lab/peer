@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const figureRevision = vi.hoisted(() => ({ FIGURE_EXTRACTION_REVISION: "invented-old-engine" }));
+vi.mock("@/lib/figures/figure-revision", () => figureRevision);
 
 // P0-10: the request tests below run `useResolvedFigure`'s effect on the
 // minimal hook runtime (no DOM here); the key tests are pure and unaffected.
@@ -57,6 +59,7 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
 
   beforeEach(() => {
     calls.length = 0;
+    figureRevision.FIGURE_EXTRACTION_REVISION = "3";
     vi.stubGlobal("fetch", async (url: string, init: RequestInit = {}) => {
       calls.push({ url, method: init.method ?? "GET", body: typeof init.body === "string" ? init.body : null, cache: init.cache });
       return new Response(JSON.stringify({ imageUrl: "data:image/png;base64,AAAA", caption: "Figure 1", source: "publisher", status: "found" }));
@@ -70,6 +73,20 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
     opened.unmount();
     return opened.value;
   }
+
+  it("P12-28: a revision invalidates the settled resolver and its public edge URL, then reuses the current result", async () => {
+    const args = { itemId: "arxiv:2610.00228", figureIndex: 0 };
+    figureRevision.FIGURE_EXTRACTION_REVISION = "invented-old-engine";
+    await resolve(args);
+    expect(calls).toHaveLength(1);
+    const oldUrl = calls[0].url;
+    figureRevision.FIGURE_EXTRACTION_REVISION = "invented-new-engine";
+    await resolve(args);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].url).not.toBe(oldUrl);
+    await resolve(args);
+    expect(calls).toHaveLength(2);
+  });
 
   it("posts an upload's request, with no report text or title in the URL and no title in the body", async () => {
     const figure = await resolve({
@@ -87,7 +104,7 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
     expect(calls[0].cache).toBe("no-store");
     expect(JSON.parse(calls[0].body ?? "null")).toEqual({
       id: "upload:0123456789abcdef",
-      v: "12",
+      v: "12-3",
       url: "/api/papers/upload/0123456789abcdef/file",
       query: "Peer's words about the private paper",
       idx: 1,
@@ -120,7 +137,7 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
     expect(calls[0].cache).toBe("no-store");
     expect(JSON.parse(calls[0].body ?? "null")).toEqual({
       id: "openalex:W7000000003",
-      v: "12",
+      v: "12-3",
       url: "https://example.org/a-public-paper",
       doi: "10.1000/public",
       query: "Peer's words from the deep report on the attached PDF",
@@ -164,7 +181,7 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
 
     expect(calls).toEqual([
       {
-        url: "/api/figure?id=arxiv%3A2607.00001&v=12&url=https%3A%2F%2Farxiv.org%2Fabs%2F2607.00001&doi=10.1000%2Fxyz&query=Words+about+a+public+paper&paperTitle=A+Public+Title&idx=2",
+        url: "/api/figure?id=arxiv%3A2607.00001&v=12-3&url=https%3A%2F%2Farxiv.org%2Fabs%2F2607.00001&doi=10.1000%2Fxyz&query=Words+about+a+public+paper&paperTitle=A+Public+Title&idx=2",
         method: "GET",
         body: null,
         cache: "no-store",

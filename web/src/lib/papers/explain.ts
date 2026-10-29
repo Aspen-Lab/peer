@@ -346,6 +346,8 @@ export interface LocatedPassage {
   after: string | null;
   /** P11-42: set only when the passage stands in a section's heading or a figure's caption, never for a paragraph's. */
   block?: "heading" | "caption";
+  /** P12-11: a validated bounded range, framed neutrally even if it starts in a heading/caption. */
+  range?: true;
   /** P11-42: with `block`, the section's heading, as the body renders it. */
   heading?: string;
   /** P11-42: with a caption, the figure's label ("Figure 3"). */
@@ -689,7 +691,7 @@ function buildPeerWordsPrompt(args: {
 function promptContext(args: {
   paper: { title: string; abstract: string };
   map: readonly ExplainMapLine[];
-  located: Pick<LocatedPassage, "paragraph" | "before" | "after" | "block" | "heading" | "label">;
+  located: Pick<LocatedPassage, "paragraph" | "before" | "after" | "block" | "heading" | "label" | "range">;
 }) {
   const { located } = args;
   return {
@@ -707,7 +709,8 @@ function promptContext(args: {
  * P11-42: what the context says of a passage that stands in a heading or a caption — nothing for a paragraph's, so a paragraph's context is what it was. That
  * the `paragraph` is a heading or a caption (`block`); for a caption, the figure's label and the heading of the section it stands in (a heading is its own section).
  */
-function blockContext(located: Pick<LocatedPassage, "block" | "heading" | "label">) {
+function blockContext(located: Pick<LocatedPassage, "block" | "heading" | "label" | "range">) {
+  if (located.range) return { range: true };
   if (!located.block) return {};
   return {
     block: located.block,
@@ -722,7 +725,10 @@ function blockContext(located: Pick<LocatedPassage, "block" | "heading" | "label
  * never the quote; nor is a caption's own sentence — the verifier holds a quote to the sections' text (`placeQuote`), the captions are not in it, and a quote it cannot
  * place leaves the prose Peer's reading — so the quote is asked for from the paragraphs on either side, which are the sections' own.
  */
-function blockRules(located: Pick<LocatedPassage, "block">, quoted: string): string[] {
+function blockRules(located: Pick<LocatedPassage, "block" | "range">, quoted: string): string[] {
+  if (located.range) {
+    return [`\`passage\` is a validated range of the paper's rendered text. \`context\` supplies bounded orientation around its first block; it does not classify the whole range as that block. Take \`${quoted}\` only from an actual sentence of the paper supplied in \`context\`, never join evidence across blocks.`];
+  }
   if (located.block === "heading") {
     return [`\`context.paragraph\` is the heading of a section of the paper, not a sentence of its text, and \`context.after\` is how that section opens: say what the heading names and why the author puts it here, and take \`${quoted}\` from \`context.after\`, never from the heading.`];
   }
@@ -767,7 +773,7 @@ const PEER_WORDS_FROM: Record<PeerWordsSource, string> = {
  *  in no paragraph of the paper, so the context is the abstract and the map — and, P10-38, the body paragraph that best matches
  *  them (`matched`, from `matchPeerWords`) when there is one. */
 export type PassageFrame =
-  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after" | "block" | "heading" | "label">; peerWords?: undefined; matched?: undefined }
+  | { located: Pick<LocatedPassage, "paragraph" | "before" | "after" | "block" | "heading" | "label" | "range">; peerWords?: undefined; matched?: undefined }
   | { peerWords: PeerWordsSource; located?: undefined; matched?: PeerWordsMatch | null };
 
 const EXPLAIN_REPLY_SYSTEM = [
@@ -1338,9 +1344,10 @@ export function explainCacheKey(
   detail = false,
   peerWords?: PeerWordsSource,
   block?: "heading" | "caption",
+  rangeIdentity?: string,
 ): string {
   return sha256(
-    `${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}${peerWords ? `|peer:${peerWords}` : ""}${block ? `|block:${block}` : ""}`,
+    `${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}${peerWords ? `|peer:${peerWords}` : ""}${block ? `|block:${block}` : ""}${rangeIdentity ? `|range:${sha256(rangeIdentity)}` : ""}`,
   );
 }
 

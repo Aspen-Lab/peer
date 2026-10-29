@@ -65,6 +65,7 @@ import {
   listNumber,
   moveBlock,
   nextType,
+  ownStickyContents,
   parseMarkdown,
   shortcut,
   wordCount,
@@ -229,7 +230,7 @@ interface RowApi {
   /** What a citation key reads as in this note. */
   label: Label;
   caret: (id: string, el: HTMLElement) => void;
-  blur: (id: string) => void;
+  blur: (id: string, next?: EventTarget | null) => void;
   edit: (id: string, caret: Caret) => void;
   toggle: (id: string) => void;
   addBelow: (id: string) => void;
@@ -247,6 +248,7 @@ interface RowApi {
 }
 
 interface RowProps {
+  leadingMarker?: React.ReactNode;
   block: Block;
   first: boolean;
   number: number;
@@ -267,7 +269,7 @@ function Grip() {
   );
 }
 
-const Row = memo(function Row({ block: b, first, number, editing, sources, dragging, dropBefore, dropAfter, api }: RowProps) {
+const Row = memo(function Row({ block: b, first, number, editing, sources, dragging, dropBefore, dropAfter, api, leadingMarker }: RowProps) {
   const area = useRef<HTMLTextAreaElement | null>(null);
   const view = useRef<HTMLDivElement | null>(null);
   const cls = textClass(b.type);
@@ -336,7 +338,9 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         onKeyDown={(e) => api.current.key(e, b.id)}
         onPaste={(e) => api.current.paste(e, b.id)}
         onSelect={(e) => api.current.caret(b.id, e.currentTarget)}
-        onBlur={() => api.current.blur(b.id)}
+        onBlur={(e) => api.current.blur(b.id, e.relatedTarget)}
+        aria-keyshortcuts="Alt+F10"
+        title="Alt+F10 moves between this block and Format."
         className={cn(
           cls,
           "block w-full resize-none overflow-hidden bg-transparent p-0 outline-none placeholder:text-text-faint/70",
@@ -348,6 +352,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
     content = (
       <Surface
         id={b.id}
+        formatShortcut
         text={b.text}
         sources={sources}
         api={api}
@@ -457,7 +462,7 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         </button>
       </div>
       <div className="flex min-w-0 flex-1" style={indent ? { paddingLeft: indent * 24 } : undefined}>
-        {marker && <div className={cn(cls, "flex h-[1lh] w-6 shrink-0 items-center")}>{marker}</div>}
+        {(marker || leadingMarker) && <div className={cn(cls, "flex h-[1lh] shrink-0 items-center gap-1")} style={{ width: marker && leadingMarker ? "calc(2em + 0.5rem)" : "calc(1em + 0.5rem)" }}>{leadingMarker}{marker}</div>}
         <div
           className={cn(
             "min-w-0 flex-1",
@@ -632,11 +637,29 @@ export function visibleWordCount(note: Pick<Note, "blocks" | "sources">, hiddenB
   return wordCount(hiddenBlockId ? { ...note, blocks: note.blocks.filter((b) => b.id !== hiddenBlockId) } : note);
 }
 
+/**
+ * P12-65 (M1a): one editor's whole-note write. It remembers the blocks the editor started from, then the blocks it last wrote, and
+ * hands them to `save` as the base of this write, so the store can merge a note another writer changed meanwhile (a sticky) rather
+ * than take the editor's copy over it. The half-second timer, the page leave and the unmount all write through the one writer, so
+ * each is measured against the one before.
+ */
+export function makeDocWriter(start: readonly Block[]) {
+  let base = start;
+  return (doc: { blocks: Block[] }, save: (base: readonly Block[]) => void): void => {
+    const was = base;
+    base = doc.blocks;
+    save(was);
+  };
+}
+
 export function NoteEditor({
   note,
   compact = false,
   onDoc,
   hiddenBlockId = null,
+  transient = false,
+  autoFocus = false,
+  leadingMarker,
 }: {
   note: Note;
   /** P10-09b: the editor as the notes window holds it — the blocks and the toolbar alone, no rail, no page bar, no
@@ -648,6 +671,10 @@ export function NoteEditor({
    *  and saves it, but it is out of reach: the caret never moves into it, no key joins text into or out of it, and the
    *  word count leaves it out. The window does not pass one. */
   hiddenBlockId?: string | null;
+  /** A scoped sticky supplies its own structured writer through onDoc; never save it over the whole note. */
+  transient?: boolean;
+  autoFocus?: boolean;
+  leadingMarker?: React.ReactNode;
 }) {
   const router = useRouter();
   const saveNote = useNotesStore((s) => s.save);
@@ -666,7 +693,7 @@ export function NoteEditor({
   // P10-28: an anchored block an old Backspace left as text is a sticky's heading again. The doc starts as the repaired
   // copy, so the editor's own save (it saves a doc that is not `initial`) writes the repair back.
   const [doc, setDoc] = useState<Doc>(() => {
-    const blocks = repairAnchored(initial.current.blocks);
+    const blocks = ownStickyContents(repairAnchored(initial.current.blocks));
     return blocks === initial.current.blocks ? initial.current : { ...initial.current, blocks };
   });
   const docRef = useRef(doc);
@@ -677,7 +704,16 @@ export function NoteEditor({
     docRef.current = next;
     setDoc(next);
   }, []);
-  const setBlocks = (blocks: Block[]) => commit({ ...docRef.current, blocks });
+  const setBlocks = (blocks: Block[]) => {
+    const old = new Map(docRef.current.blocks.map((b) => [b.id, b]));
+    const owned = blocks.map((b, i) => {
+      if (b.anchor || b.highlight || b.stickyId || old.has(b.id)) return b;
+      const prev = blocks[i - 1];
+      const owner = prev?.stickyId ?? (prev?.anchor ? prev.id : undefined);
+      return owner ? { ...b, stickyId: owner } : b;
+    });
+    commit({ ...docRef.current, blocks: owned });
+  };
   /** What a citation key reads as in the text: the read view's "Rose et al., 2024", or its key. */
   const label: Label = (key) => {
     const source = docRef.current.sources[key];
@@ -692,6 +728,7 @@ export function NoteEditor({
   const pendingFocus = useRef<{ id: string; caret: Caret } | null>(null);
   /** The caret last seen, as a visible-character offset, which stays true across a change of marks. */
   const lastCaret = useRef<{ id: string; plain: number } | null>(null);
+  const toolbarTarget = useRef<{ id: string; source: string; from: number; to: number } | null>(null);
   /** Each block's steps to undo: the source and the selection at each (the browser's undo cannot follow a surface that is drawn again). */
   const histories = useRef(new Map<string, History>());
   /** The editor's splits and joins of blocks, to undo and redo (P10-28): a step no block's own history can hold. */
@@ -729,21 +766,29 @@ export function NoteEditor({
 
   // ── Saving ──
   const dirty = useRef(false);
+  // P12-65 (M1a): every whole-note write carries the blocks this editor started from or last wrote.
+  const [docWriter] = useState(() => makeDocWriter(note.blocks));
+  const writeDoc = useCallback(
+    () => docWriter(docRef.current, (base) => saveNote(note.id, docRef.current, undefined, base)),
+    [docWriter, note.id, saveNote],
+  );
   useEffect(() => {
+    if (transient) return;
     if (doc === initial.current) return;
     dirty.current = true;
     setStatus("saving");
     const t = setTimeout(() => {
-      saveNote(note.id, docRef.current);
+      writeDoc();
       dirty.current = false;
       setStatus("saved");
     }, 500);
     return () => clearTimeout(t);
-  }, [doc, note.id, saveNote]);
+  }, [doc, writeDoc, transient]);
   useEffect(() => {
+    if (transient) return;
     const flush = () => {
       if (!dirty.current) return;
-      saveNote(note.id, docRef.current);
+      writeDoc();
       dirty.current = false;
     };
     window.addEventListener("pagehide", flush);
@@ -751,7 +796,7 @@ export function NoteEditor({
       window.removeEventListener("pagehide", flush);
       flush();
     };
-  }, [note.id, saveNote]);
+  }, [writeDoc, transient]);
 
   useEffect(() => {
     if (compact) return;
@@ -808,9 +853,22 @@ export function NoteEditor({
     if (r.bottom > window.innerHeight - 24 || r.top < 72) el.scrollIntoView({ block: "nearest" });
   });
 
+  // P12-66 (B P12-52, M2 and M3): an editor that is asked for the focus (`autoFocus`: a new sticky, or one started afresh by the follow that held the
+  // focus) takes it in a layout effect. The caret stands in the commit's own turn, before the browser paints and before a key can be delivered, so no
+  // render passes with nothing focused (a key typed in that gap went to the page, where a single letter is a command). One that is not asked leaves the
+  // focus where the reader is.
+  useLayoutEffect(() => {
+    if (!autoFocus) return;
+    const first = initial.current.blocks.find((b) => isTextual(b.type));
+    if (first) focusBlock(first.id, "end");
+    // Once, on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // A note that was just made opens ready to write in: an empty title first,
-  // else the first prompt a template left.
+  // else the first prompt a template left. (A sticky's editor, `transient`, is opened ready by `autoFocus` alone.)
   useEffect(() => {
+    if (autoFocus || transient) return;
     const fresh = Date.now() - Date.parse(note.createdAt) < 15_000;
     if (!fresh) return;
     if (!initial.current.title.trim()) {
@@ -905,12 +963,17 @@ export function NoteEditor({
     });
   }, [menu]);
 
+  const toolbarSelection = (id: string) => {
+    const held = toolbarTarget.current;
+    const toolbar = columnRef.current?.querySelector('[role="toolbar"]');
+    return held?.id === id && held.source === srcOf(id) && toolbar?.contains(document.activeElement) ? held : null;
+  };
   /** Where the reader's selection is in a block: source offsets (what the store and the menus speak) and visible-character offsets. */
   const selection = (id: string): { start: number; end: number; from: number; to: number; len: number } | null => {
     const el = areas.current.get(id);
     if (!el) return null;
     if (el instanceof HTMLTextAreaElement) return { start: el.selectionStart, end: el.selectionEnd, from: el.selectionStart, to: el.selectionEnd, len: el.value.length };
-    const sel = getPlainSelection(el);
+    const sel = toolbarSelection(id) ?? getPlainSelection(el);
     if (!sel) return null;
     const tree = treeOf(srcOf(id), label);
     return { start: sourceOfPlain(tree, sel.from, "start"), end: sourceOfPlain(tree, sel.to, "end"), from: sel.from, to: sel.to, len: plainLength(el) };
@@ -998,12 +1061,13 @@ export function NoteEditor({
     const b = docRef.current.blocks.find((x) => x.id === id);
     const el = areas.current.get(id);
     if (!b || !el || b.type === "code" || el instanceof HTMLTextAreaElement) return;
-    const sel = getPlainSelection(el);
+    const sel = toolbarSelection(id) ?? getPlainSelection(el);
     if (!sel) return;
     const out = pressMark(b.text, sel, mark, pendingMarks.current?.id === id && pendingMarks.current.plain === sel.from ? pendingMarks.current.marks : null, label);
     if (out.kind === "pending") {
       // nothing selected (or only spaces): the mark is toggled for what is typed next, as in a word processor
       pendingMarks.current = { id, plain: sel.from, marks: out.marks };
+      if (toolbarSelection(id)) focusBlock(id, { plain: sel.from, to: sel.to });
       return;
     }
     // an edit that would have left a delimiter unmatched writes nothing
@@ -1231,7 +1295,14 @@ export function NoteEditor({
       if (pendingMarks.current && (pendingMarks.current.id !== id || pendingMarks.current.plain !== sel.from || sel.from !== sel.to)) pendingMarks.current = null;
     },
 
-    blur: (id) => {
+    blur: (id, next) => {
+      const toolbar = columnRef.current?.querySelector('[role="toolbar"]');
+      if (next && toolbar?.contains(next as Node)) {
+        const selected = selection(id);
+        if (selected) toolbarTarget.current = { id, source: srcOf(id), from: selected.from, to: selected.to };
+        return;
+      }
+      toolbarTarget.current = null;
       setEditing((cur) => (cur === id ? null : cur));
       if (menuRef.current?.blockId === id) setMenu(null);
     },
@@ -1257,6 +1328,7 @@ export function NoteEditor({
     citation: showPaper,
 
     highlightColour: (id, colour) => {
+      if (!transient && docRef.current.blocks.some((b) => b.id === id && b.highlight?.segments)) useNotesStore.getState().setHighlightColour(note.id, id, colour);
       const next = withHighlightColour(docRef.current.blocks, id, colour);
       if (next !== docRef.current.blocks) setBlocks(next);
     },
@@ -1361,6 +1433,15 @@ export function NoteEditor({
       // The selection: source offsets (pos, end), and the visible characters (sel.from, sel.to of sel.len).
       const sel = selection(id);
       if (!sel) return;
+      if (e.key === "F10" && e.altKey && !mod && !e.shiftKey) {
+        const first = columnRef.current?.querySelector<HTMLButtonElement>('[role="toolbar"] button:not(:disabled):not([aria-disabled="true"])');
+        if (first) {
+          e.preventDefault();
+          toolbarTarget.current = { id, source: srcOf(id), from: sel.from, to: sel.to };
+          first.focus({ preventScroll: true });
+        }
+        return;
+      }
       const pos = sel.start;
       const end = sel.end;
       const collapsed = sel.from === sel.to;
@@ -1586,12 +1667,15 @@ export function NoteEditor({
           return;
         }
         case "Tab": {
-          e.preventDefault();
           if (b.type === "code" && !e.shiftKey) {
+            e.preventDefault();
             replaceRange(id, pos, end, "  ");
             return;
           }
-          setBlocks(indentBlock(blocks, i, e.shiftKey ? -1 : 1));
+          if (canIndent(b.type)) {
+            e.preventDefault();
+            setBlocks(indentBlock(blocks, i, e.shiftKey ? -1 : 1));
+          }
           return;
         }
       }
@@ -1652,6 +1736,7 @@ export function NoteEditor({
     } else if (action === "duplicate") {
       insertAt(i + 1, duplicateBlock(b, block().id));
     } else if (action === "delete") {
+      if (!transient && b.type === "highlight" && b.highlight?.segments) useNotesStore.getState().removeHighlight(note.id, id);
       const rest = blocks.filter((x) => x.id !== id);
       setBlocks(rest.length > 0 ? rest : [block("text")]);
       setUndo({ block: b, index: i });
@@ -1839,6 +1924,15 @@ export function NoteEditor({
 
         <div
           ref={columnRef}
+          onBlurCapture={(e) => {
+            const next = e.relatedTarget as Node | null;
+            const toolbar = e.currentTarget.querySelector('[role="toolbar"]');
+            const surface = editing ? areas.current.get(editing) : null;
+            if (!next || (!toolbar?.contains(next) && !surface?.contains(next))) {
+              toolbarTarget.current = null;
+              setEditing(null);
+            }
+          }}
           className={cn(
             compact ? "max-w-[44rem]" : "mt-8 max-w-[44rem]",
             "[&_[aria-disabled=true]]:cursor-default [&_[aria-disabled=true]]:opacity-40 [&_[aria-disabled=true]]:hover:bg-transparent",
@@ -1869,7 +1963,19 @@ export function NoteEditor({
             active={editingBlock?.type ?? null}
             enabled={Boolean(editingBlock && isTextual(editingBlock.type))}
             onMark={(m) => editing && applyMark(editing, m)}
+            onReturn={() => {
+              if (!editing) return;
+              const held = toolbarSelection(editing);
+              focusBlock(editing, held ? { plain: held.from, to: held.to } : { plain: lastCaret.current?.id === editing ? lastCaret.current.plain : 0 });
+            }}
             onType={(t) => editing && applyType(editing, t)}
+            onIndent={(delta) => {
+              if (!editing) return;
+              const index = docRef.current.blocks.findIndex((b) => b.id === editing);
+              if (index < 0 || !canIndent(docRef.current.blocks[index].type)) return;
+              setBlocks(indentBlock(docRef.current.blocks, index, delta));
+              focusBlock(editing, { plain: lastCaret.current?.id === editing ? lastCaret.current.plain : 0 });
+            }}
             className={compact ? "sticky top-0 z-10 bg-surface py-1" : "sticky top-0 z-10 -ml-1 mt-4 bg-bg py-1 md:top-12"}
           />
 
@@ -1900,6 +2006,7 @@ export function NoteEditor({
               <Row
                 key={b.id}
                 block={b}
+                leadingMarker={i === 0 ? leadingMarker : undefined}
                 first={i === 0}
                 number={b.type === "numbered" ? listNumber(doc.blocks, i) : 0}
                 editing={editing === b.id}
@@ -1988,6 +2095,7 @@ export function NoteEditor({
                 type="button"
                 className="text-text-muted underline underline-offset-[3px] hover:text-heading"
                 onClick={() => {
+                  if (!transient && undo.block.highlight?.segments) useNotesStore.getState().restoreHighlightGroup(note.id, undo.block);
                   const blocks = docRef.current.blocks.slice();
                   blocks.splice(Math.min(undo.index, blocks.length), 0, undo.block);
                   setBlocks(blocks);

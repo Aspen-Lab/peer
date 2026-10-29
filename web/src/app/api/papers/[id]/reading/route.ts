@@ -9,7 +9,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText, type FullTextResult } from "@/lib/papers/full-text";
-import { buildReading } from "@/lib/papers/reading";
+import { buildReading, type PaperReading } from "@/lib/papers/reading";
+import { markFullTextPending } from "@/lib/papers/full-text-pending";
 import { rawItemToPaper } from "@/lib/feed/mapper";
 import { bareUploadId, claimsUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
@@ -18,6 +19,11 @@ import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access"
  * How long the route waits for the full text before answering with the
  * abstract alone. `getFullText` keeps running behind the answer and caches
  * its result, so the next request — uncached, see below — gets the sections.
+ *
+ * P12-58: that answer says the full text is *pending* (`provenance.fullText`),
+ * not that there is none, and the page asks again (`use-reading.ts`). The ask
+ * joins the attempt that is already running (`getFullText` shares it), so a
+ * large PDF is read once, not once per ask.
  */
 const FULL_TEXT_TIMEOUT_MS = 8_000;
 
@@ -49,6 +55,22 @@ async function fullTextWithin(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The reading for a full-text attempt: built from its result once it settled;
+ * the abstract alone, marked *pending*, when the wait ended first (or the
+ * attempt threw — a transient failure, not a fact about the paper). A settled
+ * "no text" stays "none" (or `pdf_empty`, `paywalled`, ...): only an attempt
+ * that has not finished is pending.
+ */
+function readingFor(
+  paper: Parameters<typeof buildReading>[0],
+  attempt: Awaited<ReturnType<typeof fullTextWithin>>,
+): PaperReading {
+  return attempt.settled
+    ? buildReading(paper, attempt.result)
+    : markFullTextPending(buildReading(paper, null));
 }
 
 export async function GET(
@@ -97,10 +119,7 @@ export async function GET(
       },
       FULL_TEXT_TIMEOUT_MS,
     );
-    const uploadReading = buildReading(
-      uploadPaper,
-      uploadFullText.settled ? uploadFullText.result : null,
-    );
+    const uploadReading = readingFor(uploadPaper, uploadFullText);
     const stillCurrent = await ownedUpload(uploadHash16);
     if (!stillCurrent || stillCurrent.revision !== startRevision) {
       return NextResponse.json(
@@ -157,7 +176,7 @@ export async function GET(
     FULL_TEXT_TIMEOUT_MS,
   );
 
-  const reading = buildReading(paper, fullText.settled ? fullText.result : null);
+  const reading = readingFor(paper, fullText);
   return NextResponse.json(reading, {
     headers: fullText.settled && !refresh ? CACHE_HEADERS : NO_STORE_HEADERS,
   });

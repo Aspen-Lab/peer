@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 @theme {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #9a3412;
+  --color-action-focus: #9a3412;
   /* ── Screens above Tailwind's last one ──────────────────
      `xl` is 80rem and `2xl` is 96rem, and the board runs out of named
      screens well before a desk monitor runs out of pixels.
@@ -263,6 +269,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 
 /* Light palette (default; also data-mode="light" and system-on-light-OS) */
 :root {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #9a3412;
+  --color-action-focus: #9a3412;
   --seed: #ff520d;
   --seed-dark: #ff6a2b;
   --color-bg: #fafafa;
@@ -335,6 +347,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 
 /* Dark palette — explicit toggle */
 html[data-mode="dark"] {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #ffb38a;
+  --color-action-focus: #ffb38a;
   --color-bg: #111111;
   --color-bg-secondary: #181818;
   --color-surface: #232323;
@@ -396,6 +414,12 @@ html[data-mode="dark"] {
    above; CSS has no mixins, keep the two in sync. */
 @media (prefers-color-scheme: dark) {
   html[data-mode="system"] {
+  /* P12 action colour tokens: shared answers / Submit; white text AA. */
+  --color-action-orange: #c2410c;
+  --color-action-orange-hover: #a93608;
+  --color-action-foreground: #ffffff;
+  --color-action-boundary: #ffb38a;
+  --color-action-focus: #ffb38a;
   --color-bg: #111111;
   --color-bg-secondary: #181818;
   --color-surface: #232323;
@@ -761,9 +785,9 @@ html[data-mode="dark"] {
   position: absolute;
   inset-block: 0;
   left: 50%;
-  width: 1px;
-  margin-left: -0.5px;
-  background: var(--color-border-strong);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-text-muted);
 }
 .reader-divider:hover::before,
 .reader-divider:focus-visible::before,
@@ -776,13 +800,18 @@ html[data-mode="dark"] {
 /* The centre: the paper's text. Its content is capped at 38em (about 87 characters of Newsreader at 1x) and centred, so a wider window
    adds blank gutter, not 150-character lines, and a pane narrower than the cap re-flows. The prose measures (`.measure`, `.measure-paper`),
    which were lifted on the old spread because its column was sized for the text, are lifted here for the same reason: the cap is the
-   measure. */
+   measure.
+
+   P12-89 (E5; ruling §1h.476): the right padding is 20px, the left 12px, always: at every width and step, a card open or not, so the words never move when a
+   card opens (P11 A8). The edge tab ("Open your notes") stands in that gutter, left of the margin divider's 12px strip, while a card stands: 15px for the tab and 2px
+   clear of the strip need 17px between the text's right edge and the strip, and the centre at its narrowest (1024 and 853px) is all text, so the padding is the
+   gutter. The text column is 8px narrower for it. */
 .reader-centre {
   min-width: 0;
-  padding-inline: 12px;
+  padding-inline: 12px 20px;
 }
 .reader-centre-inner {
-  max-width: 38em;
+  max-width: calc(38em * var(--reading-scale, 1));
   margin-inline: auto;
 }
 .reader-centre .measure,

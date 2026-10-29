@@ -63,13 +63,13 @@ const view = (over: Partial<Parameters<typeof HighlightRowView>[0]> = {}) =>
   });
 
 describe("HighlightRowView — the four parts, left to right", () => {
-  it("is a 14-px square in the highlight's colour that goes to the passage, named for what it does", () => {
+  it("is a text-sized square in the highlight's colour (P12 item 2), named for its action", () => {
     const tree = view();
     const squares = byLabel(tree, "Go to the passage");
     expect(squares).toHaveLength(1);
     expect(squares[0].type).toBe("button");
     expect(SQUARE_PX).toBe(14);
-    expect(squares[0].props.style).toMatchObject({ width: 14, height: 14, backgroundColor: "#ffe600" });
+    expect(squares[0].props.style).toMatchObject({ width: "1em", height: "1em", fontSize: "inherit", backgroundColor: "#ffe600" });
   });
 
   it("is the words on their colour, ink and fill from the colour table, the whole passage in the page", () => {
@@ -180,7 +180,7 @@ describe("HighlightRowView — a passage the paper no longer holds", () => {
 
   it("holds the square's place with a quiet, inert one, so the rows keep their line", () => {
     const tree = view({ lost: true });
-    const inert = elements(tree).filter((e) => e.type === "span" && e.props["aria-hidden"] === true && (e.props.style as { width?: number } | undefined)?.width === 14);
+    const inert = elements(tree).filter((e) => e.type === "span" && e.props["aria-hidden"] === true && (e.props.style as { width?: string } | undefined)?.width === "1em");
     expect(inert).toHaveLength(1);
     expect(inert[0].props.onClick).toBeUndefined();
   });

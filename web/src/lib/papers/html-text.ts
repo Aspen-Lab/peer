@@ -28,6 +28,13 @@ export interface ExtractedSection {
   text: string;
   /** PDFs only: the page the section's heading sits on. HTML has no pages. */
   page?: number;
+  /**
+   * PDFs only (P12-75): the depth of an unnumbered heading the outline put under a part. 1 is a part's own heading
+   * that holds only sub-headings ("Methods", then at once its first sub-heading), kept as a row with no words;
+   * 2 is a sub-heading set smaller than it, which took its bucket. Absent on every other section, whose depth
+   * the heading's number gives.
+   */
+  level?: 1 | 2;
 }
 
 /** A section as an extractor builds it, before it has its place in the
@@ -167,6 +174,17 @@ function oneLine(text: string): string {
 }
 
 /**
+ * P12-48 (L2, B P12-40 R3): the notes a journal prints after the argument — "Online content", "Additional
+ * information", "Reporting summary", "Peer review information", "Reprints and permissions", "Keywords". They are
+ * apparatus, and are filed under the bucket the other back-matter notes (acknowledgements, data availability,
+ * competing interests) already have, so every reader that drops or ignores end matter drops these too. The whole
+ * heading must be the note: "Online content moderation" and "Keyword extraction" are body headings that only
+ * contain the words.
+ */
+const END_MATTER_NOTE =
+  /^(?:online content|additional information(?: and declarations)?|(?:nature (?:portfolio|research) )?reporting summar(?:y|ies)|peer review (?:information|files?)|reprints? (?:and|&) permissions?|rights and permissions|key ?words?)\s*[.:]?$/;
+
+/**
  * Map a heading to the bucket the readers downstream understand.
  *
  * Numbering is stripped in every shape LaTeXML, JATS and PDF text produce
@@ -185,14 +203,36 @@ export function canonicalizeHeading(heading: string): string {
   if (/limitation|caveat|threats? to validity|failure (?:case|mode)s?|weakness/.test(lower)) {
     return "limitations";
   }
-  if (/material.*method|experimental (?:section|setup|design|details|procedure)|methodolog/.test(lower)) {
+  // P12-75 (item 2, §1h.452): a heading that is "Experimental" alone, or "Experimental" and one of section / part / details /
+  // procedures, names the methods part (in chemistry and materials journals it is the whole heading of the methods).
+  // Tested before the `^experiment…` → results line below; "Experiments", "Experimental results" and "Experimental
+  // evaluation" are not it and stay results.
+  if (/^experimental(?:\s+(?:section|part|details?|procedures?))?$/.test(lower)) return "methods";
+  // P12-48 (L1, B P12-40 R1): "experimental methods" is the methods part, whichever methods word follows
+  // "experimental" ("experimental procedures", "experimental and computational methods"). It is tested here, before
+  // the `^experiment…` → results line below, which would otherwise file it as results. "Experimental results" and
+  // "Experiments" have no methods word right after "experimental" and stay results.
+  if (/material.*method|experimental (?:and \w+ )?(?:section|setup|design|details?|procedures?|methods?|protocols?|techniques?)|methodolog/.test(lower)) {
     return "methods";
   }
+  // Before the lines below, which would read "Reporting summary" as a conclusion.
+  if (END_MATTER_NOTE.test(lower)) return "acknowledgments";
   if (/result.*discussion/.test(lower)) return "results";
   if (/^result|^finding|^evaluation|^experiment|^empirical|^performance|^ablation/.test(lower)) {
     return "results";
   }
-  if (/discussion/.test(lower)) return "discussion";
+  // P12-75 (B P12-73, M7): "Implications" and "Outlook" name the discussion as the word "discussion" does; they are
+  // tested before the methods words below ("Implications for the proposed model" is not methods). A heading that also
+  // names the conclusion or a summary ("Conclusions and outlook") is the conclusion, as it was.
+  if (/discussion/.test(lower) || (/\bimplications?\b|\boutlook\b/.test(lower) && !/conclusion|summary/.test(lower))) {
+    return "discussion";
+  }
+  // P12-75 (B P12-73, M5): the experiments a procedure heading names ("Sample preparation and NMR experiments") are done
+  // in the methods; the unanchored `experiment` line below files a heading that holds the word results. The heading
+  // must name the procedure too (a sample, a preparation, a synthesis, a setup ...): "Cycling experiments" stays results.
+  if (/\bexperiments?\b/.test(lower) && /\b(?:sample|specimen|preparation|synthesis|fabrication|assembly|measurements?|setup|details)\b/.test(lower)) {
+    return "methods";
+  }
   if (/evaluation|experiment|benchmark/.test(lower)) return "results";
   if (/method|approach|model|theory|framework|architecture|proposed|our solution|formulation|system design/.test(lower)) {
     return "methods";
@@ -203,7 +243,8 @@ export function canonicalizeHeading(heading: string): string {
   if (/conclusion|summary|future work/.test(lower)) return "conclusion";
   if (/\bresults?\b/.test(lower)) return "results";
   if (/reference|bibliograph/.test(lower)) return "references";
-  if (/acknowledg|funding|author contribution|competing interest|conflict of interest|data availability|ethic/.test(lower)) {
+  // P12-48 (L2): the availability statements of code, software and materials sit with data availability.
+  if (/acknowledg|funding|author contribution|competing interest|conflict of interest|(?:data|code|software|materials?)(?: and (?:data|code|software|materials?))? availability|availability of (?:data|code|software|materials?)|ethic/.test(lower)) {
     return "acknowledgments";
   }
   if (/supplement|supporting|appendix/.test(lower)) return "supplementary";
@@ -239,10 +280,13 @@ export function numbersHeading(parent: string, child: string): boolean {
  * heading) and goes, as every empty heading used to. The next section is judged as it stands in `sections`,
  * before this drops anything, so "2." survives a chain of empty levels ("2.", "2.1", "2.1.1 …").
  */
-export function dropStrayHeadings<T extends { heading?: string; text?: string }>(sections: readonly T[]): T[] {
+export function dropStrayHeadings<T extends { heading?: string; text?: string; level?: 1 | 2 }>(sections: readonly T[]): T[] {
   return sections.filter((section, index) => {
     if ((section.text ?? "").trim().length > 0) return true;
     const next = sections[index + 1];
+    // P12-75: a part's heading with no text of its own and no number ("Methods") stays when the section after it is
+    // one of its sub-headings (`level` 2); one without sub-headings under it is a stray, as any empty heading is.
+    if (section.level === 1 && next?.level === 2) return true;
     return Boolean(section.heading && next?.heading && numbersHeading(section.heading, next.heading));
   });
 }
@@ -253,7 +297,7 @@ export function dropStrayHeadings<T extends { heading?: string; text?: string }>
  * Comparison Across Budgets" under the same parent is not methods, whatever
  * the word "model" in it suggests.
  */
-const STRONG_BUCKETS = new Set([
+export const STRONG_BUCKETS = new Set([
   "limitations",
   "references",
   "acknowledgments",

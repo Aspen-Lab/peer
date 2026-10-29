@@ -6,10 +6,11 @@
 // selection (`markEdit`, `lib/notes/inline.ts`), so what is stored is what is exported; bullets, numbering and the
 // heading turn the block's type. The keys do the same: ⌘/Ctrl+B bold, I italic, E code, U underline, Shift+H highlight.
 //
-// The buttons never take focus (mousedown is cancelled), so the textarea keeps its caret and its selection when one
+// Pointer presses do not take focus (mousedown is cancelled), so the textarea keeps its caret and its selection when one
 // is pressed. This file is the buttons and the key table; the editor applies them.
 
 import type { BlockType } from "@/lib/notes/types";
+import { canIndent } from "@/lib/notes/blocks";
 import type { MarkName } from "@/lib/notes/inline";
 import { cn } from "@/lib/cn";
 
@@ -47,6 +48,8 @@ export function NoteToolbarView({
   enabled,
   onMark,
   onType,
+  onIndent,
+  onReturn,
   className,
 }: {
   /** The type of the block that holds the caret; null when none does. */
@@ -54,12 +57,17 @@ export function NoteToolbarView({
   enabled: boolean;
   onMark: (mark: MarkName) => void;
   onType: (type: BlockType) => void;
+  onIndent?: (delta: -1 | 1) => void;
+  onReturn?: () => void;
   className?: string;
 }) {
   return (
-    <div role="toolbar" aria-label="Format" className={cn("flex flex-wrap items-center gap-1", className)}>
+    <div role="toolbar" aria-label="Format" aria-keyshortcuts="Alt+F10" title="Alt+F10 moves between Format and editing."
+      onKeyDown={(e) => {
+        if (e.key === "F10" && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && onReturn) { e.preventDefault(); onReturn(); }
+      }} className={cn("flex flex-wrap items-center gap-1", className)}>
       {TOOLBAR_ITEMS.map((item, i) => {
-        const disabled = !enabled || (item.kind === "mark" && active === "code" && item.mark !== "code");
+        const disabled = !enabled || (item.kind === "mark" && active === "code");
         return (
           <span key={item.id} className="contents">
             {i === 5 && <span aria-hidden className="mx-1 h-4 w-px bg-border-strong" />}
@@ -85,6 +93,14 @@ export function NoteToolbarView({
           </span>
         );
       })}
+      {onIndent && ([-1, 1] as const).map((delta) => (
+        <button key={delta} type="button" aria-label={delta === 1 ? "Indent" : "Outdent"}
+          title={delta === 1 ? "Indent (Tab)" : "Outdent (Shift+Tab)"} disabled={!enabled || !active || !canIndent(active)}
+          onMouseDown={(e) => e.preventDefault()} onClick={() => onIndent(delta)}
+          className="grid h-8 min-w-8 place-items-center px-2 text-body-sm text-text-muted hover:bg-bg-secondary hover:text-heading disabled:opacity-40">
+          <span aria-hidden>{delta === 1 ? "→" : "←"}</span>
+        </button>
+      ))}
     </div>
   );
 }

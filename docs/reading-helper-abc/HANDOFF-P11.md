@@ -1,3 +1,5 @@
+# [SUPERSEDED for new work by HANDOFF-P12.md (round P12, branch update-on-paper-digest, 2026-10-23); this file remains the record of round P11]
+
 # HANDOFF — round P11 of the reading helper (Peer), for any agent that continues this work
 
 **给 Peter（owner）的说明：** 这份文件是给任何接手的 agent（ChatGPT / Codex / Claude / 人）看的交接书。它写明：还要做什么、怎么做（我们在用的 reviewing-cycle + abc 流程和 subagent 分工）、现在做到哪了，以及一份**每完成一件事就记一笔**的工作日志。额度用完被打断时，下一个 agent 从 §6 的日志最后一条接着做。日志是追加式的，最新一条就是现状。

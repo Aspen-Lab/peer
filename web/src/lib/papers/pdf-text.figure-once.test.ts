@@ -7,7 +7,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { barChart, figurePdf, panel, bodyText, type FigurePage } from "@/lib/figures/figure-pdf.test-helper";
 
 const measure = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/figures/pdf-engine", () => ({ measurePdfFigure: measure }));
+// P12-61 (part 3), re-aimed: the engine measures a paper's figures in one open (`measurePdfFigures`); the counted
+// `measure` is still the per-figure measurer behind it, so every count below is the figures measured, as before.
+vi.mock("@/lib/figures/pdf-engine", () => ({
+  measurePdfFigures: (bytes: Uint8Array, targets: { page: number; fig: number }[]) =>
+    Promise.all(targets.map((target) => measure(bytes, target.page, target.fig))),
+}));
+const revision = vi.hoisted(() => ({ FIGURE_EXTRACTION_REVISION: "invented-old-engine" }));
+vi.mock("@/lib/figures/figure-revision", () => revision);
 
 import { extractPdfTextFromBytes, withFigureSizes } from "./pdf-text";
 
@@ -104,5 +111,21 @@ describe("a paper's figures are measured once (P10-37, P10-34's unsettled)", () 
     const again = await withFigureSizes(bare, new Uint8Array(pdf));
     expect(measure).not.toHaveBeenCalled();
     expect(again.figureCaptions[0].width).toBeGreaterThan(0);
+  });
+
+  it("P12-28: changing the engine revision recomputes both an old size and an old null, then reuses the new answers", async () => {
+    const pdf = paperPdf("revision-refresh");
+    revision.FIGURE_EXTRACTION_REVISION = "invented-old-engine";
+    const first = await extractPdfTextFromBytes(pdf);
+    expect(first.doc?.figureCaptions.map((c) => c.width)).toEqual([expect.any(Number), undefined]);
+    measure.mockReset();
+    measure.mockResolvedValue({ width: 721, height: 411 });
+    revision.FIGURE_EXTRACTION_REVISION = "invented-new-engine";
+    const second = await extractPdfTextFromBytes(pdf);
+    expect(measure).toHaveBeenCalledTimes(2);
+    expect(second.doc?.figureCaptions.map((c) => [c.width, c.height])).toEqual([[721, 411], [721, 411]]);
+    measure.mockClear();
+    expect((await extractPdfTextFromBytes(pdf)).doc?.figureCaptions).toEqual(second.doc?.figureCaptions);
+    expect(measure).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Paper } from "@/types";
 import { blockMarker } from "@/lib/text/math";
-import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
+import { canonicalizeHeading, withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
 import { ROUTE } from "@/components/reader/copy";
@@ -260,10 +260,16 @@ describe("buildReadingMap — openings (§1f.21, P1-10)", () => {
 });
 
 describe("buildReadingMap — sections, roles, words and minutes (§1f.1–3)", () => {
-  it("maps every bucket to its role, and an unplaced heading to body", () => {
+  // P12-48 (re-aimed; B P12-40 §5 "What each changes"; rubric Theme C): this test asserted that an unplaced heading is
+  // `body` and put that row last, after the references. §1h.423 (c) supersedes §1f.2's "no positional guessing": an
+  // unplaced top-level part after the references is now back matter (A3), so the row would be apparatus. It is now put
+  // between the introduction and the methods, where an unplaced heading is evidence (A2), and a paper with no anchored
+  // introduction keeps its unplaced heading `body`. Every named bucket's role is asserted as before.
+  it("maps every bucket to its role; an unplaced heading is evidence between the introduction and the methods, and body where no introduction is anchored", () => {
     const buckets: Array<[string, string]> = [
       ["introduction", "setup"],
       ["related_work", "setup"],
+      ["body", "evidence"],
       ["methods", "method"],
       ["results", "evidence"],
       ["discussion", "interpretation"],
@@ -272,11 +278,20 @@ describe("buildReadingMap — sections, roles, words and minutes (§1f.1–3)", 
       ["references", "apparatus"],
       ["acknowledgments", "apparatus"],
       ["supplementary", "apparatus"],
-      ["body", "body"],
     ];
     const map = buildReadingMap(doc(buckets.map(([canonical]) => ({ canonical, text: `Text of the ${canonical} section.` }))));
 
     expect(map.sections.map((s) => [s.canonical, s.role])).toEqual(buckets);
+
+    // No introduction anchored: the unplaced heading is untagged, as it always was.
+    const unanchored: Array<[string, string]> = [
+      ["body", "body"],
+      ["methods", "method"],
+      ["references", "apparatus"],
+    ];
+    const bare = buildReadingMap(doc(unanchored.map(([canonical]) => ({ canonical, text: `Text of the ${canonical} section.` }))));
+
+    expect(bare.sections.map((s) => [s.canonical, s.role])).toEqual(unanchored);
   });
 
   it("leaves the abstract out, and keeps each section's own id and page", () => {
@@ -907,5 +922,92 @@ describe("buildReadingMap — the paper's hierarchy (P10-04, A10)", () => {
 
   it("has no group row in a map whose sections all have paragraphs: groupTotals is empty", () => {
     expect(groupTotals(buildReadingMap(doc([{ heading: "1. A", text: filler(10) }, { heading: "1.1 B", text: filler(10) }]))).size).toBe(0);
+  });
+});
+
+// P12-75 (B P12-73, M2): a paper that numbers nothing (a Nature-style one) prints "Methods" with no text of its own and
+// its sub-headings under it. The outline now keeps that heading as a row with no words (`level` 1) and its sub-headings
+// at `level` 2; the map reads the level the section carries, as a group row of a numbered paper is read.
+describe("buildReadingMap — an unnumbered part's group row (P12-75, M2)", () => {
+  const unnumbered = () =>
+    doc([
+      { heading: "Introduction", canonical: "introduction", text: filler(60) },
+      { heading: "Slow cooling spares the grain edges", text: filler(120) },
+      { heading: "Methods", canonical: "methods", text: "", level: 1, page: 9 },
+      { heading: "Film growth", canonical: "methods", text: filler(40), level: 2 },
+      { heading: "Cell assembly", canonical: "methods", text: filler(31), level: 2 },
+      { heading: "Data availability", canonical: "acknowledgments", text: filler(10) },
+    ]);
+
+  it("keeps the part's heading with no paragraphs when its sub-headings follow, and drops the ones that stand for nothing", () => {
+    const rendered = readableSections(unnumbered());
+    expect(rendered.map((r) => r.section.heading)).toEqual([
+      "Introduction", "Slow cooling spares the grain edges", "Methods", "Film growth", "Cell assembly", "Data availability",
+    ]);
+    expect(rendered[2].paragraphs).toEqual([]);
+    expect(rendered.map((r) => r.id)).toEqual(["s0", "s1", "s2", "s3", "s4", "s5"]);
+
+    // A part heading with no sub-heading after it (the next section is not level 2), an empty sub-heading, and an
+    // empty heading with no level: all strays, as before.
+    const strays = readableSections(doc([
+      { heading: "Methods", canonical: "methods", text: "", level: 1 },
+      { heading: "Results", canonical: "results", text: filler(10) },
+      { heading: "Film growth", canonical: "methods", text: "", level: 2 },
+      { heading: "Data availability", canonical: "acknowledgments", text: filler(10) },
+      { heading: "Discussion", canonical: "discussion", text: "" },
+      { heading: "Cell assembly", canonical: "methods", text: filler(10), level: 2 },
+    ]));
+    expect(strays.map((r) => r.section.heading)).toEqual(["Results", "Data availability", "Cell assembly"]);
+  });
+
+  it("reads the level the section carries: the part at 1, its sub-headings at 2 under it, the next unnumbered heading at 1", () => {
+    const map = buildReadingMap(unnumbered());
+    expect(map.sections.map((r) => [r.heading, r.level, r.parentId])).toEqual([
+      ["Introduction", 1, undefined],
+      ["Slow cooling spares the grain edges", 1, undefined],
+      ["Methods", 1, undefined],
+      ["Film growth", 2, "s2"],
+      ["Cell assembly", 2, "s2"],
+      ["Data availability", 1, undefined],
+    ]);
+  });
+
+  it("gives the part its bucket's role, with no words of its own, and sums its sub-headings with groupTotals", () => {
+    const map = buildReadingMap(unnumbered());
+    const part = map.sections[2];
+    expect([part.role, part.words, part.minutes, part.paragraphs, part.page]).toEqual(["method", 0, 0, [], 9]);
+    expect(map.sections.slice(3, 5).map((r) => r.role)).toEqual(["method", "method"]);
+    expect([...groupTotals(map).keys()]).toEqual(["s2"]);
+    expect(groupTotals(map).get("s2")).toEqual({ words: 71, minutes: 1 });
+  });
+
+  it("leaves a numbered paper's levels to its numbers: the level a section carries is for the unnumbered", () => {
+    const map = buildReadingMap(doc([
+      { heading: "2. RESULTS", text: "" },
+      { heading: "2.1. Growth", text: filler(10) },
+    ]));
+    expect(map.sections.map((r) => [r.level, r.parentId])).toEqual([[1, undefined], [2, "s0"]]);
+  });
+});
+
+// P12-75 (B P12-73, M7): a part headed "Implications" sat between the last results and the named conclusion and was read as
+// evidence (the unnamed rows before the first named interpretation row are). Its heading names the discussion now.
+describe("buildReadingMap — a part headed 'Implications' (P12-75, M7)", () => {
+  it("reads it as interpretation, not as the evidence the unnamed rows before it are", () => {
+    const heading = (text: string) => ({ heading: text, canonical: canonicalizeHeading(text) });
+    const map = buildReadingMap(doc([
+      { ...heading("Introduction"), text: filler(60) },
+      { ...heading("Slow cooling spares the grain edges"), text: filler(120) },
+      { ...heading("Fast cooling splits the film"), text: filler(110) },
+      { ...heading("Implications"), text: filler(90) },
+      { ...heading("Conclusions"), text: filler(40) },
+    ]));
+    expect(map.sections.map((r) => [r.heading, r.role])).toEqual([
+      ["Introduction", "setup"],
+      ["Slow cooling spares the grain edges", "evidence"],
+      ["Fast cooling splits the film", "evidence"],
+      ["Implications", "interpretation"],
+      ["Conclusions", "interpretation"],
+    ]);
   });
 });

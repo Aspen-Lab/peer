@@ -1,17 +1,52 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { DOCK_BOTTOM_PX, DOCK_STACK_FLOOR_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_TOP_PX, columnBottomPx, legendHeightPx } from "@/components/reader/explain-dock";
 import { block } from "@/lib/notes/blocks";
 import { FIGURE_ZOOM_ROW_PX } from "@/components/reader/figure-card";
 
-import { EXPLAIN_WINDOW_ID, MIN_FRONT_PX, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, STACK_Z_BASE, WINDOW_HEADER_PX, FIGURE_CHROME_PX, figureStackedFloorPx, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
+import { EXPLAIN_WINDOW_ID, NOTES_MIN_FRONT_PX, NOTES_WINDOW_ID, STACK_Z_BASE, WINDOW_HEADER_PX, FIGURE_CHROME_PX, figureStackedFloorPx, stackFrameIn, stackLayout, stackRows, useWindows, type FloatingWindow } from "./windows";
 
 // P10-09a (review 7.1a; ruling §1h.78): the windows at the right stand like cascaded cards — only the headers of
 // the ones behind show (each later window offset by a header's height), the raised one in front and full; a header
 // click raises it. `useWindows` holds `{ id, kind, title, order }`; `stackLayout` places them.
 
+
+// P12-04 RE-AIM shared oracle: literal80px default content minimum and12px gaps,
+// independent of the production constants.194 allows a shared scroll track past the band.
+function assertSplit(rows: ReturnType<typeof stackLayout>, ids: string[], top: number, bottom: number) {
+  const height=Math.max((bottom-top-12*(ids.length-1))/ids.length,80);
+  expect(rows.map(r=>r.id)).toEqual(ids);
+  expect(rows.map(r=>r.front)).toEqual(ids.map(()=>true));
+  rows.forEach((row,i)=>{expect(row.top).toBeCloseTo(top+i*(height+12));expect(row.height).toBeCloseTo(height);expect(row.height).toBeGreaterThanOrEqual(80);});
+  expect(rows[rows.length-1].top+rows[rows.length-1].height).toBeCloseTo(top+height*ids.length+12*(ids.length-1));
+}
+
 const sticky = (n: number) => ({ id: `s${n}`, kind: "sticky" as const, title: `Note ${n}` });
+
+describe("P12-21 singleton actual furniture minimum", () => {
+  const note = (minimum: number): FloatingWindow => ({ id: "single", kind: "sticky", title: "Note", order: 1, minimum });
+  it("consumes the measured189 minimum and lifts only the29px deficit", () => {
+    expect(stackLayout([note(189)], { top: 280, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 251, height: 189 });
+  });
+  it("keeps feasible high selection alignment and the normal260 preference", () => {
+    expect(stackLayout([note(189)], { top: 180, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 180, height: 260 });
+    expect(stackLayout([note(189)], { top: 200, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 200, height: 240 });
+  });
+  it("does not cap actual furniture by preferred height and retains it past an undersized band", () => {
+    expect(stackLayout([note(300)], { top: 280, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 140, height: 300 });
+    expect(stackLayout([note(189)], { top: 350, bottom: 400, minTop: 300 })[0]).toMatchObject({ top: 300, height: 189 });
+  });
+  it("uses a new floor after wrapping/read replacement without storing changed geometry", () => {
+    const state = useWindows.getState(); state.open({ ...sticky(1), anchorTop: 280 });
+    state.setMinimum("s1", 189);
+    expect(stackLayout(useWindows.getState().windows, { top: 280, bottom: 440, minTop: 48 })[0].height).toBe(189);
+    state.setMinimum("s1", 225);
+    expect(stackLayout(useWindows.getState().windows, { top: 280, bottom: 440, minTop: 48 })[0]).toMatchObject({ top: 215, height: 225 });
+    state.close("s1"); state.setMinimum("s1", 225);
+    expect(useWindows.getState().windows).toEqual([]);
+  });
+});
 
 describe("useWindows", () => {
   beforeEach(() => useWindows.setState({ windows: [], clock: 0 }));
@@ -54,36 +89,18 @@ describe("stackLayout", () => {
   const frame = { top: 100, bottom: 900, frontHeight: 260 };
 
   it("offsets each later window by a header's height; the last raised is in front and full", () => {
-    expect(WINDOW_HEADER_PX).toBe(40);
-    const rows = stackLayout([w("a", 1), w("b", 2), w("c", 3)], frame);
-    expect(rows.map((r) => [r.id, r.top])).toEqual([["a", 100], ["b", 140], ["c", 180]]);
-    expect(rows.map((r) => r.front)).toEqual([false, false, true]);
-    expect(rows.map((r) => r.height)).toEqual([40, 40, 260]);
-    expect(rows[0].z).toBeLessThan(rows[1].z);
-    expect(rows[1].z).toBeLessThan(rows[2].z);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    expect(WINDOW_HEADER_PX).toBe(40); const rows=stackLayout([w("a",1),w("b",2),w("c",3)],frame); assertSplit(rows,["a","b","c"],100,900); expect(rows[0].z).toBeLessThan(rows[1].z); expect(rows[1].z).toBeLessThan(rows[2].z);
   });
 
   it("brings the raised one to the front: a header click reorders the stack", () => {
-    useWindows.setState({ windows: [], clock: 0 });
-    const { open, raise } = useWindows.getState();
-    open(sticky(1));
-    open(sticky(2));
-    open(sticky(3));
-    raise("s1");
-    const rows = stackLayout(useWindows.getState().windows, frame);
-    expect(rows.map((r) => r.id)).toEqual(["s2", "s3", "s1"]);
-    expect(rows[2]).toMatchObject({ id: "s1", front: true, top: 180 });
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    useWindows.setState({windows:[],clock:0}); const {open,raise}=useWindows.getState();open(sticky(1));open(sticky(2));open(sticky(3));raise("s1"); const rows=stackLayout(useWindows.getState().windows,frame);assertSplit(rows,["s1","s2","s3"],100,900);expect(useWindows.getState().windows.find(w=>w.id==="s1")!.order).toBe(useWindows.getState().clock);
   });
 
   it("lifts the column, never above minTop, when the explain window stands so low the front would be squeezed", () => {
-    const rows = stackLayout([w("a", 1), w("b", 2), w("c", 3)], { top: 800, bottom: 960, frontHeight: 260, minTop: 48 });
-    expect(rows[0].top).toBeLessThan(800);
-    expect(rows[2].height).toBeGreaterThanOrEqual(160);
-    expect(rows[2].top + rows[2].height).toBeLessThanOrEqual(960);
-    const high = stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 250, frontHeight: 260, minTop: 90 });
-    expect(high[0].top).toBeGreaterThanOrEqual(90);
-    // Room enough, or no minTop: the column stays where it was asked.
-    expect(stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 900, frontHeight: 260, minTop: 48 })[0].top).toBe(100);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const rows=stackLayout([w("a",1),w("b",2),w("c",3)],{top:800,bottom:960,frontHeight:260,minTop:48});assertSplit(rows,["a","b","c"],48,960);const high=stackLayout([w("a",1),w("b",2)],{top:100,bottom:250,frontHeight:260,minTop:90});assertSplit(high,["a","b"],90,250);assertSplit(stackLayout([w("a",1),w("b",2)],{top:100,bottom:900,minTop:48}),["a","b"],48,900);
   });
 
   // P11-14 (rule 4; retired, §1c): "moves the column above the explain window when there is room there and none under it" — the column
@@ -92,11 +109,8 @@ describe("stackLayout", () => {
   // height and the headers stay on the screen — is asserted with the explain card among the windows ("every card's header is reachable…").
 
   it("gives one window the whole front, and fits the front above the bottom", () => {
-    expect(stackLayout([w("a", 1)], frame)[0]).toMatchObject({ top: 100, height: 260, front: true });
-    const short = stackLayout([w("a", 1), w("b", 2)], { top: 100, bottom: 250, frontHeight: 260 });
-    expect(short[1].top + short[1].height).toBeLessThanOrEqual(250);
-    expect(short[1].height).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
-    expect(stackLayout([], frame)).toEqual([]);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    expect(stackLayout([w("a",1)],frame)[0]).toMatchObject({top:100,height:260,front:true});assertSplit(stackLayout([w("a",1),w("b",2)],{top:100,bottom:250,frontHeight:260}),["a","b"],100,250);expect(stackLayout([],frame)).toEqual([]);
   });
 });
 
@@ -114,29 +128,13 @@ describe("stackLayout — the notes window and the stickies in one cascade (P10-
   const frame = { top: 100, bottom: 900, frontHeight: 260 };
 
   it("opening the notes window while three stickies stand makes four cards, 40 px apart, the notes window in front", () => {
-    const rows = stackLayout([sticky("a", 1), sticky("b", 2), sticky("c", 3), notes(4)], frame);
-    expect(rows.map((r) => [r.id, r.top])).toEqual([["a", 100], ["b", 140], ["c", 180], [NOTES_WINDOW_ID, 220]]);
-    expect(rows.map((r) => r.front)).toEqual([false, false, false, true]);
-    expect(rows.map((r) => r.height).slice(0, 3)).toEqual([40, 40, 40]);
-    // In front the notes window takes what the screen leaves, not a sticky's 260.
-    expect(rows[3].height).toBe(900 - 220);
-    expect(new Set(rows.map((r) => r.z)).size).toBe(4);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const rows=stackLayout([sticky("a",1),sticky("b",2),sticky("c",3),notes(4)],frame);assertSplit(rows,["a","b","c",NOTES_WINDOW_ID],100,900);expect(new Set(rows.map(r=>r.z)).size).toBe(4);
   });
 
   it("raising a sticky brings it in front of the notes window, and raising the notes window brings it back", () => {
-    useWindows.setState({ windows: [], clock: 0 });
-    const { open, raise } = useWindows.getState();
-    open({ id: "a", kind: "sticky", title: "Note 1" });
-    open({ id: "b", kind: "sticky", title: "Note 2" });
-    open({ id: NOTES_WINDOW_ID, kind: "notes", title: "Your notes" });
-    expect(stackLayout(useWindows.getState().windows, frame).map((r) => r.id)).toEqual(["a", "b", NOTES_WINDOW_ID]);
-    raise("a");
-    const rows = stackLayout(useWindows.getState().windows, frame);
-    expect(rows.map((r) => r.id)).toEqual(["b", NOTES_WINDOW_ID, "a"]);
-    expect(rows[2]).toMatchObject({ id: "a", front: true, top: 180, height: 260 });
-    expect(rows[1]).toMatchObject({ id: NOTES_WINDOW_ID, front: false, height: 40 });
-    raise(NOTES_WINDOW_ID);
-    expect(stackLayout(useWindows.getState().windows, frame).map((r) => r.id)).toEqual(["b", "a", NOTES_WINDOW_ID]);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    useWindows.setState({windows:[],clock:0});const {open,raise}=useWindows.getState();open({id:"a",kind:"sticky",title:"Note1"});open({id:"b",kind:"sticky",title:"Note2"});open({id:NOTES_WINDOW_ID,kind:"notes",title:"Your notes"});assertSplit(stackLayout(useWindows.getState().windows,frame),["a","b",NOTES_WINDOW_ID],100,900);raise("a");assertSplit(stackLayout(useWindows.getState().windows,frame),["a","b",NOTES_WINDOW_ID],100,900);raise(NOTES_WINDOW_ID);assertSplit(stackLayout(useWindows.getState().windows,frame),["a","b",NOTES_WINDOW_ID],100,900);expect(useWindows.getState().windows.find(w=>w.id===NOTES_WINDOW_ID)!.order).toBe(useWindows.getState().clock);
   });
 
   // The four cases the notes window's own box (`notesWindowBox`, P10-09b) used to answer, re-aimed to the stack (§1c).
@@ -184,12 +182,12 @@ describe("stackRows — which windows stand in the column (P10-09c)", () => {
     ];
     const rows = stackRows(windows, heads, frame);
     expect(rows.map((r) => r.id)).toEqual([heads[0].id, NOTES_WINDOW_ID, heads[1].id]);
-    expect(rows.map((r) => r.top)).toEqual([100, 140, 180]);
+    assertSplit(rows, [heads[0].id, NOTES_WINDOW_ID, heads[1].id], 100, 900);
   });
 
   it("is the same cascade whoever asks: the stickies' view and the notes window's view agree", () => {
-    const windows = [sticky(heads[0].id, 1), { id: NOTES_WINDOW_ID, kind: "notes" as const, title: "Your notes", order: 2 }];
-    expect(stackRows(windows, heads, frame)).toEqual(stackRows([...windows].reverse(), heads, frame));
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const windows=[sticky(heads[0].id,1),{id:NOTES_WINDOW_ID,kind:"notes" as const,title:"Your notes",order:2}];const expected=[heads[0].id,NOTES_WINDOW_ID];assertSplit(stackRows(windows,heads,frame),expected,100,900);assertSplit(stackRows([...windows],heads,frame),expected,100,900);assertSplit(stackRows([...windows].reverse(),heads,frame),[...expected].reverse(),100,900);
   });
 });
 
@@ -209,8 +207,7 @@ describe("stackRows — which windows stand in the column (P10-09c)", () => {
 // (`LEAST_FRONT_PX`) is what these cases hold to account, so they must not read it — a floor lowered there, the explain card's 250 to 100,
 // would lower the expectation with it and every case would stay green. A sticky 160, the notes window 240, the explain card 250 (its
 // header, its follow-up field and Send).
-const FRONT_FLOOR_PX = { sticky: 160, notes: 240, explain: 250 } as const;
-const floorOf = (windows: readonly FloatingWindow[]) => FRONT_FLOOR_PX[windows[windows.length - 1].kind as keyof typeof FRONT_FLOOR_PX];
+
 
 // P10-18 (A P10-14 §4 X-B1, B9; ruling §1h.93 (a)): the explain window stood at z 70 over the stack (z 60+), and used to stand over the
 // stickies' headers, their X and the notes window's Export once it, three stickies and the notes window were more than the screen; it
@@ -252,10 +249,10 @@ describe("every card's header is reachable with the explain card in the stack (P
           }
           // The headers do not stand on each other either: 40 px apart, so each one's X is its own.
           const tops = rows.map((r) => r.top);
-          for (let i = 1; i < tops.length; i += 1) expect(tops[i] - tops[i - 1]).toBe(WINDOW_HEADER_PX);
+          for (let i = 1; i < tops.length; i += 1) expect(tops[i] - tops[i - 1]).toBeCloseTo(rows[i - 1].height + 12);
           // The front keeps what it needs: the notes window 240, a sticky 160, the explain card 250 (its header, its follow-up field and Send).
           const front = rows[rows.length - 1];
-          expect(front.height, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(floorOf(windows));
+          expect(front.height, `${name}, origin ${origin}`).toBeGreaterThanOrEqual(80);
           expect(front.top + front.height, `${name}, origin ${origin}`).toBeLessThanOrEqual(frame.bottom);
         }
       });
@@ -263,11 +260,8 @@ describe("every card's header is reachable with the explain card in the stack (P
   }
 
   it("the front gives way only as much as the screen needs: the explain card keeps 250, the notes window 240, beside four headers", () => {
-    const four = [sticky(1, 1), sticky(2, 2), sticky(3, 3), explain(4)];
-    expect(stackLayout(four, stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(720, DOCK_BOTTOM_PX) }, 243))[3].height).toBeGreaterThanOrEqual(DOCK_STACK_FLOOR_PX);
-    const withNotes = [sticky(1, 1), sticky(2, 2), sticky(3, 3), notes(4)];
-    expect(stackLayout(withNotes, stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(720, DOCK_BOTTOM_PX) }, 243))[3].height).toBeGreaterThanOrEqual(NOTES_MIN_FRONT_PX);
-    expect(stackLayout([sticky(1, 1), sticky(2, 2), sticky(3, 3)], stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(1000, DOCK_BOTTOM_PX) }, 296))[2].height).toBeGreaterThanOrEqual(MIN_FRONT_PX);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const four=[sticky(1,1),sticky(2,2),sticky(3,3),explain(4)];const bottom=columnBottomPx(720,DOCK_BOTTOM_PX);assertSplit(stackLayout(four,stackFrameIn({top:48,bottom},243)),four.map(w=>w.id),48,bottom);const withNotes=[sticky(1,1),sticky(2,2),sticky(3,3),notes(4)];assertSplit(stackLayout(withNotes,stackFrameIn({top:48,bottom},243)),withNotes.map(w=>w.id),48,bottom);const three=[sticky(1,1),sticky(2,2),sticky(3,3)];assertSplit(stackLayout(three,stackFrameIn({top:48,bottom:960},296)),three.map(w=>w.id),48,960);
   });
 
   it("the explain card alone stands level with its origin and takes the room beneath it, as the dock did (P8-02, P9-17)", () => {
@@ -318,21 +312,16 @@ describe("the stack on short screens, with the explain card in it (P10-31, BACKL
           expect(front.height).toBeGreaterThanOrEqual(WINDOW_HEADER_PX);
           // ...and what is in front keeps its floor (the base kept the explain window at exactly 250 here): a sticky 160, the notes window
           // 240, the explain card 250 — read from the numbers above, not from the stack's table.
-          expect(front.height, `${name}, origin ${origin}: the front keeps its floor`).toBeGreaterThanOrEqual(floorOf(windows));
-          for (const row of rows.slice(0, -1)) expect(row.height).toBe(WINDOW_HEADER_PX);
+          expect(front.height, `${name}, origin ${origin}: the front keeps its floor`).toBeGreaterThanOrEqual(80);
+          for (const row of rows) expect(row.height).toBeCloseTo(rows[0].height);
         }
       });
     }
   }
 
   it("with the explain card and four more windows on a screen under 560 px high, no header is lower than the screen", () => {
-    // At 480 the fifth header's foot passes the column's foot (440) by up to 26 px, into the legend's strip, and stays above the screen's end
-    // (BACKLOG-86's remainder: a header over the legend's strip, never one off-screen).
-    const five = [exp(1), stk(1, 2), stk(2, 3), stk(3, 4), nts(5)];
-    for (const height of [520, 480]) {
-      const rows = stackLayout(five, stackFrameIn({ top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) }, 48));
-      expect(rows[rows.length - 1].top + WINDOW_HEADER_PX, `${height} px`).toBeLessThanOrEqual(height);
-    }
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const five=[exp(1),stk(1,2),stk(2,3),stk(3,4),nts(5)];for(const height of [520,480])assertSplit(stackLayout(five,stackFrameIn({top:48,bottom:columnBottomPx(height,DOCK_BOTTOM_PX)},48)),five.map(w=>w.id),48,columnBottomPx(height,DOCK_BOTTOM_PX));
   });
 });
 
@@ -387,10 +376,8 @@ describe("stackLayout — one front height per kind (P11-14, rule 2)", () => {
   });
 
   it("the notes window and a figure in front take all the room the band leaves", () => {
-    expect(stackLayout([card("n", "notes", 1)], band)[0]).toMatchObject({ height: 800, front: true });
-    expect(stackLayout([card("f", "figure", 1)], band)[0]).toMatchObject({ height: 800, front: true });
-    const under = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], band);
-    expect(under.map((r) => [r.id, r.top, r.height])).toEqual([["a", 100, 40], ["f", 140, 760]]);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    expect(stackLayout([card("n","notes",1)],band)[0]).toMatchObject({height:800,front:true});expect(stackLayout([card("f","figure",1)],band)[0]).toMatchObject({height:800,front:true});assertSplit(stackLayout([card("a","sticky",1),card("f","figure",2)],band),["a","f"],100,900);
   });
 
   it("the explain card in front is its content, at most the room, and the whole room until its content is known", () => {
@@ -405,36 +392,16 @@ describe("stackLayout — one front height per kind (P11-14, rule 2)", () => {
   });
 
   it("every kind behind another is a header, in one cascade 40 px apart, and a header press (raise) brings it forward", () => {
-    useWindows.setState({ windows: [], clock: 0, origin: null });
-    const { open, raise } = useWindows.getState();
-    open({ id: "a", kind: "sticky", title: "Note 1" });
-    open({ id: "f", kind: "figure", title: "Figure 1" });
-    open({ id: EXPLAIN_WINDOW_ID, kind: "explain", title: "Explain this" });
-    let rows = stackLayout(useWindows.getState().windows, band);
-    expect(rows.map((r) => [r.id, r.top, r.height, r.front])).toEqual([["a", 100, 40, false], ["f", 140, 40, false], [EXPLAIN_WINDOW_ID, 180, 720, true]]);
-    raise("a");
-    rows = stackLayout(useWindows.getState().windows, band);
-    expect(rows.map((r) => r.id)).toEqual(["f", EXPLAIN_WINDOW_ID, "a"]);
-    expect(rows[2]).toMatchObject({ id: "a", front: true, top: 180, height: 260 });
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    useWindows.setState({windows:[],clock:0,origin:null});const {open,raise}=useWindows.getState();open({id:"a",kind:"sticky",title:"Note1"});open({id:"f",kind:"figure",title:"Figure1"});open({id:EXPLAIN_WINDOW_ID,kind:"explain",title:"Explain this"});assertSplit(stackLayout(useWindows.getState().windows,band),["a","f",EXPLAIN_WINDOW_ID],100,900);raise("a");assertSplit(stackLayout(useWindows.getState().windows,band),["a","f",EXPLAIN_WINDOW_ID],100,900);expect(useWindows.getState().windows[0].order).toBe(useWindows.getState().clock);
   });
 
   // RE-AIMED (§1c), P11-26 rule 2: the figure card's 240 is the floor of a figure that stands ALONE; in front of another card its floor is the height
   // that keeps its picture box at half the band (`figureStackedFloorPx`) — 630 px in the 852-px band below, where the sticky behind took the
   // column up to 230 — and the "never above the band's top" half of the sentence is held by the second figure case.
   it("lifts the column to keep the front its least height — the explain card 250, a lone figure 240, a figure in front of a card its picture's half band — never above the band's top", () => {
-    const rows = stackLayout([card("a", "sticky", 1), card("b", "sticky", 2), card("e", "explain", 3)], { top: 700, bottom: 900, minTop: 48, frontHeights: { explain: 400 } });
-    expect(rows.map((r) => r.top)).toEqual([570, 610, 650]);
-    expect(rows[2].height).toBe(250);
-    const lone = stackLayout([card("f", "figure", 1)], { top: 880, bottom: 900, minTop: 48 });
-    expect(lone[0]).toMatchObject({ top: 900 - 240, height: 240 });
-    const figure = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], { top: 800, bottom: 900, minTop: 48 });
-    expect(figureStackedFloorPx(900 - 48)).toBe(630);
-    expect(figure[0].top).toBe(900 - 40 - 630);
-    expect(figure[1].height).toBe(630);
-    // Never above the band's top: where the cards behind leave no more room than that, the figure takes all there is.
-    expect(figureStackedFloorPx(300 - 48)).toBe(255);
-    const tight = stackLayout([card("a", "sticky", 1), card("f", "figure", 2)], { top: 200, bottom: 300, minTop: 48 });
-    expect(tight.map((r) => [r.top, r.height])).toEqual([[48, 40], [88, 212]]);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const rows=stackLayout([card("a","sticky",1),card("b","sticky",2),card("e","explain",3)],{top:700,bottom:900,minTop:48,frontHeights:{explain:400}});assertSplit(rows,["a","b","e"],48,900);const lone=stackLayout([card("f","figure",1)],{top:880,bottom:900,minTop:48});expect(lone[0]).toMatchObject({top:660,height:240});assertSplit(stackLayout([card("a","sticky",1),card("f","figure",2)],{top:800,bottom:900,minTop:48}),["a","f"],48,900);assertSplit(stackLayout([card("a","sticky",1),card("f","figure",2)],{top:200,bottom:300,minTop:48}),["a","f"],48,300);
   });
 });
 
@@ -531,8 +498,7 @@ describe("stackRows — the explain card is one of the stack (P11-14, rule 4; O-
     ];
     const rows = stackRows(windows, heads, frame);
     expect(rows.map((r) => r.id)).toEqual([heads[0].id, EXPLAIN_WINDOW_ID, NOTES_WINDOW_ID, heads[1].id]);
-    expect(rows.map((r) => r.top)).toEqual([100, 140, 180, 220]);
-    expect(rows.map((r) => r.front)).toEqual([false, false, false, true]);
+    assertSplit(rows, windows.map(w => w.id), 100, 900);
   });
 
   it("every card's header is reachable whatever the order the four were opened in: 40 px apart, inside the band, the front above the foot", () => {
@@ -550,7 +516,7 @@ describe("stackRows — the explain card is one of the stack (P11-14, rule 4; O-
         expect(rows, label).toHaveLength(4);
         rows.forEach((row, i) => {
           expect(row.top, label).toBeGreaterThanOrEqual(DOCK_TOP_PX);
-          if (i > 0) expect(row.top - rows[i - 1].top, label).toBe(WINDOW_HEADER_PX);
+          if (i > 0) expect(row.top - rows[i - 1].top, label).toBeCloseTo(rows[i - 1].height + 12);
         });
         const front = rows[3];
         expect(front.top + front.height, label).toBeLessThanOrEqual(bottom);
@@ -590,26 +556,14 @@ describe("stackLayout — a figure in front of other cards is never a thumbnail 
     for (const [name, kinds] of BEHIND) {
       it(`${width} x ${height}, in front of ${name}: the picture box is at least half the band, whatever the caption takes, wherever the cascade started`, () => {
         const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(height, DOCK_BOTTOM_PX) };
-        const bandHeight = band.bottom - band.top;
         const windows = [...kinds.map((kind, i) => win(`${kind}:${i}`, kind, i + 1)), win("figure", "figure", kinds.length + 1)];
         for (const origin of [null, 48, 200, 335, 455, 600, 700]) {
           const rows = stackLayout(windows, stackFrameIn(band, origin));
           const front = rows[rows.length - 1];
           const label = `${name}, origin ${origin}`;
           expect(front.id, label).toBe("figure");
-          // Half the band for the box, wherever the cards behind leave room for it; where they do not (three headers on a 526-px band), the figure
-          // takes everything under them — as large as the room allows.
-          const needed = Math.ceil((bandHeight / 2 + CHROME) / (1 - STACKED_CAPTION_SHARE));
-          if ((kinds.length * WINDOW_HEADER_PX) + needed <= bandHeight) expect(boxWorstCase(front.height), label).toBeGreaterThanOrEqual(bandHeight / 2);
-          else expect(front.top, label).toBe(band.top + kinds.length * WINDOW_HEADER_PX);
-          // …and the room is used: the figure stands on the band's foot, not above it.
-          expect(front.top + front.height, label).toBe(band.bottom);
-          // The cards behind keep their headers: 40 px apart from the cascade's top, inside the band, one X each.
-          rows.forEach((row, i) => {
-            expect(row.top, label).toBeGreaterThanOrEqual(band.top);
-            if (i > 0) expect(row.top - rows[i - 1].top, label).toBe(WINDOW_HEADER_PX);
-            if (i < rows.length - 1) expect(row.height, label).toBe(WINDOW_HEADER_PX);
-          });
+          // P12-04 RE-AIM: thirds take precedence over the old half-band foreground floor.
+          assertSplit(rows, windows.map(w => w.id), band.top, band.bottom);
         }
       });
     }
@@ -634,10 +588,8 @@ describe("stackLayout — a figure in front of other cards is never a thumbnail 
   });
 
   it("the cascade is lifted only as far as the picture needs: a cascade that started high enough stays where it is", () => {
-    const band = { top: DOCK_TOP_PX, bottom: columnBottomPx(900, DOCK_BOTTOM_PX) };
-    const rows = stackLayout([win("s", "sticky", 1), win("figure", "figure", 2)], stackFrameIn(band, 100));
-    expect(rows.map((r) => r.top)).toEqual([100, 140]);
-    expect(rows[1].height).toBe(band.bottom - 140);
+    // P12-04 RE-AIM: equal visible panels replace the foreground cascade; standalone assertions remain.
+    const band={top:DOCK_TOP_PX,bottom:columnBottomPx(900,DOCK_BOTTOM_PX)};assertSplit(stackLayout([win("s","sticky",1),win("figure","figure",2)],stackFrameIn(band,100)),["s","figure"],band.top,band.bottom);
   });
 });
 
@@ -695,7 +647,8 @@ describe("the stack never stands over the selection's buttons (P11-26 rule 5; §
     for (let i = 1; i <= 12; i += 1) open({ id: `w${i}`, kind: "sticky", title: `Note ${i}` });
     raise("w1");
     const rows = stackLayout(useWindows.getState().windows, band);
-    expect(rows[rows.length - 1]).toMatchObject({ id: "w1", front: true });
+    expect(rows[0]).toMatchObject({ id: "w1", front: true });
+    expect(useWindows.getState().windows[0].order).toBe(useWindows.getState().clock);
     expect(Math.max(...rows.map((r) => r.z))).toBeLessThan(ACTIONS_Z);
     expect(rows[rows.length - 1].z).toBe(Math.max(...rows.map((r) => r.z)));
     useWindows.setState({ windows: [], clock: 0, origin: null });

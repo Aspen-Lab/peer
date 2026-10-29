@@ -57,6 +57,7 @@ import { useEffect, type RefObject } from "react";
 import { DOCK_TOP_PX, PAGE_ZOOM_ROOT } from "@/components/reader/explain-dock";
 import { readPageZoom } from "@/lib/reader/margin";
 import { paragraphAtTop } from "@/lib/notes/return-to-paper";
+import { readReadingInteraction, restoreReadingInteraction, resolveTextPosition, textPosition, type TextPosition } from "./reading-position";
 
 /** The line under the masthead that the place is read at: `paragraphAtTop`'s own default, the masthead's foot and 8 px (the first text clear of it). */
 export const PLACE_LINE_PX = DOCK_TOP_PX + 8;
@@ -127,6 +128,7 @@ export interface CharRead {
   offset: number;
   top: number;
   height: number;
+  point?: TextPosition;
 }
 
 /** The character the place is kept by, and how much of its own box is above `CARET_LINE_PX` (a fraction: the line may fall a little outside the glyph, in the line's leading). */
@@ -134,6 +136,7 @@ export interface Anchor {
   node: unknown;
   offset: number;
   fraction: number;
+  point?: TextPosition;
 }
 
 /** Whether `scrollY` is at the page's top, or at its foot, to within a pixel. */
@@ -187,7 +190,7 @@ export function underTheLine(top: number, height: number): boolean {
  */
 export function anchorOf(read: CharRead | null, held: Held | null): Anchor | null {
   if (!read || !held || held.gap > 0 || read.id !== held.id || !underTheLine(read.top, read.height)) return null;
-  return { node: read.node, offset: read.offset, fraction: (CARET_LINE_PX - read.top) / read.height };
+  return { node: read.node, offset: read.offset, fraction: (CARET_LINE_PX - read.top) / read.height, ...(read.point ? { point: read.point } : {}) };
 }
 
 /**
@@ -222,6 +225,12 @@ export interface KeepPlaceEnv {
   onScroll(run: () => void): () => void;
   /** Told after the layout, before the paint, whenever the column's box (or Fit's root) changes size; the result stops it. */
   observe(run: () => void): () => void;
+  /** Start before the responsive React commit, using the LAST stable read. */
+  onResponsive?(run: () => void): () => void;
+  /** Actual wheel/key/touch/pointer input, distinct from a native clamp scroll. */
+  onIntervention?(run: () => void): () => void;
+  beginInteractionHold?(): void;
+  restoreInteraction?(): void;
 }
 
 /**
@@ -251,6 +260,12 @@ export function keepPlace(env: KeepPlaceEnv): () => void {
   /** The direction of the reader's last scroll: 1 down, -1 up, 0 none (yet); and when it was (the clock's ms). */
   let dir = 0;
   let lastScroll = Number.NEGATIVE_INFINITY;
+  let responsiveUntil = 0;
+  const responsive = () => env.now() < responsiveUntil;
+  const beginResponsive = () => {
+    responsiveUntil = env.now() + SETTLE_MS;
+    env.beginInteractionHold?.();
+  };
 
   const read = () => {
     held = heldPlace(env.view());
@@ -267,6 +282,9 @@ export function keepPlace(env: KeepPlaceEnv): () => void {
   };
   const onScroll = () => {
     const y = env.scrollY();
+    // CSS can clamp our own transient correction before the final observer.
+    // A scroll event alone cannot overwrite the durable pre-reflow token.
+    if (responsive()) { at = y; return; }
     if (own !== null && Math.abs(y - own) < MIN_SHIFT_PX) {
       at = y;
       return;
@@ -287,7 +305,7 @@ export function keepPlace(env: KeepPlaceEnv): () => void {
     // The window has moved since the place was read or put back, and its scroll event has not come: the reader's, ahead of its event; unless it is
     // at the foot, where the browser puts a window that the page has become too short for (that is not the reader's, and is put right as ever).
     let ahead = Math.abs(env.scrollY() - at) >= MIN_SHIFT_PX ? env.scrollY() - at : 0;
-    if (ahead !== 0 && atEdge(env.view())) ahead = 0;
+    if (ahead !== 0 && (responsive() || atEdge(env.view()))) ahead = 0;
     if (ahead !== 0 && now < settleUntil) {
       dir = Math.sign(ahead);
       lastScroll = now;
@@ -295,12 +313,14 @@ export function keepPlace(env: KeepPlaceEnv): () => void {
     if (next !== key) {
       key = next;
       settleUntil = now + SETTLE_MS;
+      if (env.onResponsive) beginResponsive();
     } else if (now >= settleUntil) {
       // Taller or shorter, not re-wrapped (the reading arrived, a block opened): not a re-flow, so nothing is put back, as it was;
       // take the place as it stands.
       read();
       return;
     }
+    if (responsive()) env.restoreInteraction?.();
     const base = shift();
     if (base === null) return;
     // The anchor has moved with the reader's own scroll too (`ahead`): what is put right is the change of the page's heights, not their scroll.
@@ -319,9 +339,17 @@ export function keepPlace(env: KeepPlaceEnv): () => void {
   read();
   const stopScroll = env.onScroll(onScroll);
   const stopObserving = env.observe(onBox);
+  const stopResponsive = env.onResponsive?.(beginResponsive);
+  const stopIntervention = env.onIntervention?.(() => {
+    responsiveUntil = 0;
+    own = null;
+    read();
+  });
   return () => {
     stopScroll();
     stopObserving();
+    stopResponsive?.();
+    stopIntervention?.();
   };
 }
 
@@ -343,7 +371,16 @@ function caretAt(x: number, y: number): { node: Node; offset: number } | null {
 }
 
 /** The real page. Browser only. */
-export function domEnv(column: Element): KeepPlaceEnv {
+export function domEnv(source: Element | (() => Element | null), scope?: Element): KeepPlaceEnv {
+  const column = () => typeof source === "function" ? source() : source;
+  let interaction = readReadingInteraction(document);
+  let holding = false, restoring = false;
+  let release: ReturnType<typeof setTimeout> | undefined;
+  const beginInteractionHold = () => {
+    holding = true;
+    clearTimeout(release);
+    release = setTimeout(() => { holding = false; interaction = readReadingInteraction(document); }, SETTLE_MS);
+  };
   const box = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return null;
@@ -370,7 +407,10 @@ export function domEnv(column: Element): KeepPlaceEnv {
     for (const offset of [caret.offset, caret.offset - 1, caret.offset + 1]) {
       if (offset < 0 || offset >= text.length || !/\S/.test(text.data[offset])) continue;
       const rect = charRect(text, offset);
-      if (rect && underTheLine(rect.top, rect.height)) return { id: el.id, node: text, offset, top: rect.top, height: rect.height };
+        if (rect && underTheLine(rect.top, rect.height)) {
+          const point = scope ? textPosition(text, offset, document) : null;
+          return { id: el.id, node: text, offset, top: rect.top, height: rect.height, ...(point ? { point } : {}) };
+        }
     }
     return null;
   };
@@ -387,7 +427,9 @@ export function domEnv(column: Element): KeepPlaceEnv {
     },
     charBox(anchor) {
       const text = anchor.node as Text;
-      return text.isConnected ? charRect(text, anchor.offset) : null;
+      if (text.isConnected) return charRect(text, anchor.offset);
+      const point = anchor.point ? resolveTextPosition(anchor.point, document) : null;
+      return point ? charRect(point.node, point.offset) : null;
     },
     view() {
       const top = paragraphAtTop(document, PLACE_LINE_PX);
@@ -401,8 +443,10 @@ export function domEnv(column: Element): KeepPlaceEnv {
     },
     paragraph: box,
     key() {
-      const style = window.getComputedStyle(column);
-      return layoutKey(column.getBoundingClientRect().width, style.getPropertyValue("--reading-scale"), String(readPageZoom(column)));
+      const current = column();
+      if (!current) return "missing";
+      const style = window.getComputedStyle(current);
+      return layoutKey(current.getBoundingClientRect().width, style.getPropertyValue("--reading-scale"), String(readPageZoom(current)));
     },
     scrollY: () => window.scrollY,
     now: () => performance.now(),
@@ -414,12 +458,48 @@ export function domEnv(column: Element): KeepPlaceEnv {
     observe(run) {
       if (typeof ResizeObserver === "undefined") return () => {};
       const observer = new ResizeObserver(run);
-      observer.observe(column);
+      let watched: Element | null = null;
+      const watch = () => {
+        const current = column();
+        if (current === watched) return;
+        if (watched) observer.unobserve(watched);
+        watched = current;
+        if (current) observer.observe(current);
+      };
+      watch();
       // Fit's zoom changes the root's size when it changes the wrapping, even where the capped column's own width does not move.
-      const root = column.ownerDocument?.querySelector(PAGE_ZOOM_ROOT);
+      const root = column()?.ownerDocument?.querySelector(PAGE_ZOOM_ROOT);
       if (root) observer.observe(root);
-      return () => observer.disconnect();
+      const mutation = scope && typeof MutationObserver !== "undefined" ? new MutationObserver(() => { watch(); run(); }) : null;
+      mutation?.observe(scope!, { childList: true, subtree: true });
+      return () => { observer.disconnect(); mutation?.disconnect(); clearTimeout(release); };
     },
+    ...(scope ? {
+      beginInteractionHold,
+      restoreInteraction() {
+        if (!holding) return;
+        restoring = true;
+        try { restoreReadingInteraction(interaction, document); } finally { restoring = false; }
+      },
+      onResponsive(run: () => void) {
+        const start = () => { beginInteractionHold(); run(); };
+        window.addEventListener("resize", start, true);
+        return () => window.removeEventListener("resize", start, true);
+      },
+      onIntervention(run: () => void) {
+        const acted = () => { holding = false; clearTimeout(release); run(); };
+        const capture = () => { if (!holding && !restoring) interaction = readReadingInteraction(document); };
+        const inputs = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+        const edits = ["selectionchange", "focusin", "select", "input"] as const;
+        inputs.forEach((type) => window.addEventListener(type, acted, { capture: true, passive: true }));
+        edits.forEach((type) => document.addEventListener(type, capture, true));
+        return () => {
+          inputs.forEach((type) => window.removeEventListener(type, acted, true));
+          edits.forEach((type) => document.removeEventListener(type, capture, true));
+          clearTimeout(release);
+        };
+      },
+    } : {}),
   };
 }
 
@@ -427,11 +507,17 @@ export function domEnv(column: Element): KeepPlaceEnv {
  * The shell's one call: keep the reader's place while the text column re-flows. `grid` is the shell's grid, which holds the column; where it
  * cannot be found (a shell rendered without a DOM), nothing is kept and nothing fails.
  */
-export function useKeepPlace(grid: RefObject<HTMLElement | null>): void {
+export function useKeepPlace(grid: RefObject<HTMLElement | null>, options: { enabled?: boolean; responsive?: boolean } = {}): void {
+  const { enabled = true, responsive = false } = options;
   useEffect(() => {
+    if (!enabled) return;
     const shell = grid.current;
     if (!shell || typeof shell.querySelector !== "function") return;
+    if (responsive) {
+      const column = () => shell.querySelector(COLUMN_SELECTOR) ?? shell.querySelector("#paper-body") ?? shell.querySelector("[data-reader-one-column]");
+      return keepPlace(domEnv(column, shell));
+    }
     const column = shell.querySelector(COLUMN_SELECTOR);
     return column ? keepPlace(domEnv(column)) : undefined;
-  }, [grid]);
+  }, [grid, enabled, responsive]);
 }

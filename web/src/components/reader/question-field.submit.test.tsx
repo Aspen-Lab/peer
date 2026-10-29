@@ -1,3 +1,4 @@
+// P12-06: native disabled assertions re-aimed to guarded, keyboard-reachable aria-disabled.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // P7-13 (R11c, the owner's R11; §1h.29 Q8): the Submit control. These cases need several
@@ -47,7 +48,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const disabled = (view: View) => view.submit.props.disabled;
+const disabled = (view: View) => view.submit.props["aria-disabled"];
 
 describe("the Submit control — when there is something to send", () => {
   // P10-03 re-aim of "shows once the box is in use …": the control is in the bar from the start (a search bar
@@ -91,7 +92,7 @@ describe("the Submit control — when there is something to send", () => {
     ]);
   });
 
-  it("follows the text, not the keystrokes: edited and put back it is disabled again; spaces at the edges make no difference to it", async () => {
+  it("follows the text, not the keystrokes: edited and put back it is disabled again; raw edge spaces need acknowledgement without resettling", async () => {
     useReadingQuestionsStore.getState().set(PAPER, [A], false, AT);
     useReadingQuestionsStore.getState().settle(PAPER);
 
@@ -101,7 +102,7 @@ describe("the Submit control — when there is something to send", () => {
       type(A),
       check((view) => expect(disabled(view)).toBe(true)),
       type(`  ${A}  `),
-      check((view) => expect(disabled(view)).toBe(true)),
+      check((view) => expect(disabled(view)).toBe(false)),
     ]);
   });
 

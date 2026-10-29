@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { READING_VERSION } from "@/components/reader/use-reading";
 import { goToPassage, passageIsLost, storedBodyOf } from "./note-tags";
 
 // P11-27 rule 2 (owner items 5 and 8; round 1's walk X-4; ruling §1h.122): the blue square and the lost check work for a note or a highlight taken on a
@@ -79,7 +80,7 @@ describe("passageIsLost — a heading's or a caption's note, against the reading
 
 describe("storedBodyOf — the reading kept in this browser keeps its headings and captions", () => {
   it("gives back the sections as stored, headings and figures with them", () => {
-    const entry = { ts: 1_000, reading: { version: 14, body: BODY } };
+    const entry = { ts: 1_000, reading: { version: READING_VERSION, body: BODY } };
     const storage = { getItem: () => JSON.stringify({ "p1|key": entry }) };
     const body = storedBodyOf("p1", storage, 2_000);
     expect(body).toEqual(BODY);

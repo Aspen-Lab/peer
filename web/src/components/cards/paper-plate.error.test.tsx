@@ -31,7 +31,8 @@ import type { ComponentProps, ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import type { Paper } from "@/types";
 import type { FigureState } from "@/components/paper-figure";
-import { FigureLightbox } from "@/components/reader/figure-lightbox";
+// P12-09 re-aim: retain load/error/shape guards on the unified margin route.
+import { MarginFigure as FigureLightbox } from "@/components/reader/margin-figure";
 import { PaperPlate } from "./paper-plate";
 
 const found = (imageUrl: string): FigureState => ({

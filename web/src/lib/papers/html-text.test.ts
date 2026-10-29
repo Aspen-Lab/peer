@@ -4,6 +4,7 @@ import {
   bucketInheritor,
   canonicalizeHeading,
   chooseHtmlExtractor,
+  dropStrayHeadings,
   looksLikeFullText,
   parseCaption,
   resolveBase,
@@ -70,6 +71,208 @@ describe("canonicalizeHeading", () => {
     ["Abstract", "abstract"],
   ])("%s → %s", (heading, bucket) => {
     expect(canonicalizeHeading(heading)).toBe(bucket);
+  });
+});
+
+// P12-48 (rule L1; B P12-40 R1, Theme C): "experimental methods" is a methods heading. It used to miss the
+// methods words and fall to the `^experiment…` line, which files it as results — the methods part of a paper
+// (and its numbered sub-headings, which inherit the bucket) read as evidence.
+describe("canonicalizeHeading — experimental methods (L1)", () => {
+  it.each([
+    ["Experimental methods", "methods"],
+    ["2. Experimental Methods", "methods"],
+    ["EXPERIMENTAL PROCEDURES", "methods"],
+    ["3 Experimental procedure", "methods"],
+    ["Experimental and computational methods", "methods"],
+    ["Experimental protocols", "methods"],
+    ["Experimental techniques", "methods"],
+    ["Experimental details", "methods"],
+    ["Experimental detail", "methods"],
+  ])("%s → %s", (heading, bucket) => {
+    expect(canonicalizeHeading(heading)).toBe(bucket);
+  });
+
+  it("keeps the headings that were methods before, and the ones that are results", () => {
+    expect(canonicalizeHeading("4. EXPERIMENTAL SECTION")).toBe("methods");
+    expect(canonicalizeHeading("IV. Experimental Setup")).toBe("methods");
+    expect(canonicalizeHeading("Experimental design")).toBe("methods");
+    // No methods word follows "experimental": these are the paper's findings.
+    expect(canonicalizeHeading("Experimental results")).toBe("results");
+    expect(canonicalizeHeading("Experiments")).toBe("results");
+    expect(canonicalizeHeading("5 Experimental Evaluation")).toBe("results");
+    expect(canonicalizeHeading("Experimental and numerical results")).toBe("results");
+  });
+
+  it("gives the numbered sub-headings of an experimental-methods part the methods bucket", () => {
+    const inherit = bucketInheritor();
+    expect(inherit("2. Experimental methods", canonicalizeHeading("2. Experimental methods"))).toBe("methods");
+    expect(inherit("2.1 Sample preparation", canonicalizeHeading("2.1 Sample preparation"))).toBe("methods");
+    expect(inherit("2.2 Measurements", canonicalizeHeading("2.2 Measurements"))).toBe("methods");
+  });
+});
+
+// P12-75 (item 2, §1h.452): in chemistry and materials journals a bare "Experimental" is the whole heading of the methods
+// part; the `^experiment…` line filed it (and "Experimental part") as results, and the part's sub-headings with it.
+describe("canonicalizeHeading — a bare 'Experimental' is the methods part (P12-75, item 2)", () => {
+  it.each([
+    "Experimental",
+    "EXPERIMENTAL",
+    "Experimental part",
+    "Experimental section",
+    "Experimental details",
+    "Experimental procedures",
+    "Experimental procedure",
+    "4. Experimental",
+    "IV. Experimental part",
+    "2.1 Experimental",
+  ])("%s → methods", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("methods");
+  });
+
+  it.each([
+    "Experiments",
+    "Experiment",
+    "Experimental results",
+    "Experimental evaluation",
+    "Experimental findings",
+    "Experimental and numerical results",
+    "Experimental validation",
+    "5 Experimental Evaluation",
+    "Experimental data",
+  ])("%s → results, as before", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("results");
+  });
+});
+
+// P12-75 (B P12-73, M7): a part headed "Implications" or "Outlook" sits between the last results and the conclusion; it had
+// no bucket of its own word (`body`, or methods by "model"), and the map read it as evidence. The word names the discussion.
+describe("canonicalizeHeading — implications and outlook are the discussion (P12-75, M7)", () => {
+  it.each([
+    "Implications",
+    "Implication",
+    "Implications for storage",
+    "Broader implications of the proposed model",
+    "Implications and outlook",
+    "Outlook",
+    "OUTLOOK",
+    "Future outlook",
+    "5 Outlook",
+    "6.2. Implications for the field",
+    "Discussion and outlook",
+  ])("%s → discussion", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("discussion");
+  });
+
+  it("leaves a heading that also names the conclusion or a summary as the conclusion, as it was", () => {
+    expect(canonicalizeHeading("Conclusions and outlook")).toBe("conclusion");
+    expect(canonicalizeHeading("Summary and outlook")).toBe("conclusion");
+    expect(canonicalizeHeading("Conclusion and implications")).toBe("conclusion");
+  });
+
+  it("leaves a heading that an earlier line places where it was", () => {
+    expect(canonicalizeHeading("Results and implications")).toBe("results");
+    expect(canonicalizeHeading("Limitations and implications")).toBe("limitations");
+  });
+
+  it("does not read a word that only contains the letters", () => {
+    expect(canonicalizeHeading("Applications")).toBe("body");
+    expect(canonicalizeHeading("Complications")).toBe("body");
+    expect(canonicalizeHeading("Implicit bias")).toBe("body");
+  });
+});
+
+// P12-75 (B P12-73, M5): "Sample preparation and NMR experiments" is a procedure; the unanchored `experiment` line filed it
+// results. A heading that holds `experiment(s)` and also names the procedure (a sample, a specimen, a preparation, a
+// synthesis, a fabrication, an assembly, a measurement, a setup, details) is methods. Without the procedure word, or
+// with the word `experimental` only, it stays as it was.
+describe("canonicalizeHeading — a procedure's experiments are methods (P12-75, M5)", () => {
+  it.each([
+    "Sample preparation and NMR experiments",
+    "Specimen preparation for tensile experiments",
+    "Synthesis and cycling experiments",
+    "Fabrication of the device and transport experiments",
+    "Cell assembly for the experiments",
+    "Sample and measurements for the experiments",
+    "Setup of the experiments",
+    "Details of the experiments",
+    "Details of the experiment",
+    "Cycling experiments: measurement protocol",
+    "SAMPLE PREPARATION AND NMR EXPERIMENTS",
+    "3.2 Sample preparation and NMR experiments",
+  ])("%s → methods", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("methods");
+  });
+
+  it.each([
+    "Cycling experiments",
+    "Control experiments on seam growth",
+    "Experiments on three films",
+    "Annealing experiments and their outcome",
+    "Experimental results on the seams",
+    "Comparison experiments",
+  ])("%s → results, as before", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("results");
+  });
+
+  it("does not move a heading that names the procedure without any experiments", () => {
+    expect(canonicalizeHeading("Sample preparation")).toBe("body");
+    expect(canonicalizeHeading("Measurement setup")).toBe("body");
+    expect(canonicalizeHeading("Synthesis")).toBe("body");
+  });
+
+  it("leaves the headings that start with experiment where the anchored lines put them", () => {
+    expect(canonicalizeHeading("Experiments")).toBe("results");
+    expect(canonicalizeHeading("Experiments and sample preparation")).toBe("results");
+    expect(canonicalizeHeading("Experimental details")).toBe("methods");
+  });
+});
+
+// P12-48 (rule L2; B P12-40 R3, Theme C): the notes a journal prints after the argument are apparatus. They had
+// no word of their own: "Reporting summary" was read as a conclusion, and "Online content" and "Additional
+// information" were `body`, with no role tag on the map.
+describe("canonicalizeHeading — end-matter notes (L2)", () => {
+  it.each([
+    "Online content",
+    "Online Content",
+    "Additional information",
+    "Additional information and declarations",
+    "9. Additional information",
+    "Reporting summary",
+    "Reporting Summaries",
+    "Nature Portfolio reporting summary",
+    "Peer review information",
+    "Peer review file",
+    "Reprints and permissions",
+    "Reprints & permissions",
+    "Rights and permissions",
+    "Keywords",
+    "Key words:",
+    "Code availability",
+    "Software availability",
+    "Data and code availability",
+    "Data and materials availability",
+    "Availability of data and materials",
+    "Author contributions",
+    "Competing interests",
+    "Data availability",
+  ])("%s → acknowledgments, the apparatus bucket", (heading) => {
+    expect(canonicalizeHeading(heading)).toBe("acknowledgments");
+  });
+
+  it("does not take a body heading that only contains the words", () => {
+    expect(canonicalizeHeading("Online content moderation")).toBe("body");
+    expect(canonicalizeHeading("Keyword extraction")).toBe("body");
+    expect(canonicalizeHeading("Additional information retrieval")).toBe("body");
+    expect(canonicalizeHeading("Peer review")).toBe("body");
+    expect(canonicalizeHeading("Reprints")).toBe("body");
+  });
+
+  it("leaves the headings that were something else before as they were", () => {
+    expect(canonicalizeHeading("Summary")).toBe("conclusion");
+    expect(canonicalizeHeading("Summary of results")).toBe("conclusion");
+    expect(canonicalizeHeading("Supplementary information")).toBe("supplementary");
+    expect(canonicalizeHeading("Online methods")).toBe("methods");
+    expect(canonicalizeHeading("References")).toBe("references");
   });
 });
 
@@ -624,5 +827,43 @@ describe("extractPmc — a nested section is its own (P10-40, BACKLOG-35)", () =
     expect(out.sections.map((s) => s.heading)).toEqual(["Methods", "Sampling"]);
     expect(out.sections[0].text).toContain("Box: the watering schedule.");
     expect(out.sections[1].text).toBe("Probes sat in each plot.");
+  });
+});
+
+// P12-75 (B P12-73, M2): an unnumbered part's heading with no text of its own ("Methods", then at once its first
+// sub-heading) is kept by the outline at `level` 1, and each sub-heading under it is `level` 2. `dropStrayHeadings`
+// keeps such a part heading when the section after it is one of its sub-headings, and drops it as it drops any
+// empty heading when nothing of its own follows.
+describe("dropStrayHeadings — an unnumbered part's heading (P12-75)", () => {
+  type Row = { heading: string; text: string; level?: 1 | 2 };
+  const headings = (rows: Row[]) => dropStrayHeadings(rows).map((row) => row.heading);
+
+  it("keeps a part heading with no text when the next section is its sub-heading", () => {
+    expect(
+      headings([
+        { heading: "Slow cooling", text: "Films held their capacity." },
+        { heading: "Methods", text: "", level: 1 },
+        { heading: "Film growth", text: "Films were grown on discs.", level: 2 },
+        { heading: "Cell assembly", text: "Cells were sealed in a box.", level: 2 },
+      ]),
+    ).toEqual(["Slow cooling", "Methods", "Film growth", "Cell assembly"]);
+  });
+
+  it("drops a part heading with no text when the next section is not a sub-heading, or when none follows", () => {
+    expect(headings([{ heading: "Methods", text: "", level: 1 }, { heading: "Data availability", text: "On request." }])).toEqual(["Data availability"]);
+    expect(headings([{ heading: "Methods", text: "", level: 1 }, { heading: "Results", text: "", level: 1 }, { heading: "Film growth", text: "Discs.", level: 2 }])).toEqual(["Results", "Film growth"]);
+    expect(headings([{ heading: "Data availability", text: "On request." }, { heading: "Methods", text: "", level: 1 }])).toEqual(["Data availability"]);
+  });
+
+  it("drops an empty sub-heading, and an empty heading with no level even when a sub-heading follows it", () => {
+    expect(
+      headings([
+        { heading: "Methods", text: "", level: 1 },
+        { heading: "Film growth", text: "", level: 2 },
+        { heading: "Cell assembly", text: "Cells were sealed in a box.", level: 2 },
+        { heading: "Our approach", text: "" },
+        { heading: "Statistics", text: "Medians are given.", level: 2 },
+      ]),
+    ).toEqual(["Methods", "Cell assembly", "Statistics"]);
   });
 });

@@ -513,7 +513,11 @@ describe("the whole reading", () => {
   // `canonicalizeHeading` never returns either — it files the first under
   // `acknowledgments` and strips "Appendix A" down to what follows it — so
   // the thank-yous and the proofs were read as the paper's argument.
-  it("stops at a numbered Acknowledgements heading, before the references", () => {
+  // P12-62, RE-AIMED (was "stops at a numbered Acknowledgements heading, before the references"): the argument
+  // still stops at the numbered Acknowledgements heading and the Introduction takes none of its text, but the
+  // first end-matter heading is a section of its own now (its text kept, the acknowledgments bucket) as the
+  // later ones are since P12-51; the references stay out. Only the exclusion of the first end-matter part changed.
+  it("stops the argument at a numbered Acknowledgements heading, before the references; the thanks are a section of their own", () => {
     const outline = buildOutline([
       page(1, [
         ["A Paper About Sequence Models", { height: 17 }],
@@ -528,10 +532,14 @@ describe("the whole reading", () => {
     ]);
     expect(outline.sections?.map((s) => [s.canonical, s.heading])).toEqual([
       ["introduction", "1 Introduction"],
+      ["acknowledgments", "6 Acknowledgements"],
     ]);
+    const [argument, thanks] = outline.sections ?? [];
+    expect(argument.text).toContain("integral part of compelling models");
+    expect(argument.text).not.toContain("We thank the anonymous reviewers");
+    expect(thanks.text).toBe("We thank the anonymous reviewers and our funders for their generous support.");
     const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
-    expect(prose).toContain("integral part of compelling models");
-    expect(prose).not.toContain("We thank the anonymous reviewers");
+    expect(prose).not.toContain("Someone");
   });
 
   it("stops at an appendix the heading's own words name, numbered or not", () => {
@@ -1789,10 +1797,18 @@ const BODY_HEADINGS = [
 ];
 
 describe("the end matter after the argument is not the paper's (P7-18, F2)", () => {
-  it("ends the map after 4.5 on the owner's paper's heading list: associated content, author information and the affiliation blocks are out", () => {
-    expect(headingsOf(OWNER_PAPER)).toEqual(BODY_HEADINGS);
+  // P12-51 (O5), RE-AIMED: the argument still ends after 4.5 and the first end matter (ASSOCIATED CONTENT), the
+  // blocks of affiliations, the notes under a heading no bucket names and the references stay out. The outline no
+  // longer stops at the first end-matter heading, though: the Supporting Information line and the ACKNOWLEDGMENTS
+  // that follow it are other end-matter parts and are sections of their own now (a paper whose supporting-information
+  // line comes first lost its acknowledgements and statements). The first assertion is the one the test had, on the
+  // first fifteen headings; the "not.toContain" lines are all kept but the first, which is its contrary.
+  it("ends the argument after 4.5 on the owner's paper's heading list: associated content, author information and the affiliation blocks are out; the notes after them are read", () => {
+    expect(headingsOf(OWNER_PAPER)?.slice(0, BODY_HEADINGS.length)).toEqual(BODY_HEADINGS);
+    expect(headingsOf(OWNER_PAPER)).toEqual([...BODY_HEADINGS, "Supporting Information", "ACKNOWLEDGMENTS"]);
     const text = textOf(OWNER_PAPER);
-    expect(text).not.toContain("Supporting Information is available");
+    expect(text).toContain("Supporting Information is available");
+    expect(text).toContain("The authors thank the funders");
     expect(text).not.toContain("Urbana");
     expect(text).not.toContain("Department of Materials");
     expect(text).not.toContain("competing financial interest");
@@ -1822,17 +1838,42 @@ describe("the end matter after the argument is not the paper's (P7-18, F2)", () 
     "Funding",
     "Funding Sources",
     "6. Funding",
-  ])("%s, printed after the last numbered section, ends the argument and takes what follows with it", (heading) => {
+  ])("%s, printed after the last numbered section, ends the argument and opens a section of its own that holds what follows", (heading) => {
+    // P12-62, RE-AIMED (was "... ends the argument and takes what follows with it"): the heading still ends the
+    // argument, and the four body sections still take none of the text under it, but the first end-matter
+    // heading is a section of its own now, its text kept and filed under the apparatus bucket, as the later
+    // end-matter parts have been since P12-51. Only the exclusion of the first end-matter part changed.
     const numbered = /^\d/.test(heading);
     const rows: PageRow[] = [...AFTER_THE_ARGUMENT, numbered ? ["N", heading] : ["H", heading], marker("Under the end matter")];
-    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
-    expect(textOf(rows)).not.toContain("Under the end matter");
+    const sections = buildOutline(rowsPage(rows)).sections ?? [];
+    expect(sections.map((s) => s.heading)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION", heading]);
+    expect(sections.slice(0, -1).map((s) => s.text).join(" ")).not.toContain("Under the end matter");
+    expect(sections[4].text).toContain("Under the end matter");
+    // Filed by its own heading: the supporting-information lines under `supplementary`, every other part under
+    // the apparatus bucket (a heading no bucket names, "Associated content", is filed there too).
+    expect(sections[4].canonical).toBe(/^supporting/i.test(heading) ? "supplementary" : "acknowledgments");
   });
 
-  it("takes everything from the first such heading on, sub-headings and text, to the references", () => {
-    const rows: PageRow[] = [...AFTER_THE_ARGUMENT, ["H", "AUTHOR INFORMATION"], ["S", "Funding"], marker("Funding text"), ["H", "Methods addendum"], marker("Addendum text")];
-    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
-    expect(textOf(rows)).not.toMatch(/Funding text|Addendum text/);
+  // P12-51 (O5), RE-AIMED: the sub-headings no bucket names stay out. What follows the first end matter is read: a
+  // Funding statement is another end-matter part and "Methods addendum" names a part of the argument, so each opens a
+  // section of its own (the outline no longer stops at the first end matter).
+  // P12-62, RE-AIMED (was "takes the first such heading's text and its other sub-headings out, and reads ..."): the
+  // first such heading (AUTHOR INFORMATION) opens a section of its own now and its own text is read, like the later
+  // end-matter parts'. Only the exclusion of the first end-matter part's text changed; the sub-heading's text, which no
+  // bucket names, is still out (the affiliation blocks printed under such a heading are not the paper's).
+  it("opens a section at the first such heading and reads its own text, takes its other sub-headings out, and reads the end-matter parts and the argument parts after it", () => {
+    const rows: PageRow[] = [
+      ...AFTER_THE_ARGUMENT,
+      ["H", "AUTHOR INFORMATION"], marker("Author information text"),
+      ["S", "Corresponding Authors"], marker("Corresponding author text"),
+      ["S", "Funding"], marker("Funding text"),
+      ["H", "Methods addendum"], marker("Addendum text"),
+    ];
+    expect(headingsOf(rows)).toEqual(["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION", "AUTHOR INFORMATION", "Funding", "Methods addendum"]);
+    expect(textOf(rows)).toMatch(/Author information text/);
+    expect(textOf(rows)).not.toMatch(/Corresponding author text/);
+    expect(textOf(rows)).toMatch(/Funding text/);
+    expect(textOf(rows)).toMatch(/Addendum text/);
   });
 
   // A template that prints Funding (or Data availability, Competing interests) on page 1 under the
@@ -1899,11 +1940,24 @@ describe("a glyph before an end-matter heading does not hide it (P8-03, BACKLOG-
   ];
   const BODY_HEADINGS_ONLY = ["ABSTRACT", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"];
 
+  // P12-62, RE-AIMED: this table held thirteen headings that "end the argument and take what follows with it".
+  // The two that name the bulky apparatus (an appendix) or the references still do, under the test's own name; the
+  // eleven that are end-matter notes are in the table below, where the glyph is still read past and the heading
+  // ends the argument, but the heading opens a section of its own that holds the text (the first end-matter
+  // heading is read as the later ones are since P12-51).
+  it.each([
+    "• Appendix A Proofs",
+    "• References",
+  ])("%s, printed after the last numbered section, ends the argument and takes what follows with it", (heading) => {
+    const rows: PageRow[] = [...BODY_ROWS, ["H", heading], marker("Under the glyph heading")];
+    expect(headingsOf(rows)).toEqual(BODY_HEADINGS_ONLY);
+    expect(textOf(rows)).not.toContain("Under the glyph heading");
+  });
+
   it.each([
     "■ ACKNOWLEDGMENTS",
     "■ Acknowledgements",
     "* Acknowledgments",
-    "• Appendix A Proofs",
     "*sı Supporting Information",
     "* Supporting Information",
     "▪ ASSOCIATED CONTENT",
@@ -1912,11 +1966,12 @@ describe("a glyph before an end-matter heading does not hide it (P8-03, BACKLOG-
     "■ Data availability",
     "■ 5. Funding",
     "• Funding",
-    "• References",
-  ])("%s, printed after the last numbered section, ends the argument and takes what follows with it", (heading) => {
+  ])("%s, printed after the last numbered section, ends the argument and opens a section of its own that holds what follows", (heading) => {
     const rows: PageRow[] = [...BODY_ROWS, ["H", heading], marker("Under the glyph heading")];
-    expect(headingsOf(rows)).toEqual(BODY_HEADINGS_ONLY);
-    expect(textOf(rows)).not.toContain("Under the glyph heading");
+    const sections = buildOutline(rowsPage(rows)).sections ?? [];
+    expect(sections.map((s) => s.heading)).toEqual([...BODY_HEADINGS_ONLY, heading]);
+    expect(sections.slice(0, -1).map((s) => s.text).join(" ")).not.toContain("Under the glyph heading");
+    expect(sections[4].text).toContain("Under the glyph heading");
   });
 
   it("takes a Notes after such a heading out with the rest, as it does after a plain one", () => {
@@ -1936,8 +1991,13 @@ describe("a glyph before an end-matter heading does not hide it (P8-03, BACKLOG-
     ];
     expect(headingsOf(early)).toEqual(["ABSTRACT", "■ Funding", "1. INTRODUCTION", "2. METHODS", "3. CONCLUSION"]);
     expect(textOf(early)).toContain("Printed on the first page");
+    // P12-62, RE-AIMED: the numbered Funding behind a glyph still ends the argument (the body's four sections take
+    // none of the text under it); it is a section of its own now, holding that text, as any first end-matter part.
     const late: PageRow[] = [...BODY_ROWS, ["H", "■ 6. Funding"], marker("Under the numbered glyph heading")];
-    expect(textOf(late)).not.toContain("Under the numbered glyph heading");
+    const lateSections = buildOutline(rowsPage(late)).sections ?? [];
+    expect(lateSections.map((s) => s.heading)).toEqual([...BODY_HEADINGS_ONLY, "■ 6. Funding"]);
+    expect(lateSections.slice(0, -1).map((s) => s.text).join(" ")).not.toContain("Under the numbered glyph heading");
+    expect(lateSections[4].text).toContain("Under the numbered glyph heading");
   });
 
   it("leaves a heading that merely starts with a letter, or a body heading behind a glyph, as it was", () => {
@@ -1972,7 +2032,9 @@ describe("a numbered subsection takes its parent's bucket, even when the parent 
     for (const s of sections) counts[s.canonical ?? "body"] = (counts[s.canonical ?? "body"] ?? 0) + 1;
 
     // P10-04, RE-AIMED: the two group headings are sections too, each in its bucket (results 5 -> 6, methods 5 -> 6).
-    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 6, conclusion: 1, methods: 6 });
+    // P12-51 (O5), RE-AIMED: and the two end-matter parts the outline now reads after the first end matter, the
+    // Supporting Information line (supplementary) and the ACKNOWLEDGMENTS (acknowledgments), one each.
+    expect(counts).toEqual({ abstract: 1, introduction: 1, results: 6, conclusion: 1, methods: 6, supplementary: 1, acknowledgments: 1 });
     for (const s of sections) {
       if (/^2\.\d?/.test(s.heading ?? "")) expect(s.canonical).toBe("results");
       if (/^4\.\d?/.test(s.heading ?? "")) expect(s.canonical).toBe("methods");

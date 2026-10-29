@@ -1,0 +1,86 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { measuredCardMinimum, setMarginLandmark } from "./margin-stack-scroll";
+import { useWindows } from "@/lib/reader/windows";
+
+// Direct geometry probes, not a claim about a rendered page. Browser matrix
+// measurements separately check the same function with actual component boxes.
+function card(kind: string, headerHeight: number, line: number, compact = false) {
+  const header = { getBoundingClientRect: () => ({ height: headerHeight }) };
+  const styles = new Map<object, object>();
+  const body = { parentElement: null as unknown, querySelector: () => text, querySelectorAll: () => [] };
+  const text = { parentElement: body };
+  const caption = {};
+  const root = {
+    dataset: { marginCard: kind, marginCompact: compact ? "true" : undefined },
+    firstElementChild: header,
+    querySelector: (selector: string) => selector === "[data-margin-fixed]" ? compact ? header : null : selector === "[data-margin-body]" ? body : selector === "[data-figure-zoom-row]" ? { getBoundingClientRect: () => ({ height: 36 }) } : selector === "[data-figure-caption]" ? caption : null,
+  };
+  body.parentElement = root;
+  styles.set(text, { lineHeight: String(line), fontSize: "14", paddingTop: "0", paddingBottom: "0" });
+  styles.set(body, { paddingTop: "12", paddingBottom: "12" });
+  styles.set(caption, { lineHeight: String(line), paddingTop: "8", paddingBottom: "8" });
+  vi.stubGlobal("getComputedStyle", (node: object) => styles.get(node));
+  return root as unknown as HTMLElement;
+}
+afterEach(() => { vi.unstubAllGlobals(); useWindows.setState({ windows: [], clock: 0, origin: null }); });
+
+it("P12-07/212 exposes one complementary bottom Margin on the same host, removing it on side", () => {
+  const attributes = new Map<string, string>();
+  const target = { setAttribute: (name: string, value: string) => attributes.set(name, value), removeAttribute: (name: string) => attributes.delete(name), style: { position: "fixed" } };
+  setMarginLandmark(target, true);
+  expect(Object.fromEntries(attributes)).toEqual({ role: "complementary", "aria-label": "Margin" });
+  setMarginLandmark(target, false);
+  expect(attributes.size).toBe(0);
+  expect(target.style).toEqual({ position: "fixed" });
+});
+
+describe("actual minimum furniture and stable store registration", () => {
+  it("P12-21 counts inactive heading row typography and its ancestor padding after editing is replaced", () => {
+    const root = card("sticky", 45.34375, 28.6);
+    const body = root.querySelector<HTMLElement>("[data-margin-body]")!;
+    const text = body.querySelector<HTMLElement>("unused")!;
+    const toolbar = { getBoundingClientRect: () => ({ height: 76 }) };
+    const css = getComputedStyle;
+    vi.stubGlobal("getComputedStyle", (node: Element) => node === toolbar as unknown ? { marginTop: "0", marginBottom: "0" } : css(node));
+    // An inactive h2 is .paper-line.cursor-text, not .reading-prose or
+    // .font-reading and no longer contenteditable. Falling back to the body
+    // loses both the actual row and the ancestor padding.
+    body.querySelector = vi.fn((selector: string) => selector.includes("[data-row] .cursor-text") ? text : null) as typeof body.querySelector;
+    body.querySelectorAll = vi.fn(() => [toolbar]) as unknown as typeof body.querySelectorAll;
+    expect(measuredCardMinimum(root)).toBe(176);
+  });
+  for (const editable of [false, true]) {
+    for (const [toolbarHeight, line] of [[40, 26.4], [76, 26.4], [112, 35.96]]) {
+      it(`counts ${editable ? "editable" : "inactive"} note text below a ${toolbarHeight}px wrapped Format toolbar`, () => {
+        const root = card("sticky", 48, line);
+        const body = root.querySelector<HTMLElement>("[data-margin-body]")!;
+        const text = body.querySelector<HTMLElement>("unused")!;
+        const toolbar = { getBoundingClientRect: () => ({ height: toolbarHeight }) };
+        const css = getComputedStyle;
+        vi.stubGlobal("getComputedStyle", (node: Element) => node === toolbar as unknown ? { marginTop: "0", marginBottom: "0" } : css(node));
+        body.querySelector = vi.fn((selector: string) => selector.includes(editable ? "[contenteditable]" : ".reading-prose") ? text : null) as typeof body.querySelector;
+        body.querySelectorAll = vi.fn(() => [toolbar]) as unknown as typeof body.querySelectorAll;
+        expect(measuredCardMinimum(root)).toBe(Math.ceil(48 + toolbarHeight + line + 24 + 2));
+      });
+    }
+  }
+  it("counts a custom48px sticky header, its content row, padding and border", () => {
+    expect(measuredCardMinimum(card("sticky", 48, 22.4))).toBe(97);
+    expect(measuredCardMinimum(card("sticky", 48, 35.96))).toBe(110);
+  });
+  it("counts the compact fixed Explain label plus an entire row at maximum type", () => {
+    expect(measuredCardMinimum(card("explain", 40, 35.96, true))).toBe(94);
+  });
+  it("includes figure zoom, a caption row and an actual picture row", () => {
+    expect(measuredCardMinimum(card("figure", 48, 22.4))).toBe(149);
+  });
+  it("writes only changed finite minima so ResizeObserver cannot make an update loop", () => {
+    const state = useWindows.getState(); state.open({ id: "s", kind: "sticky", title: "s" });
+    state.setMinimum("s", 97); expect(useWindows.getState().windows[0].minimum).toBe(97);
+    const before = useWindows.getState().windows;
+    for (const value of [97, 97.1, Number.NaN, Number.POSITIVE_INFINITY, 20]) state.setMinimum("s", value);
+    state.setMinimum("missing", 100);
+    expect(useWindows.getState().windows).toBe(before);
+    state.setMinimum("s", 110); expect(useWindows.getState().windows[0].minimum).toBe(110);
+  });
+});

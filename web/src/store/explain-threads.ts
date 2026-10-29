@@ -21,6 +21,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { normalizeForMatch } from "@/lib/papers/evidence";
 import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
+import { clientExplainRange, type ExplainIdentity } from "@/lib/reader/explain-range";
 
 export const EXPLAIN_THREADS_STORAGE_KEY = "peer-explain-threads-v1";
 export const MAX_EXPLAIN_PASSAGES = 32;
@@ -63,6 +64,8 @@ export interface ExplainTurn {
 }
 
 export interface ExplainThread {
+  /** New groups only: bounded canonical source/occurrence, no paragraph text or DOM state. */
+  identity?: ExplainIdentity;
   /** The passage as the reader selected it (clipped), the key's source. */
   passage: string;
   /** Where it sits in the body, as the browser knew it when it asked. */
@@ -96,6 +99,21 @@ export function passageHash(passage: string): string {
 }
 
 type ByPaper = Record<string, Record<string, ExplainThread>>;
+export type ExplainCacheTarget = { passage: string; identity?: ExplainIdentity };
+const canonicalPassage = (passage: string) => passage.replace(/\s+/g, " ").trim();
+function cleanIdentity(value: ExplainIdentity): ExplainIdentity | null {
+  if (!value || !["paper", "summary", "answer"].includes(value.source) || Object.keys(value).length !== 2) return null;
+  const range = clientExplainRange({ segments: value.segments });
+  return range ? { source: value.source, segments: range.segments } : null;
+}
+export function explainCacheKey(passage: string, identity?: ExplainIdentity): string {
+  return identity ? `g-${passageHash(JSON.stringify({ passage: canonicalPassage(passage), identity: cleanIdentity(identity) }))}` : passageHash(passage);
+}
+function matches(thread: ExplainThread, expected: ExplainCacheTarget): boolean {
+  if (!thread.identity && !expected.identity) return normalizeForMatch(thread.passage) === normalizeForMatch(expected.passage);
+  return !!thread.identity && !!expected.identity && canonicalPassage(thread.passage) === canonicalPassage(expected.passage) && JSON.stringify(cleanIdentity(thread.identity)) === JSON.stringify(cleanIdentity(expected.identity)) && cleanIdentity(thread.identity) !== null;
+}
+const mayChange = (thread: ExplainThread | undefined, expected?: ExplainCacheTarget) => !!thread && (expected ? matches(thread, expected) : !thread.identity);
 
 const readerMessages = (turns: readonly ExplainTurn[]): number => turns.filter((turn) => turn.role === "reader").length;
 
@@ -106,10 +124,11 @@ export function threadFull(thread: ExplainThread | readonly ExplainTurn[] | unde
 }
 
 /** The kept answer for `passage` on `paperId`, if the same words were asked. */
-export function explanationFor(byPaper: ByPaper, paperId: string, passage: string): ExplainThread | undefined {
-  const found = byPaper[paperId]?.[passageHash(passage)];
+export function explanationFor(byPaper: ByPaper, paperId: string, passage: string, identity?: ExplainIdentity): ExplainThread | undefined {
+  if (identity && !cleanIdentity(identity)) return undefined;
+  const found = byPaper[paperId]?.[explainCacheKey(passage, identity)];
   if (!found) return undefined;
-  return normalizeForMatch(found.passage) === normalizeForMatch(passage) ? found : undefined;
+  return matches(found, { passage, identity }) ? found : undefined;
 }
 
 interface ExplainThreadsState {
@@ -119,10 +138,10 @@ interface ExplainThreadsState {
   /** Append turns — the reader's message and Peer's reply together, once the reply
    *  has arrived — to a passage already answered. Nothing past eight reader
    *  messages is stored. */
-  addTurns: (paperId: string, hash: string, turns: ExplainTurn[], at?: string) => void;
+  addTurns: (paperId: string, hash: string, turns: ExplainTurn[], at?: string, expected?: ExplainCacheTarget) => void;
   /** Empty a passage's thread and keep its first answer. */
-  resetThread: (paperId: string, hash: string) => void;
-  forget: (paperId: string, hash: string) => void;
+  resetThread: (paperId: string, hash: string, expected?: ExplainCacheTarget) => void;
+  forget: (paperId: string, hash: string, expected?: ExplainCacheTarget) => void;
   clearPaper: (paperId: string) => void;
 }
 
@@ -152,20 +171,25 @@ export const useExplainThreadsStore = create<ExplainThreadsState>()(
       byPaper: {},
       remember: (paperId, entry, at = new Date().toISOString()) =>
         set((s) => {
-          const key = passageHash(entry.passage);
+          const identity = entry.identity ? cleanIdentity(entry.identity) : undefined;
+          if (identity === null) return s;
+          const key = explainCacheKey(entry.passage, identity);
           const threads = s.byPaper[paperId] ?? {};
-          const turns = threads[key]?.turns ?? [];
+          const prior = threads[key];
+          const turns = prior && matches(prior, { passage: entry.passage, identity }) ? prior.turns : [];
+          // Explicit projection excludes caller DOM/functions/captured paragraphs.
+          const kept: ExplainThread = { passage: entry.passage, sectionId: entry.sectionId, paragraphIndex: entry.paragraphIndex, answer: entry.answer, turns, at, ...(identity ? { identity } : {}) };
           return {
             byPaper: withoutOldestPapers({
               ...s.byPaper,
-              [paperId]: withoutOldestPassages({ ...threads, [key]: { ...entry, turns, at } }),
+              [paperId]: withoutOldestPassages({ ...threads, [key]: kept }),
             }),
           };
         }),
-      addTurns: (paperId, hash, turns, at = new Date().toISOString()) =>
+      addTurns: (paperId, hash, turns, at = new Date().toISOString(), expected) =>
         set((s) => {
           const thread = s.byPaper[paperId]?.[hash];
-          if (!thread) return s;
+          if (!thread || !mayChange(thread, expected)) return s;
           const kept = [...thread.turns];
           let readers = readerMessages(kept);
           for (const turn of turns) {
@@ -178,16 +202,16 @@ export const useExplainThreadsStore = create<ExplainThreadsState>()(
           if (kept.length === thread.turns.length) return s;
           return { byPaper: { ...s.byPaper, [paperId]: { ...s.byPaper[paperId], [hash]: { ...thread, turns: kept, at } } } };
         }),
-      resetThread: (paperId, hash) =>
+      resetThread: (paperId, hash, expected) =>
         set((s) => {
           const thread = s.byPaper[paperId]?.[hash];
-          if (!thread || thread.turns.length === 0) return s;
+          if (!thread || !mayChange(thread, expected) || thread.turns.length === 0) return s;
           return { byPaper: { ...s.byPaper, [paperId]: { ...s.byPaper[paperId], [hash]: { ...thread, turns: [] } } } };
         }),
-      forget: (paperId, hash) =>
+      forget: (paperId, hash, expected) =>
         set((s) => {
           const threads = s.byPaper[paperId];
-          if (!threads?.[hash]) return s;
+          if (!threads?.[hash] || !mayChange(threads[hash], expected)) return s;
           const rest = { ...threads };
           delete rest[hash];
           const byPaper = { ...s.byPaper };

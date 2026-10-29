@@ -25,8 +25,11 @@ import { readFile } from "node:fs/promises";
 import { cleanPaperText } from "@/lib/text/clean";
 import { buildOutline, gutterPrior, linesOfPageWith, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { dropStrayHeadings, withSectionIds } from "./html-text";
+import { applyLigatures, learnLigatures, restoreLigatures } from "./ligatures";
+import { withPageCase } from "./case-repair";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 import { pictureNumber } from "./reading";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_PDF_BYTES = 18_000_000;
@@ -122,8 +125,38 @@ export async function getPdfBytes(url: string): Promise<{ bytes: Buffer } | { er
   return { bytes: download.bytes };
 }
 
+/** The longest embedded title read: a title field that holds an abstract is no title. */
+const EMBEDDED_TITLE_MAX = 400;
+
+/**
+ * P12-64: the titles the PDF itself carries — its Info dictionary's `Title` and its XMP packet's `dc:title` — cleaned
+ * of control characters and white space, whichever of the two are there. They say what the file claims to be called,
+ * and are only a witness: `pdf-outline`'s `titleOf` chooses among the first page's own lines by them, and judges
+ * whether one is plausible (a file name, the journal's name and an empty field are not). A PDF whose metadata cannot
+ * be read has none; the reading goes on without.
+ */
+async function embeddedTitlesOf(doc: {
+  getMetadata(): Promise<{ info?: unknown; metadata?: { get?(name: string): unknown } | null }>;
+}): Promise<string[]> {
+  try {
+    const { info, metadata } = await doc.getMetadata();
+    const raw: unknown[] = [(info as { Title?: unknown } | null | undefined)?.Title, metadata?.get?.("dc:title")];
+    const titles: string[] = [];
+    for (const value of raw) {
+      if (typeof value !== "string") continue;
+      // A title field is free text: the NULs and escapes in it are not words.
+      const title = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+      if (title && title.length <= EMBEDDED_TITLE_MAX && !titles.includes(title)) titles.push(title);
+    }
+    return titles;
+  } catch {
+    return [];
+  }
+}
+
 /** The PDF's text layer, page by page, as `pdf-outline` wants it. Exported
- *  for the probes that look at a real PDF's lines when the outline misreads. */
+ *  for the probes that look at a real PDF's lines when the outline misreads.
+ *  The first page also carries the titles the PDF itself holds (`embeddedTitlesOf`), when it holds any. */
 export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
   // `unpdf` ships pdf.js built for a server runtime: no worker, no canvas,
   // no native code — the only build that runs unchanged in a function.
@@ -153,7 +186,34 @@ export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
     }
     pages.push({ page: n, items });
   }
+  const embedded = pages.length > 0 ? await embeddedTitlesOf(doc) : [];
+  if (embedded.length > 0) pages[0].embeddedTitles = embedded;
   return pages;
+}
+
+/**
+ * P12-67 (§1h.443): the pages' text with the ligatures a font stored as private-use glyphs read as letters again,
+ * before anything reads it. A font that sets fi / fl / ff / ffi / ffl as glyphs with no Unicode mapping leaves a
+ * private-use character in their place; the paper's own words say which letters each one is (`ligatures.ts`), so
+ * the codes are learned from the text items of every page and applied to the same items. The outline then buckets
+ * a heading on its repaired words ("Con\uE104ict of interest" is the conflict-of-interest part, with the role that
+ * has), and the title and the DOI search read page 1 repaired. (pdf.js already hands a real Unicode ligature,
+ * U+FB01 and the like, over as its letters, so a paper whose other font maps its ligatures needs nothing here.)
+ * Pages with no such code come back as the same array.
+ */
+function withPageLigatures(pages: PdfPageText[]): PdfPageText[] {
+  function* words() {
+    for (const page of pages) for (const item of page.items) yield item.str;
+  }
+  const learned = learnLigatures(words());
+  if (learned.size === 0) return pages;
+  return pages.map((page) => ({
+    ...page,
+    items: page.items.map((item) => {
+      const str = applyLigatures(item.str, learned);
+      return str === item.str ? item : { ...item, str };
+    }),
+  }));
 }
 
 function normalize(extractor: PdfOutline): ExtractedDocument {
@@ -170,6 +230,8 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
         canonical: section.canonical || "body",
         text: cleanPaperText(section.text),
         ...(typeof section.page === "number" ? { page: section.page } : {}),
+        // P12-75: a part's heading that holds only sub-headings, and its sub-headings, keep the depth the outline gave.
+        ...(section.level === 1 || section.level === 2 ? { level: section.level } : {}),
       })),
     ),
   );
@@ -191,7 +253,7 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     .map((eq) => ({ text: cleanPaperText(eq.text), ...(eq.number ? { number: eq.number } : {}) }))
     .filter((eq) => eq.text.length > 0);
 
-  return {
+  const doc: ExtractedDocument = {
     title: cleanPaperText(extractor.title) || null,
     sections,
     figureCaptions,
@@ -200,6 +262,12 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     pageCount,
     reason: extractor.reason ?? null,
   };
+  // P12-67 (§1h.439): the second pass, on the finished document, for what the first (`withPageLigatures`, on the
+  // page text before the outline) could not read: a glyph pdf.js hands over as an item of its own is not inside a
+  // word until the outline has joined the line. It is the one place every section's heading and text, every
+  // caption and the title have passed through, and both callers (a link, an upload) arrive here. A paper whose
+  // page-level pass restored every code comes back as the same object.
+  return restoreLigatures(doc);
 }
 
 /** P10-34: the longest the measuring of a paper's figures may take; what is not measured by then carries no size. */
@@ -243,22 +311,25 @@ export async function withFigureSizes(doc: ExtractedDocument, bytes: Uint8Array)
   const targets = doc.figureCaptions.filter((cap) => typeof cap.page === "number" && pictureNumber(cap.label) !== null);
   if (targets.length === 0) return doc;
   try {
-    const sizes = measuredFor(createHash("sha256").update(bytes).digest("hex"));
+    const sizes = measuredFor(`${FIGURE_EXTRACTION_REVISION}|${createHash("sha256").update(bytes).digest("hex")}`);
     const missing = targets.slice(0, MEASURE_MAX).filter((cap) => !sizes.has(`${cap.page}/${pictureNumber(cap.label)}`));
     if (missing.length > 0) {
-      const { measurePdfFigure } = await import("@/lib/figures/pdf-engine");
-      const deadline = Date.now() + MEASURE_BUDGET_MS;
-      const tried = new Set<string>();
+      // P12-61 (part 3): one open of the PDF for all the captions, not one per caption.
+      const { measurePdfFigures } = await import("@/lib/figures/pdf-engine");
+      const tried = new Map<string, { page: number; fig: number | string }>();
       for (const cap of missing) {
         const key = `${cap.page}/${pictureNumber(cap.label)}`;
-        if (tried.has(key)) continue;
-        tried.add(key);
-        if (Date.now() > deadline) break;
-        try {
-          sizes.set(key, await measurePdfFigure(bytes, cap.page as number, pictureNumber(cap.label) as number));
-        } catch (err) {
-          console.warn("[papers/pdf-text] a figure could not be measured:", err instanceof Error ? err.message : String(err));
-        }
+        if (!tried.has(key)) tried.set(key, { page: cap.page as number, fig: pictureNumber(cap.label) as number | string });
+      }
+      try {
+        const keys = [...tried.keys()];
+        const results = await measurePdfFigures(bytes, [...tried.values()], MEASURE_BUDGET_MS);
+        // undefined: the budget ran out before this figure; it is left unmeasured and tried again next time.
+        keys.forEach((key, i) => {
+          if (results[i] !== undefined) sizes.set(key, results[i] ?? null);
+        });
+      } catch (err) {
+        console.warn("[papers/pdf-text] figures could not be measured:", err instanceof Error ? err.message : String(err));
       }
     }
     return {
@@ -286,7 +357,9 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
   }
 
   try {
-    const pages = await readPages(download.bytes);
+    // P12-83 (§1h.463): a font whose own map reads capitals as lowercase ("sE" for "SE") is read as capitals again
+    // from the paper's own evidence (`case-repair.ts`), before the ligatures and before the outline reads anything.
+    const pages = withPageLigatures(withPageCase(await readPages(download.bytes)));
     const outline = buildOutline(pages);
     if (!outline.sections || outline.sections.length === 0) {
       // A scan carries pictures of words, not words: say that, rather than
@@ -316,7 +389,8 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
  */
 export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextResult> {
   try {
-    const pages = await readPages(bytes);
+    // P12-83 (§1h.463): the capitals a font's own map reads as lowercase, repaired first (`case-repair.ts`).
+    const pages = withPageLigatures(withPageCase(await readPages(bytes)));
     // Page 1's lines as printed, joined with spaces, before any of them is set
     // aside as the cover. Read in the columns the outline reads them in (P7-10:
     // the paper's own gutter, for a first page too sparse to show one), so a

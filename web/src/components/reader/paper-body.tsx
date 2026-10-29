@@ -24,6 +24,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
+import { isPlaceholderHeading } from "@/lib/papers/reading-roles";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
@@ -37,6 +38,10 @@ import { NoteTag, highlightMarks, isHighlightSpot, passageSegments, rangeOf, tie
 import type { NoteAnchorMap } from "@/lib/notes/blocks";
 import { highlightPaint } from "@/lib/notes/highlight-colours";
 import type { HighlightColourId } from "@/lib/notes/types";
+import { drawableSegments, type DrawableSegment, type ExplainSegment } from "@/lib/notes/selection-segments";
+import type { ExplainRange } from "@/lib/papers/explain-range";
+import type { ExplainIdentity } from "@/lib/reader/explain-range";
+import { domTextEnv } from "@/components/notes/block-marks";
 
 /** Each section is a destination: the map's rows jump here, and `scroll-mt`
  *  keeps the heading clear of the sticky masthead. */
@@ -314,6 +319,17 @@ export type ExplainSource = "paper" | "summary" | "answer";
 
 /** Where the selection sits in the body, and its words. */
 export interface SelectionTarget {
+  /** Ordered actual ranges. Legacy/synthetic single-block callers may omit these. */
+  segments?: DrawableSegment[];
+  /** Canonical Explain boundaries, separate from persisted raw highlight offsets. Ephemeral only. */
+  explainSegments?: ExplainSegment[];
+  range?: ExplainRange;
+  explainIdentity?: ExplainIdentity;
+  /** Explain-only refusal: other drawable actions remain applicable. */
+  explainUnavailableReason?: string;
+  unavailableReason?: string;
+  /** Captured DOM provenance still holds at the action press. Never stored or sent. */
+  selectionStillHolds?: () => boolean;
   /** `reading.body[sectionIndex]` and its `paragraphs[paragraphIndex]`; −1 for a selection that is not the paper's (below). */
   sectionIndex: number;
   paragraphIndex: number;
@@ -399,6 +415,7 @@ const sameOptionalRect = (a: ViewRect | undefined, b: ViewRect | undefined) => (
  *  a selection that has not changed (every `selectionchange` is not a change). */
 export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | null): boolean {
   if (a === null || b === null) return a === b;
+  if (a.selectionStillHolds && !a.selectionStillHolds()) return false;
   return (
     a.sectionIndex === b.sectionIndex &&
     a.paragraphIndex === b.paragraphIndex &&
@@ -407,6 +424,11 @@ export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | 
     a.paragraphId === b.paragraphId &&
     a.block === b.block &&
     a.offset === b.offset &&
+    JSON.stringify(a.segments) === JSON.stringify(b.segments) &&
+    JSON.stringify(a.explainSegments) === JSON.stringify(b.explainSegments) &&
+    JSON.stringify(a.range) === JSON.stringify(b.range) &&
+    a.explainUnavailableReason === b.explainUnavailableReason &&
+    a.unavailableReason === b.unavailableReason &&
     sameRect(a.rect, b.rect) &&
     sameRect(a.bounds, b.bounds) &&
     sameOptionalRect(a.paragraph, b.paragraph)
@@ -624,6 +646,29 @@ export function readSelection(selection: SelectionLike | null): ExplainSelection
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   // The selection's own range changes as the selection does; this one is ours.
   const range = selection.getRangeAt(0).cloneRange();
+  // Real ranges expose their document and comparison API. Keep the single-block
+  // compatibility reader below for older minimal callers without DOM provenance.
+  const real = range as unknown as Range;
+  if (typeof real.comparePoint === "function" && real.startContainer.ownerDocument) {
+    const result = drawableSegments(real, domTextEnv());
+    const where = measureRange(range);
+    if (!where) return null;
+    if (result.reason) {
+      const start = placeOf(range.startContainer);
+      if (!start) return null;
+      return { sectionIndex: -1, paragraphIndex: -1, passage: selection.toString().replace(/\s+/g, " ").trim(), source: start.source, paragraphId: start.id,
+        unavailableReason: result.reason, ...where, measure: () => real.startContainer.isConnected ? measureRange(range) : null };
+    }
+    const first = result.segments[0];
+    const at = PARAGRAPH_ANCHOR.exec(first.paragraphId);
+    return { sectionIndex: at ? Number(at[1]) : -1, paragraphIndex: at ? Number(at[2]) : -1, paragraphId: first.paragraphId, source: first.source,
+      passage: result.segments.map((s) => s.quote).join("\n\n"), offset: first.start, ...(first.kind === "heading" || first.kind === "caption" ? { block: first.kind } : {}), segments: result.segments, explainSegments: result.explainSegments,
+      ...where, selectionStillHolds: () => {
+        const now = drawableSegments(real, domTextEnv());
+        return !now.reason && now.provenance?.length === result.provenance?.length && now.provenance?.every((node, i) => node.isConnected && node === result.provenance?.[i]) === true
+          && JSON.stringify(now.segments) === JSON.stringify(result.segments) && JSON.stringify(now.explainSegments) === JSON.stringify(result.explainSegments);
+      }, measure: () => real.startContainer.isConnected && real.endContainer.isConnected ? measureRange(range) : null };
+  }
   const spoken = selection.toString();
   const start = placeOf(range.startContainer);
   let end = placeOf(range.endContainer);
@@ -1128,11 +1173,16 @@ function Section({
   // P10-04 (review 3.3): a group heading ("2 Results" holding only "2.1 …") has no paragraphs, no equation
   // and no figure: it is its heading alone, with its anchor, and nothing under it before its first child.
   const alone = section.paragraphs.length === 0 && equations.length === 0 && figures.length === 0;
+  // P12-63 (rule 4; ruling §1h.436 (c)): the opening of a paper that prints no heading above its first text carries the extractors' placeholder
+  // ("Body") for a heading. It is not a word of the paper, so none is printed; the section keeps its anchor and its paragraphs, and the map's row
+  // for it is labelled by its role (`inferRoles`, A1). Only the first section: the placeholder is what the opening is given.
+  const unheaded = index === 0 && isPlaceholderHeading(section.heading);
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       {/* P1-05: the route marks the heading — an attribute and a tint,
           nothing else — and never the paragraphs under it. */}
       {/* P11-27 (rule 2): the heading is a block of its own — its anchor id and marker, and the notes and highlights taken on its words. */}
+      {!unheaded && (
       <h3
         id={paragraphAnchor(index, headingBlock(section))}
         {...{ [ANCHOR_BLOCK_ATTRIBUTE]: "heading" }}
@@ -1141,6 +1191,7 @@ function Section({
       >
         <NotedText text={section.heading} spots={noteAnchors?.[paragraphAnchor(index, headingBlock(section))]} />
       </h3>
+      )}
       {!alone && (
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
         {following(-1)}

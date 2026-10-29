@@ -203,7 +203,8 @@ describe("the thumb bar's cells — [Explain this] [Highlight] while a selection
     expect(cell(html)).not.toBe("");
     expect(highlightCell(html)).not.toBe("");
     expect(html.indexOf(EXPLAIN.ask)).toBeLessThan(html.indexOf(">Highlight</button>"));
-    const row = open(html, "div", "grid-cols-2");
+    // P12-08: equal automatic columns also accommodate selection Take notes.
+    const row = open(html, "div", "auto-cols-fr");
     expect(row).not.toBe("");
     for (const tag of [cell(html), highlightCell(html)]) expect(classes(tag)).toContain("w-full");
     expect(html).not.toContain("← Briefing");

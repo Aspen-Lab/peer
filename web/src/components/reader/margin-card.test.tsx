@@ -95,7 +95,10 @@ describe("MarginCardShell — the frame", () => {
     expect(root.props.role).toBe("group");
     expect(root.props["aria-label"]).toBe("Note 2");
     expect(root.props["data-sticky"]).toBe(2);
-    expect(root.props.onKeyDown).toBe(onKeyDown);
+    // P12-04 RE-AIM: the shell now guards inactive Escape before forwarding the caller's event.
+    const event = { key: "ArrowDown" };
+    (root.props.onKeyDown as (event: unknown) => void)(event);
+    expect(onKeyDown).toHaveBeenCalledWith(event);
   });
 });
 

@@ -103,14 +103,16 @@ import {
 } from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
-import { useReading } from "@/components/reader/use-reading";
+import { sentencesWhileWaiting, useReading } from "@/components/reader/use-reading";
 import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
+import { useStructureReview } from "@/components/reader/use-structure-review";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { NotesButton } from "@/components/notes/notes-button";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
-import { partitionedMap, withPartitionMarks } from "@/lib/papers/reading-partition";
+import { closingPartition, partitionedMap, withPartitionMarks } from "@/lib/papers/reading-partition";
+import { applyStructureReview, structureDraftOf } from "@/lib/papers/structure-review";
 import { useDebouncedQuestions } from "@/components/reader/use-debounced-questions";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { ReaderTabs } from "@/components/reader/reader-tabs";
@@ -128,7 +130,8 @@ import { FigureHost } from "@/components/reader/figure-host";
 import { useSelectionEscape } from "@/components/reader/front-escape";
 import { anchorMap } from "@/lib/notes/blocks";
 import { readingNoteFor, useNotesStore } from "@/store/notes";
-import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
+import { explanationFor, explainCacheKey, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
+import { prepareExplainSelection } from "@/lib/reader/explain-range";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
 import { PLAIN_DEFAULT_LEVEL, PLAIN_REWRITE_ENABLED, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
 import { exampleQuestions } from "@/lib/reader/question-examples";
@@ -724,7 +727,7 @@ function Reader({
   );
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
-  const { reading, fromServer } = useReading(paper);
+  const { reading, fromServer, wait } = useReading(paper);
   // P1-05 (§1f.13): the reader's questions for this paper, so the route follows
   // the field as it writes through. P7-13 (R11b): not on every keystroke — the
   // page's copy is updated 250 ms after the typing stops (and at once on a
@@ -826,13 +829,41 @@ function Reader({
   // laid over with it (the trunk's row becomes the parts' rows; the body is untouched, §1h.79 (c)), and
   // the route the map AND the body read has each part's mark folded in beside the real ids', derived
   // from the grades of the paragraphs inside it, so the two never disagree on a paragraph.
-  const shownMap = useMemo(
-    () => (reading?.map ? partitionedMap(reading.map, reading.body, paragraphPartition) : undefined),
+  // P12-63 (§1h.436 (c)): where the model has made no partition, the rules' own closing split of a headed paper's last results part
+  // (`closingPartition`: its echo is the paper's abstract, else the last paragraph of its setup part). The model's partition applies
+  // only to an unheaded paper's trunk, the closing split only to a headed paper's last results row, so the two never meet.
+  const overlayPartition = useMemo(
+    () => paragraphPartition ?? (reading?.map ? closingPartition(reading.map, reading.body, reading.abstract.sentences.join(" ")) : null),
     [reading, paragraphPartition],
   );
+  const shownMap = useMemo(
+    () => (reading?.map ? partitionedMap(reading.map, reading.body, overlayPartition) : undefined),
+    [reading, overlayPartition],
+  );
   const route = useMemo(
-    () => withPartitionMarks(mergedRoute, reading?.map, reading?.body, paragraphPartition),
-    [mergedRoute, reading?.map, reading?.body, paragraphPartition],
+    () => withPartitionMarks(mergedRoute, reading?.map, reading?.body, overlayPartition),
+    [mergedRoute, reading?.map, reading?.body, overlayPartition],
+  );
+  // P12-53 (§1h.428; B P12-42): the structure the rules drew is checked by the model, once per paper, whenever the
+  // reader has a model (`providerConfigured` — not the deep-report switch). The rules' draft is made here, in the
+  // browser, from the reading's map and body; the model returns corrections to it (indices and roles), which are
+  // laid over the map right after the partition overlay. The rules' map stands until they arrive and for good if
+  // they never do (a refusal, a timeout, no model); a corrected role is shown exactly like a named one (§1h.424 (a)).
+  // The abstract is the closing split's echo (the page's overlay reads it the same way), so the draft is the server's.
+  const structureDraft = useMemo(
+    () => structureDraftOf(reading?.map, reading?.body, reading?.abstract.sentences.join(" ")),
+    [reading?.map, reading?.body, reading?.abstract],
+  );
+  const structureReview = useStructureReview({
+    paper: ready ? paper : undefined,
+    hasBody,
+    draftDigest: structureDraft?.digest,
+    enabled: providerConfigured,
+    llmOverride: explainLlmOverride(profile),
+  });
+  const reviewedMap = useMemo(
+    () => (shownMap && structureDraft ? applyStructureReview(shownMap, structureDraft, structureReview) : shownMap),
+    [shownMap, structureDraft, structureReview],
   );
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
@@ -850,15 +881,18 @@ function Reader({
   // answer is remembered per paper and passage, so the same passage opens at once.
   const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);
   const selectExplain = useCallback(
-    (next: ExplainSelection | null) => setExplainTarget((current) => (sameSelection(current, next) ? current : next)),
-    [],
+    (next: ExplainSelection | null) => {
+      const prepared = next ? prepareExplainSelection(next, reading?.body ?? []) : null;
+      setExplainTarget((current) => (sameSelection(current, prepared) ? current : prepared));
+    },
+    [reading?.body],
   );
   const explainKept = useExplainThreadsStore((s) => s.byPaper[paper.id]);
   const rememberExplanation = useExplainThreadsStore((s) => s.remember);
   const addExplainTurns = useExplainThreadsStore((s) => s.addTurns);
   const resetExplainThread = useExplainThreadsStore((s) => s.resetThread);
   const explainKeptThread = useMemo(
-    () => (explainTarget ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage) : undefined),
+    () => (explainTarget && !explainTarget.explainUnavailableReason ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage, explainTarget.explainIdentity) : undefined),
     [explainTarget, explainKept, paper.id],
   );
   const explainCached = explainKeptThread?.answer;
@@ -869,7 +903,7 @@ function Reader({
       const result = await requestExplanation({ paper, selection, sectionId, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          rememberExplanation(paper.id, { passage: selection.passage, sectionId, paragraphIndex: selection.paragraphIndex, answer: result });
+          rememberExplanation(paper.id, { passage: selection.passage, sectionId, paragraphIndex: selection.paragraphIndex, answer: result, ...(selection.explainIdentity ? { identity: selection.explainIdentity } : {}) });
         } catch {
           // A full or blocked browser store never costs the reader the answer.
         }
@@ -892,7 +926,7 @@ function Reader({
       const result = await requestReply({ paper, selection, sectionId, thread, message, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          addExplainTurns(paper.id, passageHash(selection.passage), replyPair(message, result));
+          addExplainTurns(paper.id, explainCacheKey(selection.passage, selection.explainIdentity), replyPair(message, result), undefined, { passage: selection.passage, identity: selection.explainIdentity });
         } catch {
           // A full or blocked browser store never costs the reader the reply.
         }
@@ -912,7 +946,7 @@ function Reader({
       const result = await requestReply({ paper, selection, sectionId, thread, message, detail: true, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          addExplainTurns(paper.id, passageHash(selection.passage), moreReply(result));
+          addExplainTurns(paper.id, explainCacheKey(selection.passage, selection.explainIdentity), moreReply(result), undefined, { passage: selection.passage, identity: selection.explainIdentity });
         } catch {
           // A full or blocked browser store never costs the reader the reply.
         }
@@ -924,7 +958,7 @@ function Reader({
   const resetExplain = useCallback(
     (selection: SelectionTarget) => {
       try {
-        resetExplainThread(paper.id, passageHash(selection.passage));
+        resetExplainThread(paper.id, explainCacheKey(selection.passage, selection.explainIdentity), { passage: selection.passage, identity: selection.explainIdentity });
       } catch {
         // A blocked browser store leaves the old thread; the box still opens fresh.
       }
@@ -935,12 +969,12 @@ function Reader({
   const openExplain = useCallback(() => explainOpen.current?.(), []);
   // P10-09a (review 7.1, 8.4): "Take notes" on the selection — a numbered sticky note at the right, saved into the
   // paper's own note. The pill that offers it and "Explain this" is `SelectionToolbar` (mounted by the box below).
-  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  const takeNote = useTakeNote({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onUnavailable: (reason) => showToast(reason) });
   // P11-17b (owner item 8; B P11-04 §5; ruling §1h.112): "Highlight" on the selection — the passage painted in the paper (Yellow, black words), kept as a
   // block of the paper's own note, the colour strip raised in the margin. Beside `takeNote`, with the same inputs. A Tier 0 act: it needs no key and no
   // model, so the toolbar offers it whether or not the page can explain (`canHighlight` below is its own gate, never `canExplain`'s: a paragraph, a heading or a caption of the
   // paper's body, and, since P11-28, a Summary block or an answer).
-  const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body });
+  const highlight = useHighlight({ paper, questions: settledQuestions(asked), forYourQuestions: report?.forYourQuestions, body: reading?.body, onUnavailable: (reason) => showToast(reason) });
   // The tags the passages carry: the sticky notes in the paper's own note, by paragraph.
   const readingNote = useNotesStore((state) => readingNoteFor(state.notes, paper.id));
   const noteAnchors = useMemo(() => anchorMap(readingNote, paper.id), [readingNote, paper.id]);
@@ -1052,19 +1086,20 @@ function Reader({
         : null,
     [report, deepRequested],
   );
-  const sentences = useMemo(
-    () =>
-      reading
-        ? describeAvailability({
-            reading,
-            report: availability,
-            providerConfigured,
-            profileHasProject,
-            modelFailed: model.failed,
-          })
-        : [],
-    [reading, availability, providerConfigured, profileHasProject, model.failed],
-  );
+  const sentences = useMemo(() => {
+    if (!reading) return [];
+    const described = describeAvailability({
+      reading,
+      report: availability,
+      providerConfigured,
+      profileHasProject,
+      modelFailed: model.failed,
+    });
+    // P12-58 (rule 3): while the full text has not settled, the abstract-only sentence is not true of the
+    // paper — it is not read yet. `sentencesWhileWaiting` puts one calm line in its place (and, after three
+    // minutes of asking, one that says so and points at the reload); a model's own sentence stays.
+    return sentencesWhileWaiting(described, wait, availability !== null);
+  }, [reading, availability, providerConfigured, profileHasProject, model.failed, wait]);
 
   // The plate's own terms — allocated across the briefing when the paper is
   // in it, so the plate here is the plate on the card; alone otherwise.
@@ -1521,7 +1556,7 @@ function Reader({
         // P10-04 (review 3.1): the map (P1-04, §1f.12: from the reading the server built, absent without a body)
         // stands directly under the strip and floats with it, under both tabs; it is the paper's one contents
         // list (R5). A row clicked under "Summary" brings the body in first (`reveal`).
-        map={hasBody && shownMap ? <ReadingMapView key={`map:${paper.id}`} map={shownMap} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
+        map={hasBody && reviewedMap ? <ReadingMapView key={`map:${paper.id}`} map={reviewedMap} route={route} gists={paragraphGists} reveal={reveal} source={reading.provenance.sourceLabel} /> : undefined}
         // The blocks both tabs share (Q6): the question field (P1-03, §1f.10 — only where Peer has
         // the paper's text; without it there is nothing to point a question at, and the Decision
         // block already says why; one field per paper) and the answers. ONE element each, built here
@@ -1727,13 +1762,13 @@ function Reader({
     <SectionLinks headings={bodyHeadings}>
       {/* P11-14 (B P11-02 D3): a throw in the box leaves the paper and everything else on the page as they are, and shows one quiet line in its place. */}
       <ExplainBoundary key={paper.id}>
-        <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} openRef={explainOpen} reading={reading} />
+        <ExplainBox key={paper.id} target={explainTarget?.unavailableReason ? null : explainTarget} terms={terms} canAsk={explainCanAsk} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} onUnavailable={showToast} openRef={explainOpen} reading={reading} />
       </ExplainBoundary>
     </SectionLinks>
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
         the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. P11-17b: and "Highlight" — wherever `canHighlight`
         accepts the selection (a paragraph, a heading or a caption of the paper's body; since P11-28 a Summary block or an answer), with or without a key. */}
-    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />
+    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.unavailableReason ? null : explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
     {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. Its key is not the stickies' (a sibling's), or React meets two children with one key. */}
     <FigureHost key={`figure:${paper.id}`} />

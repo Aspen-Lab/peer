@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+// P12-07/197: the page's scale-aware room budget decides whether this shell
+// stands; inside it, actual clientWidth decides pin versus temporary rail.
+// Saved choices are never overwritten. Historical1024px notes follow below.
+
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { useKeepPlace } from "@/lib/reader/keep-place";
 import { useKeepSelection } from "@/lib/reader/keep-selection";
 import { registerMargin } from "@/lib/reader/margin";
 import { useReaderPanesStore } from "@/store/reader-panes";
+import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { PaneDivider } from "./pane-divider";
-import { fitPanes } from "./pane-layout";
+import { fitPanes, readingCentreMinimum } from "./pane-layout";
 
 // The reader's shell (P11-10 rule 3; B P11-01 §2; ruling §1h.113 (a)): from a window of 1024 css px the paper's page is three panes in
 // one full-width grid, as Claude's own: a left pane that stays pinned or folds into a thin rail, the paper's text in the centre, and an
@@ -60,6 +65,10 @@ export interface ReaderShellProps {
   /** What stands in the left pane's header row after the pin and collapse button — the reading controls (P11-16 follow-up, ruling §1h.115
    *  item 2). The row wraps if the pane is too narrow for both, and the button keeps the left edge. Absent: the button alone, at the right. */
   header?: ReactNode;
+  /** ReaderLayout owns the durable controller across responsive branches. */
+  keepReadingPlace?: boolean;
+  /** The centre ancestry remains mounted when side furniture gives way to one column. */
+  side?: boolean;
 }
 
 export type LeftState = "pinned" | "rail" | "peek";
@@ -89,7 +98,7 @@ function SidebarGlyph() {
   );
 }
 
-export function ReaderShell({ left, centre, header }: ReaderShellProps) {
+export function ReaderShell({ left, centre, header, keepReadingPlace = true, side = true }: ReaderShellProps) {
   const grid = useRef<HTMLDivElement | null>(null);
   const cell = useRef<HTMLDivElement | null>(null);
   const pane = useRef<HTMLDivElement | null>(null);
@@ -97,11 +106,28 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   const pinButton = useRef<HTMLButtonElement | null>(null);
   const margin = useRef<HTMLElement | null>(null);
 
-  const viewport = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => SERVER_VIEWPORT_PX);
+  const windowWidth = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => SERVER_VIEWPORT_PX);
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
+  const prefs = useSyncExternalStore(useReadingPrefsStore.subscribe, useReadingPrefsStore.getState, useReadingPrefsStore.getInitialState);
+  const scale = READING_SCALE_STEPS[prefs.scaleIndex];
+  const centreMinimum = readingCentreMinimum(scale);
+  const viewport = measuredWidth ?? windowWidth;
+  // clientWidth is layout px: it already includes the scrollbar, actual page
+  // padding and CSS Fit zoom, rather than guessing from the outer window.
+  useLayoutEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const read = () => { if (el.clientWidth > 0) setMeasuredWidth(el.clientWidth); };
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   // The reader's saved choice. The server snapshot is the store's INITIAL state, never the live one: the stores load after mount
   // (`skipHydration`, <StoreHydrator/>), and a hydrating render that already saw the loaded widths would not match the markup.
   const saved = useSyncExternalStore(useReaderPanesStore.subscribe, useReaderPanesStore.getState, useReaderPanesStore.getInitialState);
-  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned });
+  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned, centreMinimum });
 
   const [peeking, setPeeking] = useState(false);
   // A pane that is pinned does not peek: forgotten at once, so that folding it again does not open it.
@@ -115,13 +141,14 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
 
   // The shell's margin is where the cards stand: the measured rect, for as long as the shell is mounted.
   useEffect(() => {
+    if (!side) return;
     const el = margin.current;
     return el ? registerMargin(el) : undefined;
-  }, []);
+  }, [side]);
 
   // The reader's place survives a re-flow (P11-45, ruling §1h.146): the paragraph at the top stays at the top when the centre column changes width
   // (a divider dragged, a collapse or a pin, Fit, the window) — `lib/reader/keep-place.ts`.
-  useKeepPlace(grid);
+  useKeepPlace(grid, { enabled: keepReadingPlace });
 
   // A drag-select that began in the paper's text ends at the column's edge wherever it is released - over the margin, a card, the left pane, a separator, beyond the
   // window (P11-45b) - `lib/reader/keep-selection.ts`.
@@ -221,7 +248,7 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
 
   const onRailClick = () => {
     // A touch screen has no hover to rest on: the press peeks (and a second press puts it away); the pane's own button pins.
-    if (lastPointer.current === "touch") {
+    if (lastPointer.current === "touch" || fit.forced) {
       setPeeking((open) => !open);
       return;
     }
@@ -231,8 +258,10 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
   const style = { "--left-pane-w": `${fit.left}px`, "--margin-w": `${fit.margin}px` } as CSSProperties;
 
   return (
-    <div ref={grid} className="reader-shell" data-reader-shell="" data-left-state={state} style={style}>
-      <div ref={cell} className="reader-left-cell" data-reader-left-cell="" onPointerEnter={onCellEnter} onPointerLeave={onCellLeave}>
+    <div ref={grid} className={side ? "reader-shell" : "mx-auto max-w-[760px] px-5 sm:px-6"}
+      data-reader-shell={side ? "" : undefined} data-reader-one-column={side ? undefined : ""}
+      data-left-state={side ? state : undefined} style={side ? style : undefined}>
+      {side ? <div key="left" ref={cell} className="reader-left-cell" data-reader-left-cell="" onPointerEnter={onCellEnter} onPointerLeave={onCellLeave}>
         <button
           ref={rail}
           type="button"
@@ -297,12 +326,12 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
             </>
           )}
         </div>
-      </div>
-      {fit.pinned ? (
+      </div> : null}
+      {side ? fit.pinned ? (
         <PaneDivider
           pane="left"
           value={fit.left}
-          room={{ viewport, other: fit.margin }}
+          room={{ viewport, other: fit.margin, centreMinimum }}
           target={grid}
           variable="--left-pane-w"
           label="Resize left panel"
@@ -311,23 +340,23 @@ export function ReaderShell({ left, centre, header }: ReaderShellProps) {
         />
       ) : (
         <div className="reader-divider-rest" aria-hidden="true" />
-      )}
-      <div className="reader-centre" id={CENTRE_ID} data-reader-centre="">
-        <div className="reader-centre-inner" data-reader-centre-inner="">
+      ) : null}
+      <div key="centre" className={side ? "reader-centre" : undefined} id={CENTRE_ID} data-reader-centre={side ? "" : undefined} style={side ? undefined : { display: "contents" }}>
+        <div className={side ? "reader-centre-inner" : undefined} data-reader-centre-inner="">
           {centre}
         </div>
       </div>
-      <PaneDivider
+      {side ? <PaneDivider
         pane="margin"
         value={fit.margin}
-        room={{ viewport, other: fit.leftTrack }}
+        room={{ viewport, other: fit.leftTrack, centreMinimum }}
         target={grid}
         variable="--margin-w"
         label="Resize margin"
         controls={MARGIN_ID}
         onCommit={(width) => useReaderPanesStore.getState().setMarginWidth(width)}
-      />
-      <aside ref={margin} id={MARGIN_ID} className="reader-margin" data-reader-margin="" aria-label="Margin" />
+      /> : null}
+      {side ? <aside ref={margin} id={MARGIN_ID} className="reader-margin" data-reader-margin="" aria-label="Margin" /> : null}
     </div>
   );
 }

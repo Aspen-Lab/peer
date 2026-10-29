@@ -411,7 +411,14 @@ export function QuestionField({
   // P7-13 (R11c): what was last settled, to tell whether Submit has anything to send. It follows
   // the submits this field makes; nothing else settles a paper's question.
   const [settled, setSettled] = useState<readonly string[]>(initial.settled);
-  const unsent = hasNewQuestions(text, settled);
+  // P12-06: raw acknowledgement belongs to this page session; storage keeps normalized text.
+  // A legacy multi-question entry is still actionable: the unseen items have not been submitted
+  // as this bar's singleton. Empty stored/gist entries do not prove a question was submitted.
+  const [submittedText, setSubmittedText] = useState<string | null>(() =>
+    initial.settled.length > 0 && !hasNewQuestions(initial.text, initial.settled) ? initial.text : null,
+  );
+  const submitted = submittedText !== null && text === submittedText;
+  const actionable = !submitted && (hasNewQuestions(text, settled) || cleanQuestions([text]).length > 0);
   const [focused, setFocused] = useState(false);
   // P1-07 (§1f.18 a): 0 while the bar is being written, which the vague hint waits for.
   const [unsettled, setUnsettled] = useState<number | null>(null);
@@ -464,10 +471,14 @@ export function QuestionField({
   // deep report is asked about it), the ledger hears of it, and the control knows what was sent.
   // The text submitted again does nothing. The stored list becomes the one question.
   const submit = () => {
-    if (!hasNewQuestions(text, settled)) return;
-    useReadingQuestionsStore.getState().set(paperId, [text], gist);
-    settleQuestions(paperId);
-    setSettled(settledOf(useReadingQuestionsStore.getState().byPaper[paperId]));
+    if (!actionable) return;
+    // A raw-only edit may be acknowledged without resettling equivalent normalized content.
+    if (hasNewQuestions(text, settled)) {
+      useReadingQuestionsStore.getState().set(paperId, [text], gist);
+      settleQuestions(paperId);
+      setSettled(settledOf(useReadingQuestionsStore.getState().byPaper[paperId]));
+    }
+    setSubmittedText(text);
     setActive(-1);
   };
 
@@ -589,16 +600,15 @@ export function QuestionField({
           {text.length > COUNTER_FROM && (
             <span className="annotation shrink-0 text-text-faint">{ASK.counter(text.length)}</span>
           )}
-          {/* P7-13 (R11c): in the label face; shown with no key too — it settles the ledger. P7-18 (F6): a
-              44-px target on touch. P10: inside the bar's right end; grey and inert (§1h.77 (g)) until the
-              text is a question not yet submitted. */}
+          {/* P12-06: orange Submit until this exact raw text has been acknowledged; grey Submitted
+              afterwards. aria-disabled keeps both states reachable, with the handler guarding no-ops. */}
           <button
             type="button"
             onClick={submit}
-            disabled={!unsent}
-            className="annotation shrink-0 rounded-full bg-heading px-4 py-2 text-bg transition-colors hover:bg-heading/90 disabled:cursor-default disabled:bg-bg-secondary disabled:text-text-faint disabled:hover:bg-bg-secondary [@media(hover:none)]:min-h-11"
+            aria-disabled={!actionable}
+            className={`annotation shrink-0 rounded-full px-4 py-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-focus [@media(hover:none)]:min-h-11 ${submitted ? "cursor-default bg-bg-secondary text-text-muted" : "bg-action-orange text-action-foreground hover:bg-action-orange-hover"}`}
           >
-            {ASK.submit}
+            {submitted ? ASK.submitted : ASK.submit}
           </button>
         </div>
         <p id={`ask-${paperId}-hint`} className="sr-only">

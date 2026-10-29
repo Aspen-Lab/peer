@@ -44,6 +44,13 @@ function createOffer() {
 
 const explain = createOffer();
 const highlight = createOffer();
+const note = createOffer();
+
+/** Selection Take notes uses the same imperative page action as its keyboard route. */
+export function setNoteOffer(next: boolean): void { note.set(next); }
+export function noteOffered(): boolean { return note.get(); }
+export function subscribeNoteOffer(listener: () => void): () => void { return note.subscribe(listener); }
+export function useNoteOffer(): boolean { return useSyncExternalStore(subscribeNoteOffer, noteOffered, noteOffered); }
 
 /** Whether a control is on offer for a settled selection right now. */
 export function explainOffered(): boolean {

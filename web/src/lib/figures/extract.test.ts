@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const figureRevision = vi.hoisted(() => ({ FIGURE_EXTRACTION_REVISION: "invented-old-engine" }));
+vi.mock("./figure-revision", () => figureRevision);
 
 const mocks = vi.hoisted(() => ({
   extractPdfCandidatesFromPath: vi.fn(),
@@ -19,6 +21,31 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
 });
 
 import { extractFigure, finalDiagnostic, getFigurePool, tryHtmlCandidates } from "./extract";
+
+it("P12-28: public candidate pools miss across an engine revision, then reuse the corrected pool", async () => {
+  let tag = "old";
+  const fetcher = vi.fn(async (url: string) => String(url).includes("/pdf/")
+    ? new Response("", { status: 404 })
+    : new Response(`<html><body><figure><img src="https://example.org/${tag}.png"><figcaption>Figure 1. Invented pool diagram.</figcaption></figure></body></html>`, { headers: { "content-type": "text/html" } }));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const input = { itemId: "arxiv:2610.00228" };
+    figureRevision.FIGURE_EXTRACTION_REVISION = "invented-old-engine";
+    const old = await getFigurePool(input);
+    expect(old.entries[0]?.imageUrl).toContain("old.png");
+    const before = fetcher.mock.calls.length;
+    tag = "new";
+    figureRevision.FIGURE_EXTRACTION_REVISION = "invented-new-engine";
+    const fresh = await getFigurePool(input);
+    expect(fresh.entries[0]?.imageUrl).toContain("new.png");
+    expect(fetcher.mock.calls.length).toBeGreaterThan(before);
+    const after = fetcher.mock.calls.length;
+    expect((await getFigurePool(input)).entries).toEqual(fresh.entries);
+    expect(fetcher).toHaveBeenCalledTimes(after);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
 
 describe("tryHtmlCandidates — 1-22, a hard 401/402/403/451 is reported as paywalled", () => {
   const originalFetch = globalThis.fetch;

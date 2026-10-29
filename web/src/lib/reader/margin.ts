@@ -35,6 +35,8 @@ export interface MarginRect {
   width: number;
   top: number;
   bottom: number;
+  /** Omitted for the existing side margin. The complementary region on narrow readers. */
+  presentation?: "bottom";
 }
 
 const clampTo = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high));
@@ -68,7 +70,14 @@ export function marginRectOf(box: { left: number; width: number }, viewportHeigh
 }
 
 const sameRect = (a: MarginRect | null, b: MarginRect | null) =>
-  a === b || (a !== null && b !== null && a.left === b.left && a.width === b.width && a.top === b.top && a.bottom === b.bottom);
+  a === b || (a !== null && b !== null && a.left === b.left && a.width === b.width && a.top === b.top && a.bottom === b.bottom && a.presentation === b.presentation);
+
+/** P12-09: an overlay band that leaves the paper's width untouched. */
+export function bottomMarginRectOf(viewportWidth: number, viewportHeight: number, zoom: number): MarginRect {
+  const bottom = Math.max(DOCK_TOP_PX, columnBottomPx(viewportHeight, legendHeightPx(zoom)) - 8);
+  const height = Math.min(420, Math.max(0, bottom - DOCK_TOP_PX) * .55);
+  return { left: 8, width: Math.max(0, viewportWidth - 16), top: bottom - height, bottom, presentation: "bottom" };
+}
 
 interface MarginState {
   rect: MarginRect | null;
@@ -87,6 +96,8 @@ export interface MarginEnv {
   observe: (els: readonly Element[], cb: () => void) => () => void;
   /** Call `cb` when the window is resized; returns what stops it. */
   onResize: (cb: () => void) => () => void;
+  /** A real bottom-dock box already includes its vertical band. */
+  presentation?: "bottom";
 }
 
 const domEnv: MarginEnv = {
@@ -115,7 +126,10 @@ export function registerMargin(el: HTMLElement, env: MarginEnv = domEnv): () => 
   owner = el;
   const read = () => {
     if (owner !== el) return;
-    const next = marginRectOf(el.getBoundingClientRect(), env.viewportHeight(), env.zoom());
+    const box = el.getBoundingClientRect();
+    const next: MarginRect = env.presentation === "bottom"
+      ? { left: box.left, width: box.width, top: box.top, bottom: box.bottom, presentation: "bottom" }
+      : marginRectOf(box, env.viewportHeight(), env.zoom());
     if (!sameRect(useMarginStore.getState().rect, next)) useMarginStore.setState({ rect: next });
   };
   read();

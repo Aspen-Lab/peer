@@ -365,29 +365,31 @@ describe("ReaderLayout, the map under the strip (P10-04, A8)", () => {
 });
 
 describe("reader-layout.tsx source (P7-14)", () => {
+  // P12-15: the keyed centre stays mounted; the narrow-only preamble/navigation
+  // slots retain the old order. All rendered order/tab scenarios above remain.
   const source = readFileSync(resolve(process.cwd(), "src/components/reader/reader-layout.tsx"), "utf8");
   const body = source.slice(source.indexOf("export function ReaderLayout"));
-  // P11-16, RE-AIMED: the one-column branch ends where the shell's begins (`<ReaderShell`, not the two-column grid).
-  const stacked = body.slice(body.indexOf("if (!p.spread)"), body.indexOf("<ReaderShell"));
+  const preamble = body.slice(body.indexOf("const preamble = ("), body.indexOf("const navigation = ("));
+  const navigation = body.slice(body.indexOf("const navigation = ("), body.indexOf("const head = ("));
   const spread = body.slice(body.indexOf("<ReaderShell"));
+  const centre = spread.slice(spread.indexOf("centre={"));
 
   it("one column: {p.decision} right after {p.title}, before the tabs, the common blocks and the abstract", () => {
-    expect(stacked.slice(stacked.indexOf("{p.title}") + "{p.title}".length, stacked.indexOf("{p.decision}")).trim()).toBe("");
-    for (const later of ["{p.tabs}", "{common}", "{panel}"]) {
-      expect(stacked.indexOf(later)).toBeGreaterThan(stacked.indexOf("{p.decision}"));
-    }
+    expect(preamble.slice(preamble.indexOf("{p.title}") + "{p.title}".length, preamble.indexOf("{p.decision}")).trim()).toBe("");
+    expect(centre.indexOf("{common}")).toBeGreaterThan(centre.indexOf("{preamble}"));
+    expect(centre.indexOf("{navigation}")).toBeGreaterThan(centre.indexOf("{common}"));
+    expect(centre.indexOf("{panel}")).toBeGreaterThan(centre.indexOf("{navigation}"));
+    expect(navigation).toContain("{p.tabs}");
   });
 
   // P9-04 (X3): the one-column return ends with the strip and the panel it labels, side by side.
   // P10-04 (review 3.1): the map stands between the strip and the panel (JSX comments aside); the terms slot is
   // gone (P10-02).
   it("one column: {p.tabs} stands directly before {p.map}, which stands directly before {panel}, after {common}", () => {
-    const between = (from: string, to: string) =>
-      stacked.slice(stacked.indexOf(from) + from.length, stacked.indexOf(to)).replace(/\{\/\*[\s\S]*?\*\/\}/g, "").trim();
-
-    expect(between("{p.tabs}", "{p.map}")).toBe("");
-    expect(between("{p.map}", "{panel}")).toBe("");
-    expect(stacked.indexOf("{p.tabs}")).toBeGreaterThan(stacked.indexOf("{common}"));
+    expect(navigation.slice(navigation.indexOf("{p.tabs}") + "{p.tabs}".length, navigation.indexOf("{p.map}")).trim()).toBe("");
+    expect(centre.slice(centre.indexOf("{navigation}") + "{navigation}".length, centre.indexOf("{panel}"))
+      .replace(/<\/Fragment>\s*:\s*null\}/, "").trim()).toBe("");
+    expect(centre.indexOf("{navigation}")).toBeGreaterThan(centre.indexOf("{common}"));
   });
 
   // P11-16, RE-AIMED from "the spread's panel: {p.decision} right after {p.title}, then {p.tabs}, and nothing after it": the left pane's fixed
@@ -417,9 +419,9 @@ describe("reader-layout.tsx source (P7-14)", () => {
   });
 
   it("one column: {p.details} right after {p.decision}, then {p.progress}, before the common blocks", () => {
-    expect(stacked.slice(stacked.indexOf("{p.decision}") + "{p.decision}".length, stacked.indexOf("{p.details}")).trim()).toBe("");
-    expect(stacked.slice(stacked.indexOf("{p.details}") + "{p.details}".length, stacked.indexOf("{p.progress}")).trim()).toBe("");
-    expect(stacked.indexOf("{common}")).toBeGreaterThan(stacked.indexOf("{p.progress}"));
+    expect(preamble.slice(preamble.indexOf("{p.decision}") + "{p.decision}".length, preamble.indexOf("{p.details}")).trim()).toBe("");
+    expect(preamble.slice(preamble.indexOf("{p.details}") + "{p.details}".length, preamble.indexOf("{p.progress}")).trim()).toBe("");
+    expect(centre.indexOf("{common}")).toBeGreaterThan(centre.indexOf("{preamble}"));
   });
 
   it("is placed by the shell: no two-column grid, no sticky part, no panel class of spread.ts", () => {
@@ -429,10 +431,9 @@ describe("reader-layout.tsx source (P7-14)", () => {
 
   it("the common blocks are drawn before the tab panel and outside it, in both layouts, and do not read the tab", () => {
     expect(source).toContain("const common = p.common ?");
-    for (const part of [stacked, spread]) {
-      expect(part.indexOf("{common}")).toBeGreaterThan(-1);
-      expect(part.indexOf("{common}")).toBeLessThan(part.indexOf("{panel}"));
-    }
+    expect(centre.indexOf("{common}")).toBeGreaterThan(-1);
+    expect(centre.indexOf("{common}")).toBeLessThan(centre.indexOf("{panel}"));
+    expect(source).toContain('key="common"'); expect(source).toContain('key="panel"');
     // The element is built once, from the slot alone: `p.tab` is read for the panel's label only.
     const commonLine = source.slice(source.indexOf("const common = p.common ?"), source.indexOf(";", source.indexOf("const common = p.common ?")));
     expect(commonLine).not.toContain("p.tab");

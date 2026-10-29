@@ -188,6 +188,13 @@ function roleLabel(role: ReadingRole): string | null {
   return role === "body" ? null : MAP.roles[role];
 }
 
+/** P12-63 (rule 3): whether a row is a part of the model's partition - "Peer's reading", not the paper's words. A row of the closing split
+ *  (`part.closing`) is not: the rules worked its role out from the paper's own structure, and it is drawn like a named row. */
+function isPeersPart(row: ReadingMapSection): boolean {
+  const part = partOf(row);
+  return part !== undefined && part.closing !== true;
+}
+
 /** P9-51: the floor a toggle has where there is no hover (P9-23's rule: 44 px tall; with a mouse nothing moves). */
 const TOUCH_TALL = "[@media(hover:none)]:min-h-11";
 /** P9-51: where there is no hover the row's toggle is the row's tallest item; it is centred against the heading
@@ -397,8 +404,9 @@ export function ReadingMapView({
   const gistShown = map.sections.some(
     (row) => open.has(row.id) && row.paragraphs.some((line) => line.opening !== null && gistOf(gistKeyOf(row), line.index, line.opening) !== undefined),
   );
-  // P10-07b: the legend is also there while a part of Peer's reading is on screen.
-  const partShown = map.sections.some((row) => partOf(row) !== undefined);
+  // P10-07b: the legend is also there while a part of Peer's reading is on screen. P12-63 (rule 3): the model's parts only - the rows of the closing
+  // split are the rules' reading of the paper's own structure, drawn like a named row (§1h.424 (a)), and wear no mark.
+  const partShown = map.sections.some((row) => isPeersPart(row));
   // P10-21 (A P10-14 §8 item 7; round 2's reader 3): the summary counts the rows below it — the partition's groups
   // count as sections (it said "1 section" over four "Peer's reading" rows; P10-07b counted the trunk once).
   const rowCount = map.sections.length;
@@ -445,10 +453,11 @@ export function ReadingMapView({
             const lines = row.paragraphs.filter((line) => line.opening !== null);
             const expanded = open.has(row.id);
             // P10-07b: a part of Peer's reading says so where a headed row says its role; its link, and its
-            // lines', are the trunk's real anchors in the body.
+            // lines', are the trunk's real anchors in the body. P12-63 (rule 3): only a part of the model's - a row of the closing split
+            // (`part.closing`) says its role like a named row, and the "Peer's reading" tag and legend are the model's alone.
             const part = partOf(row);
             const at = sectionIndexes[k];
-            const role = part ? MAP.parts.tag : roleLabel(row.role);
+            const role = isPeersPart(row) ? MAP.parts.tag : roleLabel(row.role);
             const rowAnchor = part ? paragraphAnchor(at, part.from) : sectionAnchor(at);
             // P10-04: a group row says its children's words and minutes, and has nothing of its own to fold.
             const group = groups.get(row.id);

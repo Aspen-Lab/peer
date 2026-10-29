@@ -17,7 +17,8 @@ vi.mock("react", async (importOriginal) => {
 
 import type { ReactElement, ReactNode } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
-import { FigureLightbox } from "./figure-lightbox";
+// P12-09 re-aim: identical failure/markup guards, now on the common margin route.
+import { MarginFigure as FigureLightbox } from "./margin-figure";
 import { MattedFigure } from "./matted-figure";
 
 const SRC = "/api/papers/upload%3A0123456789abcdef/figure-image?page=2&fig=1";

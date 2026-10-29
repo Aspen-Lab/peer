@@ -857,7 +857,9 @@ describe("HighlightStripHost — never over a card's header (P11-38 rule 2)", ()
     expect(host.props.top).toBe(320);
     const { MARGIN_CARD_SELECTOR } = await import("@/lib/reader/margin");
     expect(askedSelectors.length).toBeGreaterThan(0);
-    for (const selector of askedSelectors) expect(selector).toBe(MARGIN_CARD_SELECTOR);
+    // P12-08: whole-group geometry also queries that group's own mark pieces.
+    expect(askedSelectors).toContain(MARGIN_CARD_SELECTOR);
+    for (const selector of askedSelectors) expect([MARGIN_CARD_SELECTOR, 'mark[data-highlight="h1"], mark[data-highlight-part="h1"]']).toContain(selector);
   });
 
   it("asks one frame for a burst of stack changes, as it does for scrolls (one measure per frame)", () => {
@@ -911,6 +913,8 @@ describe("HighlightStripHost — never over a card's control (P11-49 rule 1)", (
     host.act(() => useHighlightStrip.getState().show("h1", 300));
     expect(host.props.top).toBe(330);
     expect(askedSelectors.length).toBeGreaterThan(0);
-    for (const selector of askedSelectors) expect(selector).toBe("[data-margin-card]");
+    // P12-08: cards still use only their selector; the other query is the group's marks.
+    expect(askedSelectors).toContain("[data-margin-card]");
+    for (const selector of askedSelectors) expect(["[data-margin-card]", 'mark[data-highlight="h1"], mark[data-highlight-part="h1"]']).toContain(selector);
   });
 });

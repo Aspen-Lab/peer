@@ -22,6 +22,7 @@ import { headingNumber, numbersHeading, type ExtractedDocument, type ExtractedEq
 // Type only: erased at runtime, so `reading.ts` can import this module
 // without the two importing each other.
 import type { ReadingEquation } from "./reading";
+import { inferRoles, unheadedTrunk } from "./reading-roles";
 import { isBoilerplate, scoreSentence, splitSentences } from "./skim";
 
 // ── The body's sections and paragraphs (§1f.1; moved from reading.ts in P1-04) ──
@@ -100,7 +101,9 @@ export function readableSections(doc: ExtractedDocument): ReadableSection[] {
     const { paragraphs, equations } = sectionParagraphs(section, lifted);
     if (paragraphs.length === 0 && equations.length === 0) {
       const next = doc.sections[index + 1];
-      if (!next || !numbersHeading(section.heading, next.heading)) return;
+      // P12-75: an unnumbered part heading that holds only its sub-headings ("Methods") is a group row as a numbered one is.
+      const heads = section.level === 1 && next?.level === 2;
+      if (!heads && (!next || !numbersHeading(section.heading, next.heading))) return;
     }
     out.push({ id: section.id ?? `s${index}`, section, paragraphs, equations });
   });
@@ -148,7 +151,9 @@ export interface ReadingMap {
   totalMinutes: number;
 }
 
-/** §1f.2: the bucket, renamed for a reader. No positional guessing. */
+/** §1f.2: the bucket, renamed for a reader. A heading that names no role stays `body` here; P12-48 (§1h.423 (c),
+ *  which supersedes §1f.2's "no positional guessing") works a role out for such a part from where it stands
+ *  against the parts the page can name, in `reading-roles.ts`, once the rows are made (`readingMapOf`). */
 const ROLE: Readonly<Record<string, ReadingRole>> = {
   introduction: "setup",
   related_work: "setup",
@@ -279,7 +284,8 @@ export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
   const sections = rendered.map(({ id, section, paragraphs }): ReadingMapSection => {
     const words = paragraphs.reduce((sum, paragraph) => sum + wordCount(paragraph), 0);
     totalWords += words;
-    const level = levelOf(section.heading);
+    // P12-75: an unnumbered part heading and its sub-headings carry the depth the outline gave them.
+    const level = section.level ?? levelOf(section.heading);
     while (open.length > 0 && open[open.length - 1].level >= level) open.pop();
     const parentId = open[open.length - 1]?.id;
     open.push({ id, level });
@@ -296,7 +302,10 @@ export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
       ...(parentId !== undefined ? { parentId } : {}),
     };
   });
-  return { sections, totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
+  // P12-48: the roles of the parts whose heading names none (`reading-roles.ts`), once, so the map, the route's
+  // weights, the gist tiers and the explain route all read the same ones. A named role is never overridden.
+  const trunk = unheadedTrunk(rendered.map(({ id, section, paragraphs }) => ({ id, canonical: section.canonical, paragraphs })));
+  return { sections: inferRoles(sections, trunk?.sectionId ?? null), totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
 }
 
 /** P10-04: a heading's level — the parts of its number ("2." 1, "2.1" 2, "2.1.1" 3, deeper 3); no number, 1. */

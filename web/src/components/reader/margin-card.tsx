@@ -17,10 +17,13 @@
 // `MarginCard` is the shell with the margin's rect read in. Each kind keeps its own body component and hands it in as `children`;
 // a kind with a header of its own (the notes window's Export) hands that in as `header`.
 
-import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
+import { useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import { cn } from "@/lib/cn";
 import { useMarginRect, type MarginRect } from "@/lib/reader/margin";
-import type { WindowKind } from "@/lib/reader/windows";
+import { CARD_CONTENT_MIN_PX, useWindows, type WindowKind } from "@/lib/reader/windows";
+import { useMarginStack } from "./margin-stack-scroll";
+import { CardDivider } from "./card-divider";
+import { isFrontCard } from "./front-escape";
 
 /** The margin's left and width: all a card needs of it across the page. */
 export type MarginFrame = Pick<MarginRect, "left" | "width">;
@@ -120,6 +123,8 @@ export interface MarginCardShellProps extends Omit<HTMLAttributes<HTMLElement>, 
   headerAttrs?: Attrs;
   closeAttrs?: Attrs;
   children?: ReactNode;
+  elementRef?: Ref<HTMLElement>;
+  split?: boolean;
 }
 
 export function MarginCardShell({
@@ -144,6 +149,8 @@ export function MarginCardShell({
   closeAttrs,
   className,
   children,
+  elementRef,
+  split,
   ...root
 }: MarginCardShellProps) {
   const style: CSSProperties = {
@@ -156,6 +163,23 @@ export function MarginCardShell({
   return (
     <section
       {...root}
+      id={id}
+      ref={elementRef}
+      onFocusCapture={(event) => {
+        const state = useWindows.getState();
+        if (state.windows.some((w) => w.id === id) && !isFrontCard(state.windows, id)) state.raise(id);
+        root.onFocusCapture?.(event);
+      }}
+      onPointerDownCapture={(event) => {
+        const state = useWindows.getState();
+        if (state.windows.some((w) => w.id === id) && !isFrontCard(state.windows, id)) state.raise(id);
+        root.onPointerDownCapture?.(event);
+      }}
+      onKeyDown={(event) => {
+        const windows = useWindows.getState().windows;
+        if (event.key === "Escape" && windows.some((w) => w.id === id) && !isFrontCard(windows, id)) return;
+        root.onKeyDown?.(event);
+      }}
       data-margin-card={kind}
       data-margin-id={id}
       style={style}
@@ -174,13 +198,31 @@ export function MarginCardShell({
           closeAttrs={closeAttrs}
         />
       )}
-      {(front || keepMounted) && children}
+      {(front || keepMounted) && (kind !== "figure" ? <div data-margin-body="" className={cn("flex min-h-0 flex-1 flex-col", split && "overflow-y-auto overscroll-contain")}>{children}</div> : children)}
     </section>
   );
 }
 
 /** A card of the margin: the shell, with the margin's rect read in (`useMarginRect`). */
-export function MarginCard(props: Omit<MarginCardShellProps, "frame">) {
+export function MarginCard(props: Omit<MarginCardShellProps, "frame"> & { frame?: MarginFrame | null }) {
   const rect = useMarginRect();
-  return <MarginCardShell {...props} frame={rect} />;
+  const element = useRef<HTMLElement | null>(null);
+  const windows = useWindows((s) => s.windows);
+  const id = windows.find((w) => w.id === props.id || (w.kind === props.kind && w.title === props.title))?.id ?? props.id;
+  const stack = useMarginStack(id, element, props.frame === undefined ? rect : props.frame);
+  const index = stack.rows.findIndex((r) => r.id === id);
+  const row = stack.rows[index];
+  const next = stack.rows[index + 1];
+  const mine = stack.windows[index];
+  const other = stack.windows[index + 1];
+  const activate = () => { if (mine && !isFrontCard(useWindows.getState().windows, id)) useWindows.getState().raise(id); };
+  return stack.portal(<>
+    <MarginCardShell {...props} id={id} frame={props.frame === undefined ? rect : props.frame}
+      elementRef={element} split={stack.split}
+      {...(stack.scroll && row ? { top: row.top - stack.bandTop, height: row.height, maxHeight: row.height, className: `${props.className ?? ""} !absolute !left-0 !right-auto !w-full` } : {})}
+      onFocusCapture={(event) => { activate(); props.onFocusCapture?.(event); }}
+      onPointerDownCapture={(event) => { activate(); props.onPointerDownCapture?.(event); }}
+    />
+    {stack.split && row && next && mine && other && <CardDivider above={id} below={next.id} top={row.top + row.height - stack.bandTop} value={row.height} pairHeight={row.height + next.height} min={mine.minimum ?? CARD_CONTENT_MIN_PX} max={row.height + next.height - (other.minimum ?? CARD_CONTENT_MIN_PX)} />}
+  </>);
 }

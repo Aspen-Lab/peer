@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readingNote } from "@/lib/notes/templates";
 import type { Note } from "@/lib/notes/types";
 import type { Paper } from "@/types";
-import { NOTES_LABEL, NotesButtonView, TAKE_TITLE, notesLabel } from "./notes-button";
+import { DIVIDER_PX } from "@/components/reader/pane-layout";
+import { EDGE_TAB_DIVIDER_CLEAR_PX, NOTES_LABEL, NotesButtonView, TAKE_TITLE, notesLabel } from "./notes-button";
 import { useNotesStore } from "@/store/notes";
 import { openPaperNotes } from "./paper-notes";
 
@@ -33,25 +34,33 @@ describe("the label", () => {
 describe("NotesButtonView — the tab at the right edge", () => {
   const edge = (has: boolean) => renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has, onOpen: () => {} }));
 
-  it("is one button, fixed at the viewport's right edge, from md up and never on a phone", () => {
+  // Re-aimed (P12-77 rule 3, E2): was "is one button, fixed at the viewport's right edge, from md up and never on a phone" and held `hidden` and
+  // `md:flex`. A phone's reader had only the row near the top of the page, so to open notes they scrolled up to it and "Back to paper" returned
+  // them near the top (scrollY 8385 -> 85 at 390 x 844); the fixed tab keeps the place. The tab is now shown at every width (`flex`, no `hidden`),
+  // and a phone's press goes to the notes page (`notes-button.phone.flow.test.tsx`).
+  it("is one button, fixed at the viewport's right edge, at every width — a phone's too", () => {
     const html = edge(false);
 
     expect(html.match(/<button\b/g)).toHaveLength(1);
     expect(html).toContain('type="button"');
     // P11-14 (re-aimed, §1c): P7-15 had made `right-0` the dock's width with a fallback of 0px (`right-[var(--explain-dock-width,0px)]`);
     // nothing is reserved now, so with no card standing the tab is on the window's edge again.
-    for (const cls of ["fixed", "right-0", "hidden", "md:flex"]) expect(html.split('"').some((attr) => attr.split(" ").includes(cls))).toBe(true);
+    const classes = (/class="([^"]*)"/.exec(html)?.[1] ?? "").split(" ");
+    for (const cls of ["fixed", "right-0", "flex"]) expect(classes).toContain(cls);
+    for (const cls of ["hidden", "md:flex", "md:hidden"]) expect(classes).not.toContain(cls);
   });
 
   // P11-14 (re-aimed, §1c): was "stands beside the AI dock when one is open, not under it: its right edge is the dock's left edge"
   // (`right-[var(--explain-dock-width,0px)]`, a property the dock wrote on the document's root). The cards stand in the margin now: while
   // one stands (the explain card, a sticky, the notes window) the tab stands at the margin's left edge, from its rect; with no margin
   // registered, at the card's 360 px; with no card, on the window's edge.
-  it("stands beside the cards when one stands in the margin, not under them: at the margin's left edge from its rect, else at the card's 360 px", () => {
+  // Re-aimed again (P12-89, E5): the margin case held `left:1080px`, the tab's face over the margin divider's 12 px hit strip. Its right edge is now `EDGE_TAB_DIVIDER_CLEAR_PX` left of that strip
+  // (1080 less 12 less 2, in the centre's right padding), with the same translation and `z-40`. The case with no margin registered and the tab alone are as they were.
+  it("stands beside the cards when one stands in the margin, not under them: left of the margin divider's strip from its rect, else at the card's 360 px", () => {
     const beside = renderToStaticMarkup(createElement(NotesButtonView, { variant: "edge", has: false, beside: true, marginLeft: 1080, onOpen: () => {} }));
 
     // The cards are `z-60` and over, the tab `z-40`, so a tab left at `right: 0` would be hidden by them.
-    expect(beside).toContain("left:1080px");
+    expect(beside).toContain(`left:${1080 - DIVIDER_PX - EDGE_TAB_DIVIDER_CLEAR_PX}px`);
     expect(beside).toContain("translateX(-100%)");
     expect(beside).not.toMatch(/\bright-0\b/);
     expect(beside).toContain("z-40");

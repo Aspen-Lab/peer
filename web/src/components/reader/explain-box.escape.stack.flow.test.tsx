@@ -112,7 +112,9 @@ describe("the explain card behind another card does not answer Escape", () => {
       expect(event.preventDefault).not.toHaveBeenCalled();
       expect(event.stopPropagation).not.toHaveBeenCalled();
       expect(inStack()).toBe(true);
-      expect(cardOf(run.last())?.props.behind).toBe(true);
+      // P12-04 RE-AIM: inactive does not mean hidden; Escape's active-order assertions above stay intact.
+      expect(cardOf(run.last())?.props.behind).toBe(false);
+      expect(cardOf(run.last())?.props.compact).toBe(true);
       run.mounted.unmount();
     });
   }
@@ -154,11 +156,12 @@ describe("the explain card behind another card does not answer Escape", () => {
   });
 });
 
-describe("below 1024 px it stands outside the stack and nothing changes", () => {
+describe("P12-07: without a registered margin the old card/sheet Escape remains", () => {
   it("takes Escape as before at 900 px (the card) and at 390 px (the sheet), whatever card the store holds", async () => {
     for (const width of [900, 390]) {
       listeners = new Map();
       stubPage(width, 900);
+      useMarginStore.setState({ rect: null });
       useWindows.setState({ windows: [], clock: 0, origin: null });
       const event = escape();
       const run = await scenario([() => open(), () => useWindows.getState().open({ id: "s1", kind: "sticky", title: "Note 1" }), () => fire("keydown", event)]);

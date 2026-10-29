@@ -47,6 +47,7 @@ import type { FigurePool } from "@/lib/figures/extract";
 import type { PaperReport } from "./report";
 import type { ExtractedFigureCaption } from "./html-text";
 import { bindFiguresToReport } from "./figure-binding";
+import { FIGURE_EXTRACTION_REVISION } from "@/lib/figures/figure-revision";
 
 afterAll(async () => {
   delete process.env.PEER_PRIVATE_UPLOAD_DIR;
@@ -167,8 +168,8 @@ describe("the route draws the figure the pool had", () => {
 
     expect(bound.whatItProposes.figureLabel).toBe("Figure 4");
     expect(bound.resultsAndSignificance.keyResults[0].figureLabel).toBe("Figure 3");
-    expect(proposal).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=4");
-    expect(result).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=3");
+    expect(proposal).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=4&v=" + FIGURE_EXTRACTION_REVISION + "");
+    expect(result).toBe("/api/papers/arxiv%3A2610.00001/figure-image?page=2&fig=3&v=" + FIGURE_EXTRACTION_REVISION + "");
 
     const narrow = await fetchRoute(proposal);
     const wide = await fetchRoute(result);

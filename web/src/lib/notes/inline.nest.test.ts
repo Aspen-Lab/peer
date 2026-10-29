@@ -227,10 +227,14 @@ describe("the marks survive every export, nested ones too (rule 2)", () => {
     expect(text).not.toMatch(/__|==|\*\*/);
   });
 
-  it("the Markdown export keeps the marks as written", () => {
+  // Re-aimed (P12-77 O2): was "the Markdown export keeps the marks as written" and held `==__alpha__== … __==gamma==__` and `- ==__delta__==`.
+  // CommonMark, Obsidian and Pandoc read `__x__` as bold, so the Markdown leaves with each underline as `<u>x</u>`; every other mark, the nesting
+  // and the list marker are as they were.
+  it("the Markdown export keeps the marks, the underline as <u>…</u>", () => {
     const md = toMarkdown(NOTE);
-    expect(md).toContain(NEST);
-    expect(md).toContain("- ==__delta__==");
+    expect(md).toContain("==<u>alpha</u>== and **==beta==** and <u>==gamma==</u>");
+    expect(md).toContain("- ==<u>delta</u>==");
+    expect(md).not.toContain("__");
   });
 
   it("the Word export has the highlight holding the underline", () => {

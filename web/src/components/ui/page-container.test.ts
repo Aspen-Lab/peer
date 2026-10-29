@@ -9,15 +9,16 @@ import { pageContainer } from "./page-container";
 const tokens = (options: Parameters<typeof pageContainer>[0]) => pageContainer(options).split(/\s+/);
 
 describe("pageContainer — the reader width", () => {
-  it("is today's 760px column below 1024 css px and full-bleed from it: no cap, no side padding", () => {
+  // P12-07/204: the responsive reader owns its column inset; no fixed 1024px container gate.
+  it("gives the measured shell the full width; the narrow layout owns its inset", () => {
     const classes = tokens({ width: "reader", rhythm: "reader" });
-    expect(classes).toContain("max-w-[760px]");
-    expect(classes).toContain("lg:max-w-none");
-    expect(classes).toContain("lg:px-0");
+    expect(classes).toContain("max-w-none");
+    expect(classes).toContain("[&]:px-0");
+    expect(classes).not.toContain("max-w-[760px]");
   });
 
-  it("keeps the article's top at 16px from 1024, so the pinned pane's 4rem top is its first-paint position", () => {
-    expect(tokens({ width: "reader", rhythm: "reader" })).toContain("lg:pt-4");
+  it("keeps the article's top at 16px while the measured shell stands", () => {
+    expect(tokens({ width: "reader", rhythm: "reader" })).toContain("has-[.reader-shell]:pt-4");
     // The same rhythm on the spread width is unchanged: the loading and error states keep their xl top.
     expect(tokens({ width: "spread", rhythm: "reader" })).not.toContain("lg:pt-4");
     expect(tokens({ width: "spread", rhythm: "reader" })).toContain("xl:pt-4");

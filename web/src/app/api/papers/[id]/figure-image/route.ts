@@ -1,5 +1,7 @@
 // GET /api/papers/[id]/figure-image?page=N&fig=K — the picture of "Figure K"
-// on page N of a paper's PDF.
+// on page N of a paper's PDF. `fig=ed3` (P12-56, R14a) is "Extended Data Fig. 3": the
+// letters `ed` and plain digits, nothing else; "Supplementary Fig. 3" and "Fig. S3" are
+// another file's figures and are refused like any other token.
 //
 // The reading places each figure by the page its caption was read from and
 // the number in its label, and points here for the picture. This route finds
@@ -18,6 +20,28 @@
 // page's biggest picture, says which figure; a figure the page does not carry
 // is a 404, and the page shows the caption alone, which is the truth.
 //
+// P12-61 (§1h.434, the owner: "必须要这么做"): a figure view never opens the
+// whole PDF twice. An upload's first successful cut is kept beside the upload,
+// owner-private (`upload-store.ts`, keyed by the upload's hash, the page, the
+// label and `FIGURE_EXTRACTION_REVISION`), and a later look at the same figure
+// is answered from the kept picture after the owner check — the PDF is not
+// read and the engine does not run. A cut that failed (no such figure, the
+// engine would not load) is never kept. A public paper is unchanged: it has
+// its edge cache, and nothing about it is stored here.
+//
+// P12-61 (§1h.434, part 3): no whole copy of the PDF is held. An upload's PDF
+// is handed to the engine as a file (`withUploadPdfSource`: the stored file
+// itself on disk, a private temp file removed afterwards from the bucket) and
+// MuPDF reads from it only what the page needs; a public paper's downloaded
+// bytes go to the engine as they are, read through a stream, not copied twice.
+//
+// P12-61 (§1h.434, part 2): the first cut on a page also cuts that page out of
+// the upload as a PDF of its own (`cutPdfPage`, kept beside the upload), and a
+// cut of any other figure on that page, or of the same figure after a revision
+// change, opens only that small file. An upload made before this has no page
+// files: its first cut on each page takes the whole-file path above, and makes
+// the page file.
+//
 // No model, no key. The body is the PNG's bytes, never a `data:` URL.
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -25,8 +49,16 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText } from "@/lib/papers/full-text";
 import { getPdfBytes } from "@/lib/papers/pdf-text";
 import { rawItemToPaper } from "@/lib/feed/mapper";
-import { extractPdfFigures } from "@/lib/figures/pdf-engine";
-import { bareUploadId, claimsUploadId, readUploadPdf } from "@/lib/papers/upload-store";
+import { cutPdfPage, extractPdfFigures, type PdfEngineResult, type PdfSource } from "@/lib/figures/pdf-engine";
+import {
+  bareUploadId,
+  claimsUploadId,
+  readUploadFigureCut,
+  readUploadPageFile,
+  withUploadPdfSource,
+  writeUploadFigureCut,
+  writeUploadPageFile,
+} from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const runtime = "nodejs";
@@ -49,8 +81,35 @@ function wholeNumber(raw: string | null, max: number): number | null {
   return value <= max ? value : null;
 }
 
+/** The label the engine looks for, for a `fig` value: "Figure 3" for `3`, "Extended Data Fig. 3" for `ed3`
+ *  (R14a), or null for anything else. The `ed` is lower case and the digits are plain, as a number's are. */
+function figureLabel(raw: string | null): string | null {
+  const extended = raw !== null && raw.startsWith("ed");
+  const n = wholeNumber(extended ? raw.slice(2) : raw, MAX_FIGURE);
+  if (n === null) return null;
+  return extended ? `Extended Data Fig. ${n}` : `Figure ${n}`;
+}
+
+/** The engine could not read the page file — it failed to open or read it, or it has no page 1 — as opposed to
+ *  reading it and finding no such figure there. (The engine's own reasons.) */
+function readFailed(result: PdfEngineResult): boolean {
+  return result.figures.length === 0 && /^(PDF figure extraction failed|The PDF has no page 1 )/.test(result.reason ?? "");
+}
+
 function reject(status: number, error: string, headers: Record<string, string> = NO_STORE) {
   return NextResponse.json({ error }, { status, headers });
+}
+
+/** The picture itself: a public paper's with its edge cache, an upload's private and `no-store`. */
+function picture(png: Uint8Array, privately: boolean) {
+  return new NextResponse(Buffer.from(png), {
+    headers: {
+      ...(privately ? PRIVATE_UPLOAD_HEADERS : CACHE_HEADERS),
+      ...FIGURE_ENGINE,
+      "Content-Type": "image/png",
+      "Content-Length": String(png.byteLength),
+    },
+  });
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -62,10 +121,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const page = wholeNumber(req.nextUrl.searchParams.get("page"), MAX_PAGE);
   if (page === null) return reject(400, "page required", refusal);
-  const fig = wholeNumber(req.nextUrl.searchParams.get("fig"), MAX_FIGURE);
-  if (fig === null) return reject(400, "fig required", refusal);
+  const label = figureLabel(req.nextUrl.searchParams.get("fig"));
+  if (label === null) return reject(400, "fig required", refusal);
 
-  let bytes: Uint8Array;
+  // The engine's one call for this figure. A failure of the engine is a result here, not a throw, so that a
+  // failure to fetch the PDF (which is not the engine's) is not taken for one.
+  // `onlyPage` is the page in the source: the page itself in the whole PDF, 1 in the page's own file.
+  const cut = async (source: PdfSource, onlyPage = page): Promise<{ extracted: PdfEngineResult | null }> => {
+    try {
+      return { extracted: await extractPdfFigures(source, { maxPages: onlyPage === page ? MAX_PAGE : onlyPage, maxFigures: 1, onlyPage, label }) };
+    } catch (err) {
+      console.warn("[figure-image] extract failed:", err);
+      return { extracted: null };
+    }
+  };
+  // The upload whose cut is kept once it is made; null for a public paper.
+  let keepFor: string | null = null;
+  let ran: { extracted: PdfEngineResult | null } | null = null;
+  // Whether the answer was cut from the page's own file (its "page 1" is this page).
+  let fromPageFile = false;
   if (privately) {
     // P0-05 / P0-08: only the canonical `upload:<hash16>` is an upload id, and
     // only its owner is answered. A spelling that merely claims to be one is
@@ -74,9 +148,38 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const meta = hash16 ? await ownedUpload(hash16) : null;
     if (!hash16 || !meta) return reject(404, "Upload not found.", refusal);
     if (meta.pageCount && page > meta.pageCount) return reject(404, "No such page", refusal);
-    const stored = await readUploadPdf(hash16);
-    if (!stored) return reject(404, "Upload not found.", refusal);
-    bytes = new Uint8Array(stored);
+    // Owner checked: a picture cut before is answered as it was cut, and
+    // neither the PDF nor the engine is touched.
+    const kept = await readUploadFigureCut(hash16, page, label);
+    if (kept) return picture(kept.png, true);
+    keepFor = hash16;
+    // The page's own file, when it was cut before: a file of kilobytes. A page file the engine cannot read is
+    // as good as none (it is made again below); an engine that will not load at all is not a reason to try on.
+    const pageFile = await readUploadPageFile(hash16, page);
+    if (pageFile) {
+      const onPage = await cut(pageFile, 1);
+      if (!onPage.extracted || !readFailed(onPage.extracted)) {
+        ran = onPage;
+        fromPageFile = true;
+      }
+    }
+    if (!ran) {
+      ran = await withUploadPdfSource(hash16, async (source) => {
+        const whole = await cut(source);
+        // First cut on this page: make the page's own file, so the next one need not open the paper. Never
+        // fails the answer.
+        if (whole.extracted?.figures[0]?.png.byteLength) {
+          try {
+            const file = await cutPdfPage(source, page);
+            if (file) await writeUploadPageFile(hash16, page, file);
+          } catch (err) {
+            console.warn("[figure-image] could not keep the page file:", err);
+          }
+        }
+        return whole;
+      });
+      if (!ran) return reject(404, "Upload not found.", refusal);
+    }
   } else {
     const raw = await fetchPaperById(paperId);
     if (!raw) return reject(404, "Paper not found");
@@ -97,35 +200,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const pdf = await getPdfBytes(link.url);
     if ("error" in pdf) return reject(502, pdf.error);
-    bytes = new Uint8Array(pdf.bytes);
+    ran = await cut(pdf.bytes);
   }
 
-  // From here the engine runs, and every answer says so.
+  // From here the engine has run, and every answer says so.
   const engineRan = { ...refusal, ...FIGURE_ENGINE };
-  let extracted: Awaited<ReturnType<typeof extractPdfFigures>>;
-  try {
-    extracted = await extractPdfFigures(bytes, {
-      maxPages: MAX_PAGE,
-      maxFigures: 1,
-      onlyPage: page,
-      label: `Figure ${fig}`,
-    });
-  } catch (err) {
-    console.warn("[figure-image] extract failed:", err);
-    return reject(502, "Could not read the page", engineRan);
-  }
+  const extracted = ran.extracted;
+  if (!extracted) return reject(502, "Could not read the page", engineRan);
 
   const found = extracted.figures[0];
   if (!found || found.png.byteLength === 0) {
-    return reject(404, extracted.reason ?? `No Figure ${fig} on page ${page}`, engineRan);
+    // The engine counted the page file's page as page 1; the answer names the page the reader asked for.
+    const reason = fromPageFile ? extracted.reason?.replace(/ on page 1\.$/, ` on page ${page}.`) : extracted.reason;
+    return reject(404, reason ?? `No ${label} on page ${page}`, engineRan);
   }
 
-  return new NextResponse(Buffer.from(found.png), {
-    headers: {
-      ...(privately ? PRIVATE_UPLOAD_HEADERS : CACHE_HEADERS),
-      ...FIGURE_ENGINE,
-      "Content-Type": "image/png",
-      "Content-Length": String(found.png.byteLength),
-    },
-  });
+  // Only a cut that produced a picture is kept, and keeping it never fails the answer.
+  if (keepFor) {
+    try {
+      await writeUploadFigureCut(keepFor, page, label, { png: found.png, width: found.width, height: found.height });
+    } catch (err) {
+      console.warn("[figure-image] could not keep the cut:", err);
+    }
+  }
+
+  return picture(found.png, privately);
 }

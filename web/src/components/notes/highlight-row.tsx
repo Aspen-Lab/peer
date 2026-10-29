@@ -18,12 +18,12 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { KeyboardEvent, Ref } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { readHighlight } from "@/lib/notes/blocks";
+import { highlightQuote, highlightSegments, readHighlight } from "@/lib/notes/blocks";
 import { highlightColour, highlightPaint, isHighlightColour } from "@/lib/notes/highlight-colours";
 import type { Block, BlockType, HighlightColourId, HighlightSpot } from "@/lib/notes/types";
 import { useLostPassages } from "@/store/notes";
 import { HighlightSwatches } from "./highlight-strip";
-import { PASSAGE_LOST_LINE, SQUARE_PX, goToPassage, passageIsLost, storedBodyOf, type HighlightGoal } from "./note-tags";
+import { PASSAGE_LOST_LINE, goToPassage, passageIsLost, storedBodyOf, type HighlightGoal } from "./note-tags";
 
 /** The most lines of its words the row shows (the `line-clamp-2` below); the rest is cut with an ellipsis. The whole passage stays in the page, and in the tooltip. */
 export const WORDS_LINES = 2;
@@ -65,7 +65,7 @@ function useHighlightLost(id: string, spot: HighlightSpot | null): boolean {
   const told = useLostPassages((s) => s.lost[id] === true);
   return useSyncExternalStore(
     subscribeToStorage,
-    () => told || (spot !== null && highlightIsLost(id, spot, {}, storedBodyOf(spot.paperId))),
+    () => told || (spot !== null && highlightSegments(spot).some((segment) => highlightIsLost(id, { ...segment, paperId: spot.paperId }, {}, storedBodyOf(spot.paperId)))),
     () => false,
   );
 }
@@ -126,7 +126,7 @@ export interface HighlightRowViewProps {
   /** The highlight's block id. */
   id: string;
   /** Its words and colour, or null for a block that holds no readable highlight (stored data is read with care, B P11-04 I8). */
-  spot: Pick<HighlightSpot, "quote" | "colour"> | null;
+  spot: (Pick<HighlightSpot, "quote" | "colour"> & { grouped?: boolean }) | null;
   /** The paper no longer holds its words. */
   lost: boolean;
   /** The six swatches are open under the row. */
@@ -144,7 +144,7 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
   const paint = spot ? highlightPaint(spot.colour, 0) : null;
   return (
     <div ref={rootRef} data-highlight-row={id} onKeyDown={onKeyDown} className="min-w-0">
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2 font-reading text-body-sm leading-[1.5]">
         {spot && named && !lost ? (
           <button
             type="button"
@@ -152,12 +152,12 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
             title="Go to the passage"
             onMouseDown={keep}
             onClick={onGo}
-            style={{ width: SQUARE_PX, height: SQUARE_PX, backgroundColor: named.fill }}
-            className="mt-[5px] shrink-0 border border-border-strong p-0 opacity-90 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-heading"
+            style={{ width: "1em", height: "1em", marginTop: "calc(0.25em + 2px)", fontSize: "inherit", backgroundColor: named.fill }}
+            className="shrink-0 border border-border-strong p-0 opacity-90 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-heading"
           />
         ) : (
           // A passage that is gone has no square to go to it; this holds its place so the rows keep their line (P10-36).
-          <span aria-hidden style={{ width: SQUARE_PX, height: SQUARE_PX }} className="mt-[5px] inline-block shrink-0 bg-text-faint opacity-60" />
+          <span aria-hidden style={{ width: "1em", height: "1em", marginTop: "calc(0.25em + 2px)" }} className="inline-block shrink-0 bg-text-faint opacity-60" />
         )}
         <div className="min-w-0 flex-1">
           {spot && paint ? (
@@ -169,7 +169,7 @@ export function HighlightRowView({ id, spot, lost, open, onGo, onToggle, onPick,
           ) : (
             <p className="py-[2px] font-reading text-body-sm italic leading-[1.5] text-text-faint">This highlight has no words.</p>
           )}
-          {spot && lost && <p className="font-reading text-meta italic leading-tight text-text-faint">{PASSAGE_LOST_LINE}</p>}
+          {spot && lost && <p className="font-reading text-meta italic leading-tight text-text-faint">{spot.grouped ? "Some of this highlighted passage could not be found." : PASSAGE_LOST_LINE}</p>}
         </div>
         {spot && named && (
           <button
@@ -232,7 +232,7 @@ export function HighlightRow({ block, onColour, onRemove }: { block: Block; onCo
   return (
     <HighlightRowView
       id={block.id}
-      spot={spot ? { quote: spot.quote, colour: spot.colour } : null}
+      spot={spot ? { quote: highlightQuote(spot), colour: spot.colour, grouped: (spot.segments?.length ?? 0) > 1 } : null}
       lost={lost}
       open={open && spot !== null}
       onGo={() => {

@@ -9,10 +9,21 @@
 // is one document per paper for every reader, which is why it can live in
 // localStorage for a day: it carries no profile and no key. A private PDF's
 // reading is the owner's own and lives there under its own key (P0-02).
+//
+// P12-58 (rule 3): the server waits eight seconds for the full text and, if the attempt has not
+// finished, answers with the abstract alone, marked pending (`full-text-pending.ts`). The hook
+// does not take that for the answer: it asks again, one request at a time, after 2, 4, 8 and 16
+// seconds and then every 20, until the sections arrive or three minutes have passed since the
+// first ask. While it waits the page shows its one pending line (`wait: "pending"`); when the
+// body arrives it replaces the abstract in place — nothing here scrolls, and nothing remounts;
+// after three minutes `wait` is "gave-up" and the page says so and points at the reload. A
+// pending answer is never kept, in the browser or anywhere else.
 
 import { useEffect, useMemo, useState } from "react";
 import type { Paper } from "@/types";
 import { buildReading, type PaperReading } from "@/lib/papers/reading";
+import { isFullTextPending } from "@/lib/papers/full-text-pending";
+import { FULL_TEXT_WAIT } from "./copy";
 
 const STORAGE_KEY = "peer-reading-v2";
 const MAX_ENTRIES = 40;
@@ -28,7 +39,36 @@ const TTL_MS = 24 * 60 * 60 * 1000;
  *  old full reading (P8-04). The version in the URL moves the cache's key with
  *  the bump, so an old body is never served to a newer client. The route
  *  ignores the parameter. */
-const READING_VERSION: PaperReading["version"] = 14;
+export const READING_VERSION: PaperReading["version"] = 17;
+
+/** P12-58: how long to wait after the 1st, 2nd, 3rd and 4th pending answer before asking again. */
+export const POLL_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000];
+/** P12-58: after those, how long between asks. */
+export const POLL_EVERY_MS = 20_000;
+/** P12-58: how long, from the first ask, the hook keeps asking for a full text that is pending. */
+export const POLL_BUDGET_MS = 3 * 60 * 1000;
+
+/** P12-58: the wait before the next ask, after `pendingAnswers` (1 or more) answers that said pending. */
+export function pollDelayMs(pendingAnswers: number): number {
+  return POLL_DELAYS_MS[pendingAnswers - 1] ?? POLL_EVERY_MS;
+}
+
+/** What the page is waiting on: the full text is pending (still asking), or it was not there after
+ *  the whole budget (stopped asking); null when there is nothing to wait for. */
+export type ReadingWait = "pending" | "gave-up" | null;
+
+/**
+ * P12-58 (rule 3): the Decision block's sentences while the full text has not settled. The first one
+ * is `describeAvailability`'s reading sentence — "No abstract is published where Peer can read it" or
+ * "Abstract only. ..." — which is not true of a paper that is still being read; it gives way to the
+ * page's one pending line, and after the budget to the line that says the text could not be read yet
+ * and points at the reload. Any sentence after the first (a model that failed) stays, and so does the
+ * model's own sentence (`modelSentence`: a report answered, and its sentence names what it read).
+ */
+export function sentencesWhileWaiting(sentences: string[], wait: ReadingWait, modelSentence: boolean): string[] {
+  if (modelSentence || wait === null) return sentences;
+  return [wait === "pending" ? FULL_TEXT_WAIT.pending : FULL_TEXT_WAIT.gaveUp, ...sentences.slice(1)];
+}
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 
@@ -94,6 +134,60 @@ function writeCached(key: string, reading: PaperReading): void {
 interface Fetched {
   id: string;
   reading: PaperReading | null;
+  /** Set while `reading` is null because the full text is pending, or was not there in time. */
+  wait: ReadingWait;
+}
+
+/** One ask, as the loop below needs it. */
+type Asked =
+  /** A settled answer; `keep` is whether this browser should remember it. */
+  | { kind: "reading"; reading: PaperReading; keep: boolean }
+  /** The route waited for the full text and it had not settled. */
+  | { kind: "pending" }
+  /** No usable answer; `again` is whether asking again could help (a dropped connection, a 5xx). */
+  | { kind: "failed"; again: boolean };
+
+async function askReading(url: string, signal: AbortSignal, privatePdf: boolean): Promise<Asked> {
+  try {
+    const res = await fetch(url, { signal });
+    if (!res.ok) return { kind: "failed", again: res.status >= 500 };
+    const reading = (await res.json()) as PaperReading;
+    if (reading?.version !== READING_VERSION) return { kind: "failed", again: false };
+    // The route answers a full text that has not settled with the abstract alone, marked pending
+    // (P12-58). It is never kept, whatever the headers say, and it is not the answer.
+    if (isFullTextPending(reading)) return { kind: "pending" };
+    // The route answers `no-store` when the full-text attempt timed out —
+    // that reading is the abstract alone, and keeping it for a day would
+    // hide the sections the next request gets. Follow the server's own
+    // verdict on what is worth keeping. A private reading is always
+    // `private, no-store` (it must never sit in a shared HTTP cache), so
+    // there the reading itself says whether the PDF was read: a
+    // `fullText` of "none" is the abstract-only answer.
+    const cacheControl = res.headers.get("cache-control") ?? "";
+    const keep = privatePdf
+      ? reading.provenance?.fullText !== "none"
+      : !/\bno-store\b/i.test(cacheControl);
+    return { kind: "reading", reading, keep };
+  } catch {
+    return { kind: "failed", again: true };
+  }
+}
+
+/** Resolves after `ms`, or at once when `signal` aborts (the timer is cleared either way). */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done, { once: true });
+  });
 }
 
 /**
@@ -104,6 +198,9 @@ interface Fetched {
 export function useReading(paper: Paper | undefined): {
   reading: PaperReading | null;
   fromServer: boolean;
+  /** P12-58: "pending" while the hook is still asking for a full text that has not settled, "gave-up"
+   *  once the budget ran out; `reading` is the abstract alone in both, and `fromServer` is false. */
+  wait: ReadingWait;
 } {
   const paperId = paper?.id;
   useEffect(() => {
@@ -131,36 +228,47 @@ export function useReading(paper: Paper | undefined): {
   useEffect(() => {
     if (!paperId || cached) return;
     const controller = new AbortController();
+    const { signal } = controller;
     (async () => {
       // The first tick, as `use-model-report.ts` has it (P10-40, BACKLOG-04): a double effect
       // (StrictMode in dev, or a key that changes at once) cleans the first run up before
       // this line, so only the run that is kept goes on to ask.
       await Promise.resolve();
-      if (controller.signal.aborted) return;
-      try {
-        // `v` first, so a private request keeps its `upload` parameter after it.
-        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading?v=${READING_VERSION}${uploadId ? `&upload=${encodeURIComponent(uploadId)}` : ""}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`reading HTTP ${res.status}`);
-        const reading = (await res.json()) as PaperReading;
-        if (controller.signal.aborted) return;
-        if (reading?.version !== READING_VERSION) throw new Error("reading: unexpected shape");
-        // The route answers `no-store` when the full-text attempt timed out —
-        // that reading is the abstract alone, and keeping it for a day would
-        // hide the sections the next request gets. Follow the server's own
-        // verdict on what is worth keeping. A private reading is always
-        // `private, no-store` (it must never sit in a shared HTTP cache), so
-        // there the reading itself says whether the PDF was read: a
-        // `fullText` of "none" is the timed-out, abstract-only answer.
-        const cacheControl = res.headers.get("cache-control") ?? "";
-        const keep = privatePdf
-          ? reading.provenance?.fullText !== "none"
-          : !/\bno-store\b/i.test(cacheControl);
-        if (keep) writeCached(readingKey, reading);
-        setFetched({ id: readingKey, reading });
-      } catch {
-        if (!controller.signal.aborted) setFetched({ id: readingKey, reading: null });
+      if (signal.aborted) return;
+      // `v` first, so a private request keeps its `upload` parameter after it.
+      const url = `/api/papers/${encodeURIComponent(paperId)}/reading?v=${READING_VERSION}${uploadId ? `&upload=${encodeURIComponent(uploadId)}` : ""}`;
+      const startedAt = Date.now();
+      let pendingAnswers = 0;
+      // One request in flight at a time: the next ask is made only after the last one answered
+      // and the wait after it has passed. The cleanup below aborts the request and the wait both.
+      for (;;) {
+        const asked = await askReading(url, signal, privatePdf);
+        if (signal.aborted) return;
+        if (asked.kind === "reading") {
+          if (asked.keep) writeCached(readingKey, asked.reading);
+          setFetched({ id: readingKey, reading: asked.reading, wait: null });
+          return;
+        }
+        // A first ask that fails is the end of it, as it always was; so is an answer that asking
+        // again cannot change (a 4xx, a shape this build refuses). A dropped connection or a 5xx
+        // after the route has already said "pending" is a blip in a wait that is under way.
+        if (asked.kind === "failed" && (pendingAnswers === 0 || !asked.again)) {
+          setFetched({ id: readingKey, reading: null, wait: null });
+          return;
+        }
+        pendingAnswers += 1;
+        const delay = pollDelayMs(pendingAnswers);
+        if (Date.now() - startedAt + delay > POLL_BUDGET_MS) {
+          setFetched({ id: readingKey, reading: null, wait: "gave-up" });
+          return;
+        }
+        setFetched((before) =>
+          before && before.id === readingKey && before.reading === null && before.wait === "pending"
+            ? before
+            : { id: readingKey, reading: null, wait: "pending" },
+        );
+        await pause(delay, signal);
+        if (signal.aborted) return;
       }
     })();
     return () => controller.abort();
@@ -168,5 +276,6 @@ export function useReading(paper: Paper | undefined): {
 
   const server = fetched && fetched.id === readingKey ? fetched.reading : null;
   const reading = server ?? cached ?? reading0;
-  return { reading, fromServer: Boolean(server ?? cached) };
+  const wait = fetched && fetched.id === readingKey ? fetched.wait : null;
+  return { reading, fromServer: Boolean(server ?? cached), wait };
 }

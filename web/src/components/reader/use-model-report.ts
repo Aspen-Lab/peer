@@ -25,7 +25,9 @@ import { REPORT_STATUS } from "./copy";
 // replaces .novelty) and deleted "why it fits you" — a v5 report still has
 // the old two-block/fit shape and would render it for up to DEEP_TTL_MS
 // after upgrade without this bump.
-const STORAGE_KEY = "peer-paper-report-v7";
+// P12-28: a persisted report can retain a bound PDF image URL from the old
+// caption producer. Rebuild this derived report on ordinary reopen once.
+const STORAGE_KEY = "peer-paper-report-v9";
 /** The cache the old page kept, with its fabricated fallbacks inside. */
 const LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4", "peer-paper-report-v5", "peer-paper-report-v6"];
 const MAX_ENTRIES = 40;

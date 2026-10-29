@@ -86,6 +86,7 @@ import {
   type ExplainResult,
 } from "@/lib/papers/explain";
 import { getFullText } from "@/lib/papers/full-text";
+import { locateExplainRange } from "@/lib/papers/explain-range";
 import type { PaperReportRequest } from "@/lib/papers/report";
 import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
@@ -127,6 +128,8 @@ interface ExplainRequest {
   /** P10-08b: where a selection of Peer's own words is from — only a literal "summary" or "answer" counts (`peerWordsSource`);
    *  absent, "paper" or anything else is a passage of the paper's body, which must be found in it. */
   source?: unknown;
+  /** P12-11: bounded canonical paper-block descriptors, never paragraph prose. */
+  range?: unknown;
   /** P3-02b's thread, read by `readThread`: the first message has none, and
    *  anything malformed is taken for none. */
   thread?: unknown;
@@ -270,7 +273,11 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const passage = clipPassage(body.passage);
   // Peer's own words (P10-08b) are not looked for in the body; the paper's must be found in it.
   const peerWords = peerWordsSource(body.source);
-  const located = peerWords
+  const hasRange = Object.prototype.hasOwnProperty.call(body, "range");
+  if (hasRange && body.source !== undefined && body.source !== "paper") return reply({ error: "not_in_paper" } satisfies ExplainResult, 422);
+  const grouped = hasRange ? locateExplainRange(doc, passage, body.range) : null;
+  if (hasRange && !grouped) return reply({ error: "not_in_paper" } satisfies ExplainResult, 422);
+  const located = grouped?.located ?? (peerWords
     ? null
     : locatePassage(
         doc,
@@ -281,7 +288,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
         },
         // P11-42: a heading's or a caption's words are the paper's text too.
         { blocks: true },
-      );
+      ));
   // P10-38 (BACKLOG-75): Peer's words carry the body paragraph that best matches them (the Tier 0 route's scoring, a floor; no model
   // call), so a quote from the paper can be verified against it as for a selection in the body; none below the floor.
   const matched = peerWords && passage !== "" ? matchPeerWords(doc, passage) : null;
@@ -302,7 +309,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
 
   // The server's memory: the document, the passage, the thread's texts, whether the
   // reply searched and whether it is the long form — never the reader.
-  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail, peerWords ?? undefined, located?.block);
+  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail, peerWords ?? undefined, located?.block, grouped?.identity);
   const logTurn = (fields: { promptChars: number; answerChars: number; cached: boolean }) =>
     console.debug("[papers/explain] turn", {
       ...(userId ? { userId: shortHash(userId) } : {}),

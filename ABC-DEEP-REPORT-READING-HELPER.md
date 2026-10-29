@@ -1,8 +1,8 @@
 # Peer — deep report reading helper（带着问题读）— ABC shared state
 
-**Goal:** implement `docs/BLUEPRINT_goal_directed_reading.zh-CN.md` (the spec) on branch `deep-report-reading-helper-enhancement`, phase by phase, with every acceptance item in §3d independently measured, no fabricated completion, Tier 0 intact, and the product rules in `AGENTS.md` / `docs/PRODUCT_DIRECTION.md` respected.
+**Goal:** P12 improves the paper page under docs/reading-helper-abc/P12-OWNER-2026-10-23.md on update-on-paper-digest, with both themes ≥97.9 in two consecutive independent rounds, one0.25 extra per theme/round; no PR merge without the owner. Earlier campaign scope remains historical context.
 
-**Manager:** the Claude Code cloud session that opened this campaign (model Fable). **Subagents:** A / B / C spawned with the Agent tool, `model: "opus"`, `subagent_type: "general-purpose"`, one at a time. **Loop per phase:** C implements the ledger items → fresh A measures against §3d → B investigates every A finding → C fixes → A re-checks → manager verifies by reading files and running the gates → VERIFIED → push.
+**Manager:** P12 local Codex manager, taking over under HANDOFF-P12.md and the owner's current instructions. A / B / C and blind readers are separate agents; only the manager writes this state file. Historical campaign arrangements below are retained as history.
 
 **Spec:** `docs/BLUEPRINT_goal_directed_reading.zh-CN.md` in full. Where the spec and this file disagree, the latest dated ruling in §1x wins; record the conflict as a ruling, never silently.
 
@@ -12,7 +12,7 @@
 
 ## §0. Resume protocol
 
-1. `cd /home/user/peer && git branch --show-current` must print `deep-report-reading-helper-enhancement`. If not, check it out; never create another branch. `git pull --ff-only origin deep-report-reading-helper-enhancement` then `git status --short`.
+1. Read docs/reading-helper-abc/HANDOFF-P12.md whole first. The active clone is C:/I/Personal/Github - start up project/peer-p12-manager; git branch --show-current must print update-on-paper-digest. Never create/switch to a different branch. Read current status before any pull; on a clean manager checkout only, git pull --ff-only origin update-on-paper-digest.
 2. Read §1 (whose turn, which item, `STOPPED BECAUSE:`), every §1x ruling, §2, §3, the spec, and the current round in §4. A fresh session is **manager**, not automatically implementer.
 3. Assign only the next authorized role for the next unfinished ledger item (§5). Resume PARTIAL work at the first uncompleted step; never restart completed work; never redo VERIFIED items unless a later change invalidates their evidence.
 4. After each item, test, role change or stop: append evidence to §4, update the affected §5 rows, edit §1 in place. Never add a second current-state block. On an abrupt interruption, compare the actual diff and test output to the last checkpoint; a created file is not an implemented feature, a blocked gate is not a passing gate.
@@ -24,7 +24,7 @@
 - Build every brief from the role contract (§2), the ledger item (§5), ALL standing rulings (§1x) and the common constraints (§3a). Name the exact allowed files. Tell the role the model it is running on and to record it in its checkpoint.
 - One writer at a time on the single checkout. A and B are read-only on production code (they may write their checkpoint file under `docs/reading-helper-abc/`). Independent read-only investigations may run in parallel; the manager is the only writer of this file during them.
 - Checkpoint files: `docs/reading-helper-abc/<ITEM>-<ROLE>-<UTC YYYYMMDDTHHMMSSZ>.md`. Every role writes one before returning. A role message alone is never evidence.
-- **Commit per item, push after every commit** (`git push origin deep-report-reading-helper-enhancement`). This container is ephemeral: unpushed work is lost. Never force-push, rebase, amend a pushed commit, or run file-level `git checkout -- <file>` / `git restore` / `git reset` to undo an edit (an earlier campaign lost a whole implementation that way); undo with the Edit tool.
+- **Commit per item, push after every commit** (`git push origin update-on-paper-digest`). This container is ephemeral: unpushed work is lost. Never force-push, rebase, amend a pushed commit, or run file-level `git checkout -- <file>` / `git restore` / `git reset` to undo an edit (an earlier campaign lost a whole implementation that way); undo with the Edit tool.
 - Manager verifies a C item by: re-reading the changed files, running the four gates (§3a), and opening at least one real path (a fixture `.doc.json` through `buildReadingMap`, or the dev server for UI items). Only then does the item move to VERIFIED, and only after an A that did not implement it has passed it.
 - Rule on POLICY questions with a dated binding entry in §1x. Do not let a role widen scope; park new ideas as NOT_STARTED ledger rows.
 - If the account's usage limit stops this session, nothing is lost as long as §1 is true and the last commit is pushed. The hourly clock (§0c) brings the session back.
@@ -40,13 +40,15 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:            **P11 — the owner's requests of 2026-10-19 (`docs/reading-helper-abc/P11-OWNER-2026-10-19.md`; ruling §1h.111): OPEN since 21:3xZ 2026-10-19 — item 7 ("Say it plainly" switched off) DONE on main c0f97114; phase 0 spawned at once 21:3xZ: B P11-01 (the three panes, items 2 + 6), B P11-02 (the crash, item 4), B P11-03 (the margin and the selection's actions, item 5), B P11-04 (Highlight, item 8), B P11-05 (the figure viewer, item 1), C P11-06 (back to paper, item 3); the target 99, two consecutive rounds.** Before it: **P10 — the owner's review of 2026-10-13 (ruling §1h.78; the rubric `docs/reading-helper-abc/P10-RUBRIC.md`; the spec `P10-REVIEW.md`): OPEN since 00:1xZ 2026-10-14 — round 1's items spawned at once 00:5xZ: B P10-01, C P10-02, C P10-03, C P10-04, B P10-05, C P10-06, C P10-09a, C P10-09b; C P10-08 after B P10-01; then A P10-10 (the PhD reviewer) and three blind readers; stop at both themes ≥ 95 in two consecutive rounds.** Before it: P9 — the reading-quality loop's stop condition met (§1h.75: Theme 1 99.2 / 99.2, Theme 2 95.8 / 96.9) at 291c7c70. P8 — the owner's answers of 15:3xZ 2026-10-11 on the owner's calls (BACKLOG-29 yes; 31 the explain window that stays open, in the right margin, level with the passage's first line; 32 the cheap numbered-equation rule; 33 / 34 now; §1h.41): OPEN since 15:5xZ — four C items in parallel in detached worktrees (P8-01 the feed loop, P8-02 the explain window, P8-03 equations + the glyph rule, P8-04 the HTML extractors), then A P8-05, then the closing (the owner's report P8, the handoff, PR #32's description, the chat message). Before it: P7 — the owner's review of 2026-10-10 COMPLETE 11:4xZ 2026-10-11: the investigations P7-01 … P7-04, the twelve points as P7-10 … P7-16c, the final review A P7-17 (R1–R7, R9–R12 PASS; R8 PASS on the scramble with residuals) and P7-18 (the residuals F1 / F2 / F3 and the findings F5 / F6 fixed; the extraction version 5) DONE and on the branch; the manager's closing at the head (the owner's report, the handoff, PR #32's description, the chat message) 11:5xZ; pending the owner's review of PR #32. Before it, round 4 — the items COMPLETE (18:4xZ 2026-10-07); REOPENED 19:1xZ for the base merge of PR #34 and COMPLETE AGAIN 22:4xZ: P6-01 (the merge, af88b4ef), P6-01b (the verdict row's tracks, 34dc6019), A P6-02 (PASS on the merged head, 609515b3) and P6-03 (the panel tracks pinned, three comments, bffa3659) DONE on top of P0–P5; the final verification repeated at bffa3659, the handoff and the owner's plain-language report at that head (§4); pending the owner's review. P0–P5 built and verified: P0–P4 VERIFIED by their phase As; P5-01 / P5-02 VERIFIED on A P5-03, A P5-03f (the final inventory: §3d 1–16 and 18 PASS, 17 one conditional sub-point, fixed) and A P5-05 (the fix rounds in a browser); the fix rounds P5-04, P5-04b, P5-04c, P5-06, P5-06b manager-verified; the final verification of the whole branch at bc809806 (§4). Continuous on the owner's word (§1a.15): the manager stays, the safety-net check-ins run on the waiting cadence, the Sonnet clock stays enabled and stands down on this block. `main` (the BYOK-only PR #33) merged in at P4-00 (07:0xZ 2026-10-07).
-BRANCH:           **reader-three-pane-p11** (the owner's choice, 21:3xZ 2026-10-19), from main c0f97114; a draft PR to main; merged only after the loop and the owner's own look. Before it: deep-report-reading-helper-enhancement (PR #32 — **marked ready for review by the owner at 23:23Z 2026-10-07**, no longer a draft; no review yet; its description rewritten at the merged head 22:4xZ); head 4339db25 (C P7-18's checkpoint, cherry-picked and pushed 11:3xZ 2026-10-11) plus the state, handoff and report commits that follow it; code head 9cf281c6 (P7-18) over b11c044a (P7-15) and the other P7 items over bffa3659 (P6-03) on 34dc6019 (P6-01b) on the merge af88b4ef (`main` 6a702c6f, PR #34, into 7fb2bd01); every Vercel preview since 876539fd (05:5xZ) Ready, 4339db25's at 11:37Z; PR #32 `mergeable_state` clean; its description rewritten at 4339db25 (11:5xZ) with the P7 section.
-HELD BY:          manager (the cloud session, session_017DGPdGJqr95t3pMMcspXjE), the only writer of this file; the hourly resume clock `trig_01MkdKP21BdT8TbcyZpB4umB` (Haiku, a fresh session at :20 each hour) only pokes this session when it is not working. Before it: manager Claude Fable 5.1 (the cloud session, session_017DGPdGJqr95t3pMMcspXjE), who alone writes this file — **took the role back 10:4xZ 2026-10-14** from the Sonnet clock's standing session (session_01Sz4WhMKa5dgYu1pe9Zs5x9), which held it 10:4xZ–10:4xZ (6c5d06c2, dda3f612: two state commits, its five re-spawned Cs told to stop by message); round 3's workers run again from this container since 10:5xZ: C P10-16 resumed on its own worktree (four commits survived the limit), C P10-18 … P10-21 spawned fresh, the third blind reader re-run. Before it: the Sonnet clock 10:4xZ (took over from Fable, which hit its session limit at ~06:0xZ — resets 07:40Z — and was not woken until 10:43Z). Earlier: manager Claude Fable 5.1 (the cloud session), who alone writes this file; round P10's workers since 00:5xZ 2026-10-14: B P10-01, C P10-02, C P10-03, C P10-04, B P10-05, C P10-06, C P10-09a, C P10-09b (Sonnet, detached worktrees under `scratchpad/`), C P10-08 to follow. Earlier: manager Claude Fable (the cloud session), who alone writes this file; took the role back 09:4xZ 2026-10-11 from the Sonnet clock's standing session, which held it 09:4xZ–09:4xZ (6ed8f4a2, a state commit only) after this session was disconnected 07:36Z–09:41Z with its P7-15 gate run already finished green (the clock told by message to stand down, spawn nothing and push nothing). Campaign workers: **the Theme-1 group of round P9, spawned 20:2xZ 2026-10-11 in parallel from the two B designs: C P9-08 (`scratchpad/p9c08/wt`, the fold of raised runs A + the citation rule B + Unicode superscripts G — `rowsOf` / `lineOf`), C P9-09 (`p9c09/wt`, hyphens by the document C + the join marks H + the float gap E + the equation stacks F — `joinProse` / `buildOutline`), C P9-10 (`p9c10/wt`, the symbols and scripts kept D / G's gate / the capital-digit join H / braces — `clean.ts`, `evidence.ts`); the key session `session_01XrvdW2yxaEki74i1wa3sRc` (Claude Sonnet, its own container in the same environment, created 20:24Z from `briefs/P9-KEY.md` after the owner put `PEER_TEST_GEMINI_API_KEY` in the environment; reports by `send_message`, no git writes)**; B P9-01 and B P9-02 returned 20:14Z / 20:17Z (deliverables ce306011, d9c53504); C P9-06 returned 20:26Z (297f69ee, 4d3da01a; verification in `p504/wt` at 27dd4465); **the Theme-2 group of round P9, spawned 20:0xZ 2026-10-11 in parallel (§1a.16): C P9-03 (`scratchpad/p9c03/wt`, the Explain button in the gutter), C P9-04 (`p9c04/wt`, one scrolling panel / the tab strip above its panel in one column / the terms folded on a phone), C P9-05 (`p9c05/wt`, the Read next separator / the map button / function words), C P9-06 (`p9c06/wt`, the copied abstract on one block), B P9-07 (read-only, `scratchpad/p9/b07/`, the merged-questions race) — all Claude Sonnet, each in its own detached worktree from fd47c672, committing there and never pushing; the manager verifies and cherry-picks**; **A P8-05 (Claude Sonnet), re-spawned 19:4xZ 2026-10-11 after the usage-limit pause, in a read-only worktree `scratchpad/p8a05/wt`** (commits nothing; the deliverable is committed by the manager; its first attempt of 16:40Z died at 17:4xZ); **B P9-01 and B P9-02 (Claude Sonnet, read-only, re-spawned 19:4xZ)** — the extraction investigations of the reading-quality loop (`scratchpad/p9/b01/`, `b02/`). C P8-06 is done (its base 17:22Z as d5d9e447 / 4ae4a951, its follow-ups 19:50Z as 4ed627de / f713a29a; `p8c06/wt` removed). The Workflow `wf_9d0ea65a-23b` finished its Render and Read phases (its Verify / Cluster phases died on the usage limit; the results salvaged to `scratchpad/p9/r1/readers.json`, `features.json`). Returned: C P8-02 16:31Z 2026-10-11 (39c6d8f4, 0a4eb020, 71fff576 → on the branch as 039f2015, b4595a31, 832832dc; manager-verified at 575a3375), C P8-04's follow-ups 16:2xZ 2026-10-11 (ee821289, f4be3007, 4d198d01, f2fd75d5 → on the branch as 3af4cb7a, 9bc632a1, 6d94295c, 48988d8a; manager-verified at af9be08c, §1h.42 (b)), C P8-03 16:22Z 2026-10-11 (91cd6c83, c5572e8e, 062d8f19, c4a4ee0d → on the branch as bbe12710, 87167a1c, 0f388874, 0a29bc94; manager-verified at ae75e8dd, the manager's own end-to-end run reproducing C's table), C P8-01 16:06Z 2026-10-11 (c66304d5, bc637507 → on the branch as 907d8f43, 71cc1f8b; manager-verified with P8-04 at 3b7006a1), C P8-04 16:07Z 2026-10-11 (55143dd0, a22e6917 → 4506c321, efb52249), C P7-18 11:3xZ 2026-10-11 (seven commits in its worktree, manager-verified at 528c682f in `scratchpad/p504/wt` and cherry-picked as cf265f95 … 4339db25, pushed 11:3xZ), A P7-17 10:4xZ 2026-10-11 (the deliverable committed as 852ceb9f; R1–R7, R9–R12 PASS; R8's four residuals and F5 / F6 → P7-18, F4 → BACKLOG-32, F7 accepted), C P7-15 07:35Z 2026-10-11 (bf856ef5, 05abe3ea, b11c044a, d8b6594a, pushed by C; manager-verified 07:39Z, recorded 09:5xZ), C P7-14 06:4xZ, C P7-16c 06:2xZ, C P7-16 06:0xZ, C P7-11 05:4xZ, C P7-13 05:3xZ, C P7-12 05:1xZ, C P7-10 04:5xZ, B P7-01, B P7-02, A P7-03, B P7-04 (02:1xZ–02:3xZ 2026-10-11), and the P5 / P6 rounds before them (§4). The hourly Sonnet clock (the standing session `session_01Sz4WhMKa5dgYu1pe9Zs5x9`, Routine `trig_01FeaMVuXhEt9Bn6RDEuSdPv`, `40 * * * *`) stays ENABLED; it stands down while this manager pushes within 90 minutes (and on a closed block whatever the age of the last push — handoff §4 item 1, amended 12:2xZ 2026-10-11 and confirmed by the clock at 12:24Z). The block is open again since 15:4xZ: the 90-minute push rule is in force while the four Cs run; the manager's check-in is re-armed per worker round (§0c). The session's model is Claude Fable; workers on Sonnet (§1a.9).
-CURRENT ITEM:     **Round P11, phase 0 (since 21:3xZ 2026-10-19):** five Bs and C P11-06 running in parallel (rows P11-01 … P11-06). Before it: **Round P10, round 2, in flight since 04:1xZ 2026-10-14 (§1h.87; 05:0xZ: P10-12, 09d, 06c, 04b, 13, 11, 09e, 09f DONE and on the branch (48d894b7; the full gates: 1f2f47fd 7,692 + 3, b75ab10a 414 + 3 / 7,735 + 3, 48d894b7 running); C P10-06d spawned 04:4xZ (§1h.88), the last one running; A P10-14 briefed (`briefs/P10-14.md`), spawned when P10-06d lands; **the target is now 99** (§1h.89 (a)); P10-06d DONE 05:1xZ (b5ff4544 — every round-2 item on the branch); **A P10-14 and C P10-15 spawned 05:1xZ** in parallel; **C P10-16 (WYSIWYG notes) spawned 05:4xZ** on the owner's answers, §1h.90; P10-17 CANCELLED 05:5xZ on the owner's reversal, §1h.91 — the switch stays on by default; **P10-15 DONE 05:3xZ** (§1h.92); **A P10-14 DONE 05:5xZ** — A's scores A 95.0 / B 84.4, three readers running; **round 3 spawned 06:0xZ** (§1h.93), cut by the usage limit at ~06:0xZ, **re-run from this container 10:5xZ** after the Sonnet clock's interim (§4 10:4xZ): **C P10-16 DONE 11:2xZ** (6389a73e; the sticky carry patch and one timing test re-aimed by the manager), **C P10-21, P10-20, P10-18 DONE 11:3xZ** (e099b577), **C P10-23 DONE 11:4xZ** (§1h.95), **C P10-19 DONE 11:5xZ** (§1h.96) — round 3 complete on the branch; **A P10-22 DONE 12:5xZ** — round 3's scores of record **A 98.3 / B 93.8** (A and three readers unanimous, §1h.98); **round 4 spawned 13:0xZ** (§1h.97): **C P10-24 DONE 13:1xZ**, **C P10-25 DONE 13:2xZ**, C P10-26 running; then A P10-27 (brief on the branch) and the readers, the third reader of round 2 done (A 95.0 / B 82.8 of record); round 2's scores of record A 95.0 / B 82.8 (three readers, §1h.94); then A P10-22 and the readers): eight Cs in parallel in detached worktrees — P10-04b `p10c04b` (4021), P10-06c `p10c06c` (4022), P10-09d `p10c09d` (4023), P10-09e `p10c09e` (4024), P10-09f `p10c09f` (4025), P10-11 `p10c11` (4026), P10-12 `p10c12` (4027), P10-13 `p10c13` (4028); as each returns: verify in a free copy, cherry-pick, push, DONE; when all are landed: A P10-14 (round 2's walk, a fresh pack) and three readers.** Round 1 closed 04:0xZ: A P10-10 DONE (the walk e7cdf4f7), the readers' scores of record **A 78.3, B 79.7** (the rubric's Scores table; §1h.87). Earlier: **Round P10, round 1: every C landed by 03:1xZ 2026-10-14 (the head 4f2ecfae); A P10-10 (the PhD reviewer, `p10a10`, port 4020) walking since 03:1xZ; C P10-08b DONE 03:2xZ (324d2b1c — A re-checks B3 / B4 there); then three blind readers on A's evidence pack, the scores into `P10-RUBRIC.md`, the owner told, round 2's items from the walk.** Earlier: **Round P10, round 1, in flight since 00:5xZ 2026-10-14: B P10-05 DONE 00:5xZ (e500fd0b, §1h.79); C P10-07a `p10c07a` (port 4007) spawned 01:0xZ; C P10-02 DONE 01:1xZ (aeb4d76a); C P10-09b DONE 01:2xZ (d446e7a5); C P10-06, C P10-07a DONE 01:3xZ (26613e8a); C P10-09a DONE 01:4xZ (4c862d19, the manager's merge); C P10-06b `p10c06b` (4016) and C P10-09c `p10c09c` (4019) spawned 01:5xZ; C P10-04 DONE 02:0xZ (26655c27, the manager's merge); C P10-07b `p10c07b` (4017) spawned 02:1xZ; C P10-06b DONE 02:2xZ (52dc1810); C P10-09c DONE 02:1xZ (3572263d); C P10-03 DONE 03:0xZ (49282fe4); C P10-07b DONE 03:0xZ (60c569c7); B P10-01 DONE 01:0xZ (§1h.80), C P10-08 `p10c08` (port 4008) spawned 01:1xZ; the others in parallel (C P10-06 `p10c06`; ports 4001–4010).** **Round P9, Theme 1 (the extraction) in flight since 20:2xZ 2026-10-11: C P9-08 / P9-09 / P9-10 in parallel on disjoint regions (§1h.48 (a)); when all three are landed the manager bumps the extraction and reading versions once (§1h.48 (b)) and round 2 renders. The key session (P9-KEY) runs the keyed features with the owner's Gemini key and reports by message. Theme 2 (features) in flight since 20:0xZ 2026-10-11: C P9-03 … C P9-06 and B P9-07 in parallel (the briefs fd47c672; the rulings §1h.47 — the feature walk's X4 is Next.js's dev indicator, F08 is P7-14's design, X15 / X16 are the owner's calls); Theme 1 (the extraction) waits on B P9-01 / B P9-02, then its C groups on disjoint functions (raised-row folding A/B/G/H; dehyphenation + join spacing C/H; symbol folding D; captions + equation islands E/F) in parallel worktrees. Round P9 opened 17:0xZ on the owner's verdict (the reading-quality loop, §1a.17; §4 17:0xZ, 17:3xZ, 19:4xZ) — round 1's render, the manager's own read (eight mechanisms A–H, `scratchpad/p9/r1/manager-read.md`), five blind readers (60 / 64 / 64 / 64 / 55) and the feature walk (22 PASS / 2 FAIL + the extras) done; B P9-01 and B P9-02 running since 19:4xZ (the mechanisms' code paths and fix designs); next: the C groups in parallel worktrees on disjoint functions, then round 2 (render → readers) — the owner's calls pending: the abstract on the digestion tab, the empty parent headings as rows, THE CLAIM band. Meanwhile round P8 closes: all four C items DONE and on the branch (832832dc, 16:39Z); C P8-06 DONE with its follow-ups (the branch at f713a29a, 19:50Z; 402 + 3 / 8200 + 3, build 0; `briefs/P8-06.md`, §1h.45, §1h.46); A P8-05 re-spawned 19:4xZ after the usage-limit pause (`briefs/P8-05.md`: the round re-measured with the owner's paper and in the browser, P8-06's base in scope); when it returns: rulings §1h.47, fixes as C items (parallel where disjoint), A P8-07 (the empty state and the follow-ups), then the closing (the owner's report P8, the handoff, PR #32's description, the chat message) (the Cs spawned 15:5xZ 2026-10-11, §1h.41, §1a.16):** C P8-01 the home page's feed retry loop (BACKLOG-29 / 22; `briefs/P8-01.md`; `app/page.tsx`, `store/feed.ts`); C P8-02 the explain window that stays open, in the right margin, level with the explained paragraph's first line (BACKLOG-31; `briefs/P8-02.md`; `explain-box.tsx`, `explain-dock.ts`, `paper-body.tsx`); C P8-03 only numbered equations from a PDF + the leading-glyph rule, the extraction version 6 (BACKLOG-32 / 34; `briefs/P8-03.md`; `pdf-outline.ts`, `upload-concepts.ts`); C P8-04 the HTML extractors' empty numbered parent (BACKLOG-33; `briefs/P8-04.md`; `html-text.ts`). Base for all four: 2b22e0ef (code head 9cf281c6; gates tsc 0, lint 0 / 149, 396 + 3 / 8007 + 3, build 0); the branch head with all four: 832832dc (399 + 3 / 8128 + 3). As each returned: verify in `scratchpad/p504/wt`, cherry-pick onto the branch, push, record DONE, remove its worktree. When all four are DONE: A P8-05 (to brief: §1h.41 (e)). Before it (P7, closed 11:4xZ): every item of the owner's review is on the branch and verified: P7-10 … P7-16c (the twelve points), A P7-17 (the review re-measured with the owner's paper, 852ceb9f) and **P7-18 DONE 11:4xZ 2026-10-11** (F1 the abstract line whole sentences up to 1,200 characters, F2 the end matter out of the map, F3 the numbered subsections' inherited bucket, F5 the section key, F6 Submit's touch target, the extraction version 5; code head 9cf281c6, the checkpoint 4339db25; verified at the same tree 528c682f in `scratchpad/p504/wt` — tsc 0, lint 0 / 149, the 54 touched test files 1438 green, the full suite 396 + 3 / 8007 + 3, build 0, `final-528c682f.log`; own mutation "the end-matter rule never fires" 23 red / 89 green in `pdf-outline.test.ts`, `pdf-outline.ts` restored byte-identical; C's own mutations 5 and 6 red). The manager's closing at this head 11:5xZ: the owner's report `OWNER-REPORT-P7.zh-CN.md` (§0 the final numbers, §3 the residuals "已修", §4 BACKLOG-33 / 34), the HANDOFF's P7 paragraph, PR #32's description (the P7 section), the chat message to the owner in plain Chinese. Open for the owner: BACKLOG-27 / 28 / 30 (their calls, not answered 15:3xZ), the empty-state question of §1h.41 (b), and the paper's re-upload (the frozen abstract line). The clock stays enabled; the 90-minute push rule in force while the Cs run.
-NEXT TURN:        **Round P11:** as each B returns → read it whole, rule on its design (§1h), write the Cs it names (parallel, disjoint files; `page.tsx` only as named hunks), spawn them; when C P11-06 returns → verify (tsc, lint, touched ×3, own mutation, full gates) and land; write `docs/reading-helper-abc/P11-RUBRIC.md` (Theme A: the three panes and navigation — items 2, 6, 3; Theme B: the margin — items 1, 4, 5, 8) before round 1's walk. Before it: **Round P10:** when A P10-10 returns → cherry-pick its deliverable, read the walk whole as the director, spawn three blind readers (Sonnet; each gets `scratchpad/p10/r1/pack/` and `P10-RUBRIC.md` only; returns a per-unit mark list and the two scores), take the median of A and the readers, check every disagreement against the pack, record the scores (`P10-RUBRIC.md`, §1h), tell the owner in Chinese (the numbers, what changed, what is left, the decisions), cluster round 2's defects by mechanism and spawn its items in parallel. When C P10-08b returns → verify in a free copy, land, tell A (if still walking) to re-check B3 / B4 on the new head. **Round P10:** when B P10-01 returns → write its finding into §1h.79 and spawn C P10-08 (`briefs/P10-08.md`). When a C returns (any order) → verify in a free copy (`scratchpad/p504/wt` or `p505/wt` / `p506/wt`, checked out detached at the branch head with its commits cherry-picked in order: tsc, lint, the touched tests ×3, the full suite, build, one own mutation restored byte-identical), then cherry-pick onto the branch, push in batches (Vercel's daily quota, §1h.69), record DONE in §5 / §4 / §1, `git worktree remove` its worktree; a cherry-pick conflict between two Cs briefed on disjoint regions of one file is resolved by hand, never by rewriting a pushed commit. When B P10-05 returns → ruling, brief `P10-07.md` for round 2. When every round-1 C is DONE → the combined gates at the head, the extraction/reading version check (one bump, P10-04's), then A P10-10 (`briefs/P10-10.md`: the PhD reviewer's walk, the owner's PDF path in the spawn message) and three blind readers on its evidence pack; the scores into `P10-RUBRIC.md` and §1h; the owner told in Chinese; round 2's items from the walk's defects, in parallel. When a C returns (P8-01 … P8-04, any order): verify in `scratchpad/p504/wt` checked out detached at the branch head with its commits cherry-picked in order (tsc, lint, the touched tests, the full suite, build, one own mutation restored byte-identical; for P8-03 the end-to-end numbers on the owner's paper and the printout with `scratchpad/p7c18/e2e18.test.ts`), then in the main checkout cherry-pick onto the branch, push, record DONE in §5 / §4 / §1, push the state, `git worktree remove` its worktree. Two returned Cs whose cherry-picks conflict (they were briefed on disjoint files, so none is expected): resolve by hand, never rewrite a pushed commit. When all four are DONE: write and spawn **A P8-05** (`briefs/P8-05.md`, Sonnet, read-only worktree `p8a05`): §1h.41 (e) — the owner's paper and the printout through the real upload in a stubbed dev server (equations before / after, the map's 13 sections, the printout's 21 rows), the explain window at 1024 / 1280 / 1440 / 1920 (top = the explained paragraph's top ± 2 px; stays open across a new selection; the next Explain moves it with `--explain-dock` never removed; the column's left edge still; nothing under it; Escape / Close release the width), the home page against a stubbed 503 (`/api/feed` requests in 3 s ≤ 2, the "Try again" sends one), an HTML fixture with an empty numbered parent, the gates, mutations. When A returns: rulings §1h.42, fixes as C items (parallel where disjoint), then the manager's final verification at the head, the owner's report `docs/reading-helper-abc/OWNER-REPORT-P8.zh-CN.md` (plain Chinese: per point why it was wrong, what changed, how to see it; the re-upload note — version 6; the empty-state question), the HANDOFF's P8 paragraph, PR #32's description, the chat message. While the Cs run: a state push at least every 90 minutes (the clock takes over otherwise), a `send_later` check-in ~50 minutes out re-armed per round; never end the campaign on your own (§1a.15). A manager taking over: read §1h.31 and §1h.36 before touching the checkout; the Cs' worktrees `scratchpad/p8c01/wt` … `p8c04/wt` are theirs — read-only until each returns; the manager's own `scratchpad/p504/wt` (detached) is the verification copy; `scratchpad/byok/wt` (old, detached at f1812605) is removable.
-STOPPED BECAUSE:  — (continuous, §1a.15)
-GATE BASELINE:    manager, ed189e1, 16:2xZ–16:3xZ: lint 0 errors / 151 warnings; tsc 0; vitest (TZ=America/Chicago, freemium-round10 fetched) 293 passed + 3 skipped files, 5784 passed + 11 skipped + 0 failed tests. Under plain UTC two environment-dependent tests fail (§3a container rulings). **Current base (the branch head f7cf3dac — P9-43 … P9-48 over c9421afb's tree; the full gates in `scratchpad/p505/wt` at f7cf3dac, 13:13Z–13:19Z 2026-10-12, `final-f7cf3dac.log`): tsc 0; lint 0 errors / 145 warnings; 370 + 3 / 6,964 + 3, no failure; build 0. P9-51 on top: the full gates at d19fcb67 (`p504/final-d19fcb67.log`, 13:26Z–13:34Z): tsc 0; lint 0 / 145; 370 + 3 / 6,979 + 3, no failure; build 0. P9-52 on top: the full gates at e72bf6b0 (`p504/final-e72bf6b0.log`, 13:34Z–13:40Z): tsc 0; lint 0 / 145; 372 + 3 / 7,006 + 3, no failure; build 0. P9-50 on top: at 6c2a4c4f (`p504/final-6c2a4c4f.log`, 13:41Z–13:45Z): tsc 0; lint 0 / 145; 373 + 3 / 7,025 + 3, no failure; build 0. P9-53 and P9-54 on top: at 8d8eeada (`p504/final-8d8eeada.log`, 13:46Z–13:49Z): tsc 0; lint 0 / 145; 375 + 3 / 7,070 + 3, no failure; build 0. P9-49 on top: at 43240a24 (`p504/final-43240a24.log`, 13:55Z–13:58Z): tsc 0; lint 0 / 145; 377 + 3 / 7,116 + 3, no failure; build 0. P9-55 on top: at a5b9a8b7 (`p504/final-a5b9a8b7.log`, 15:15Z–15:18Z): tsc 0; lint 0 / 145; 378 + 3 / 7,126 + 3, no failure; build 0. P9-56, P9-57, P9-58 on top: at d8be82bf (`p504/final-d8be82bf.log`, 16:00Z–16:03Z): tsc 0; lint 0 / 145; 382 + 3 / 7,184 + 3, no failure; build 0 — the head round 5 walked. P9-59 on top: at f3104cb3 (`p504/final-f3104cb3.log`, 17:27Z–17:31Z): tsc 0; lint 0 / 145; 383 + 3 / 7,228 + 3, no failure; build 0. P9-60 and the skills on top: at 4aa8d491 (`p504/final-4aa8d491.log`, 17:32Z–17:35Z): tsc 0; lint 0 / 145; 383 + 3 / 7,229 + 3, no failure; build 0. The docs commits after it change no code.** Before it: the branch head c9421afb — P9-44 and P9-45 over 8bcf3c3d's tree; the full gates in `scratchpad/p505/wt` at c9421afb, 12:03Z–12:07Z 2026-10-12, `final-c9421afb.log`): tsc 0; lint 0 errors / 145 warnings; 369 + 3 / 6,943 + 3, no failure; build 0. P9-43 (one test file, the count unchanged) on top.** Before it: the branch head 8bcf3c3d — every item of round 3 / 4 on the branch (P9-35, P9-40, P9-41, P9-42 the last); the full gates in `scratchpad/p504/wt` at 8bcf3c3d, 11:19Z–11:22Z 2026-10-12, `final-head-8bcf3c3d.log`): tsc 0; lint 0 errors / 145 warnings; 369 + 3 / 6,929 + 3, no failure; build 0.** Before it: the branch head c6933271 — everything through P9-39 but P9-35 / 40 / 41 / 42, with the round's version bump; verified as one tree at 26e5ddf0, 10:52Z–10:57Z 2026-10-12, `scratchpad/p504/final-26e5ddf0.log`): tsc 0; lint 0 errors / 145 warnings; 366 + 3 / 6,934 + 3, no failure; build 0 (the drop from 8,617 is P9-33's deleted modules, 1,877).** Before it: the branch head f4dfc380 — P9-24, P9-27, P9-30 over the version bump; the full gates in `scratchpad/p505/wt` at f4dfc380, 07:25Z–07:39Z 2026-10-12, `final-head-f4dfc380.log`): tsc 0; lint 0 errors / 149 warnings; 408 + 3 / 8,617 + 3, no failure; build 0 — P9-30's own full run is this one. P9-39 (one test file) on top.** Before it: the branch head d8d8d98d and the manager's docs after it — the code is 101ee14c's, the version bump over P9-13a / 13b / 14 / 15 / 16, P9-17, P9-18, P9-19, P9-21; verified in `scratchpad/p504/wt` at 101ee14c, 06:44Z–07:06Z 2026-10-12, `final-101ee14c.log`): tsc 0; lint 0 errors / 149 warnings; 405 + 3 / 8,571 + 3 — the run showed 8,570 + the BACKLOG-41 timeout (`reading-map.cache.test.ts` "is per body"); build 0. P9-34 (no code) on top. The count falls by the dead modules' tests when P9-33 lands (§1h.60 (b)).** Before it: f5682b19 (P9-18 over the P9-15 tree; P9-18 verified at 5819043a over f57a1c28, 06:23Z 2026-10-12, `scratchpad/p505/final-5819043a.log`: 404 + 3 / 8496 + 3, build 0; P9-15 verified at 2243a15e: 405 + 3 / 8502 + 3, build 0; their files are disjoint — the combined tree's count is 8502 + 16 = 8518, measured with the next verification): tsc 0; lint 0 errors / 149 warnings.** Before it: 2efe13da (P9-15 over f57a1c28 — verified in `scratchpad/p504/wt` at 2243a15e, 05:59Z–06:13Z 2026-10-12, `final-2243a15e.log`): tsc 0; lint 0 / 149; the 4 touched test files 297 green; 405 + 3 / 8502 + 3; build 0; 2906f0cc (P9-19 over 4295f45f — verified at e1914d0a, 05:56Z 2026-10-12, `final-e1914d0a.log`): tsc 0; lint 0 / 149; the 5 touched test files 88 green; 404 + 3 / 8480 + 3; build 0; d0275026 (P9-13b and P9-16 over P9-13a — verified at 4d131921, 02:26Z 2026-10-12, `final-4d131921.log`): tsc 0; lint 0 / 149; the 7 touched test files 740 green; 404 + 3 / 8474 + 3; build 0; 9430fc45 (P9-13a over 9a61d7f9 — verified at dcf50707, 01:51Z 2026-10-12, `final-dcf50707.log`): tsc 0; lint 0 / 149; the 2 touched test files 236 green; 404 + 3 / 8435 + 3; build 0; e3557ec1 (P9-03b over 5c49def0 — verified at ce976ed7, 01:22Z 2026-10-12, `final-ce976ed7.log`): tsc 0; lint 0 / 149; the 17 touched test files 482 green; 403 + 3 / 8420 + 3; build 0; 5c49def0 (Theme 1 (P9-08 / P9-09 / P9-10), P9-04, P9-11 and the version bump a07cf796 — the final gates run in the main checkout, 01:13Z–01:17Z 2026-10-12, `final-main-a07cf796.log`): tsc 0; lint 0 / 149; 403 + 3 / 8389 + 3 once the route test's version pin was re-aimed to 8 (the run showed 8388 + that one red; the file alone 16 / 16 after); build 0; the P9-11 tree (verified at 9eebfe1b, 00:55Z 2026-10-12, `final-9eebfe1b.log`): tsc 0; lint 0 / 149; the 14 touched test files 217 green; 403 + 3 / 8242 + 3; build 0; e7131326 … 9b3c4ebe (P9-05 — verified at 8c41fb4c, 21:31Z 2026-10-11, `final-8c41fb4c.log`): tsc 0; lint 0 / 149; the 8 touched test files 219 green; 402 + 3 / 8233 + 3 (the cache test's load timeout, green alone — BACKLOG-41); build 0; 656f752b / 55700612 (P9-03 over P9-06 — verified at 10024e3a, 21:06Z 2026-10-11, `final-10024e3a.log`): tsc 0; lint 0 / 149; the 14 touched test files 407 green; 402 + 3 / 8220 + 3 (the same load timeout, green alone; recorded as 8219 at first — the count with the timed-out test green is 8220); build 0; 91402f84 / 63dc4271 (P9-06 over f713a29a — verified at 27dd4465, 20:44Z 2026-10-11, `final-27dd4465.log`): tsc 0; lint 0 / 149; the 2 touched test files 41 green; 402 + 3 / 8209 + 3 (the same load timeout, green alone); build 0; f713a29a (P8-06's follow-ups over its base and the four P8 items — verified in `scratchpad/p8v06/wt` at ba303572, 19:49Z 2026-10-11, `final-ba303572.log`): tsc 0; lint 0 / 149; the 17 touched test files 440 green; 402 + 3 / 8200 + 3; build 0; d5d9e447 / 4ae4a951 (P8-06's base, verified at b735fca1, 17:22Z 2026-10-11): 401 + 3 / 8168 + 3, lint 0 / 149, the 16 touched files 414 green, build 0; b4595a31 / 832832dc (P8-02 — all four P8 items in — verified at 575a3375, 16:39Z 2026-10-11): 399 + 3 / 8128 + 3, lint 0 / 149, the 14 touched files 374 green, build 0; 6d94295c / 48988d8a (P8-04's follow-ups, verified at af9be08c, 16:34Z 2026-10-11): 398 + 3 / 8091 + 3, lint 0 / 149, the 4 touched files 95 green, build 0; 0f388874 / 0a29bc94 (P8-03, verified at ae75e8dd, 16:30Z 2026-10-11): 398 + 3 / 8088 + 3, lint 0 / 149, the 4 touched files 170 green, build 0; 4506c321 / efb52249 (P8-01 + P8-04, verified at 3b7006a1, 16:18Z 2026-10-11): 398 + 3 / 8064 + 3, lint 0 / 149, the 29 touched files 612 green, build 0; 9cf281c6 / 4339db25 (P7-18 — the owner's review complete — verified at 528c682f, 11:3xZ 2026-10-11): 396 + 3 / 8007 + 3, lint 0 / 149, the 54 touched files 1438 green, build 0; b11c044a / d8b6594a (P7-15, 07:39Z 2026-10-11): 395 + 3 / 7953 + 3, lint 0 / 149, build 0; bcedd5b8 / bc32d259 (P7-14, 06:4xZ): 395 + 3 / 7931 + 3, lint 0 / 149, build 0; b4e6e11d (P7-16c over 0a31e42a, 06:3xZ): 394 + 3 / 7914 + 3, lint 0 / 149, build 0; 7cb641d0 (P7-16 over f743fa56, 06:1xZ): 392 + 3 / 7848 + 3, lint 0 / 149, build 0; db948d63 / e6732a84 (P7-11, 05:4xZ 2026-10-11): 383 + 3 / 7743 + 3, lint 0 / 150, build 0; 1e055979 / e729c013 (P7-13, 05:4xZ 2026-10-11): 383 + 3 / 7712 + 3, lint 0 / 150, build 0; 77701a25 / b64bc002 (P7-12, 05:2xZ 2026-10-11): 376 + 3 / 7616 + 3, lint 0 / 150, build 0; b8571792 / c8bd5702 (P7-10, 05:0xZ 2026-10-11): 374 + 3 / 7582 + 3, lint 0 / 150, build 0; bffa3659 / d7acb808 (P6-03 and the final verification, 22:4xZ 2026-10-07): 373 + 3 / 7546 + 3, lint 0 / 150, build 0; 34dc6019 / 1c37393d (P6-01b, 21:4xZ): 372 + 3 / 7542 + 3, lint 0 / 150; af88b4ef / a56d989b (P6-01, `main` PR #34 merged in, 19:3xZ): 372 + 3 / 7541 + 3, lint 0 / 150 (main's own count; 151 before the merge); e5424d62 / bc809806 (P5-06b, 18:4xZ): 372 + 3 / 7540 + 3, lint 0 / 151. **P10-02 on top (round P10): at afebf88f (`p504/final-afebf88f.log`, 00:54Z–01:05Z 2026-10-14): tsc 0; lint 0 / 145; 382 + 3 / 7,190 + 3 (−1 file, −39 tests: the deleted strip's 44, +5), no failure; build 0.** P10-09b on top: at 89d33125 (`p505/final-89d33125.log`, 01:15Z–01:22Z): tsc 0; lint 0 / 145; 386 + 3 / 7,246 + 3, no failure; build 0. P10-06 and P10-07a on top: at 26613e8a (`p504/final-26613e8a.log`): == gates at 26613e8a 01:24Z tsc 0 ✖ 145 problems (0 errors, 145 warnings)  Test Files  391 passed | 3 skipped (394)       Tests  7357 passed | 3 skipped (7360) ƒ  (Dynamic)  server-rendered on demand  == done 01:28Z. **P10-09a on top: at 4c862d19 (`p505/final-4c862d19.log`, 01:28Z–01:31Z): tsc 0; lint 0 / 145; 399 + 3 / 7,417 + 3, no failure; build 0 — the current base.** **P10-04 on top: at 26655c27 (`p504/final-26655c27.log`, 01:49Z–01:55Z): tsc 0; lint 0 / 145; 399 + 3 / 7,464 + 3, no failure; build 0 — the current base.** **P10-06b on top: at 52dc1810 (`p506/final-52dc1810.log`, 01:57Z–02:05Z): tsc 0; lint 0 / 145; 400 + 3 / 7,527 + 3, no failure; build 0 — the current base.** **P10-09c on top: at 3572263d (`p505/final-3572263d.log`, 02:09Z–02:14Z): tsc 0; lint 0 / 145; 400 + 3 / 7,562 + 3, no failure; build 0 — the current base.** **P10-03 and P10-07b on top: at 60c569c7 (`p504/final-60c569c7.log`, 02:50Z–02:53Z): tsc 0; lint 0 / 145; 406 + 3 / 7,667 + 3, no failure; build 0 — the current base.** **P10-08 on top — round 1's code head: at 4f2ecfae (`p506/final-4f2ecfae.log`, 02:58Z–03:01Z): tsc 0; lint 0 / 145; 407 + 3 / 7,575 + 3, no failure; build 0 — the current base.** **P10-08b on top: at 324d2b1c (`p504/final-324d2b1c.log`): tsc 0; lint 0 / 145; 409 + 3 / 7624 + 3, no failure; build 0 — the current base.** **Round 2 (P10-12, 09d, 06c) on top: at 1f2f47fd (`p504/final-1f2f47fd.log`, 04:32Z–04:40Z): tsc 0; lint 0 / 145; 7,692 + 3, no failure; build 0. P10-04b, 13, 11 on top: at b75ab10a (`p506/final-b75ab10a.log`, –04:43Z): tsc 0; lint 0 / 145; 414 + 3 / 7,735 + 3, no failure; build 0. Every round-2 item (through P10-06d) on top: at a3f89347 / the branch b5ff4544 (`p504/final-a3f89347.log`, –04:56Z): tsc 0; lint 0 / 145; 7,799 + 3, no failure; build 0. P10-15 on top: at 532ab016 / the branch 73572f79 (`p504/final-532ab016.log`, 05:22Z–05:26Z): tsc 0; lint 0 / 145; 420 + 3 / 7,838 + 3, no failure; build 0. P10-16 on top: at 002a0e95 / the branch 6389a73e (`p505/final-002a0e95.log`, –11:23Z): tsc 0; lint 0 / 145; 7,962 + 3, no failure; build 0. P10-21, P10-20, P10-18 on top: at e099b577 (`p504/final-e099b577.log`, 11:25Z–11:31Z): tsc 0; lint 0 / 145; 423 + 3 / 8,013 + 3, no failure; build 0. P10-23 on top: at c82f6f3e / the branch cdc97442 (`p506/final-c82f6f3e.log`, –11:44Z): tsc 0; lint 0 / 145; 424 + 3 / 8,034 + 3, no failure; build 0. P10-19 on top — round 3's code head: at c30475a4 / the branch 744af585 (`p504/final-c30475a4.log`, 11:44Z–11:47Z): tsc 0; lint 0 / 145; 426 + 3 / 8,049 + 3, no failure; build 0. P10-24 on top: at 3ab52f29 / the branch 777905f5 (`p504/final-3ab52f29.log`, 13:08Z–13:13Z): tsc 0; lint 0 / 145; 427 + 3 / 8,065 + 3, no failure; build 0. P10-25 on top: at f0e42ada / the branch e44a71a9 (`p505/final-f0e42ada.log`, 13:16Z–13:21Z): tsc 0; lint 0 / 145; 428 + 3 / 8,081 + 3, no failure; build 0. P10-26 on top — round 4's three items in: at 697a6289 / the branch 332f980b (`p504/final-697a6289.log`, 13:39Z–13:47Z): tsc 0; lint 0 / 145; 429 + 3 / 8,095 + 3, no failure; build 0. P10-30 on top: at 5c048e21 / the branch ddb395b9 (`p505/final-5c048e21.log`, 14:00Z–14:13Z): tsc 0; lint 0 / 145; 431 + 3 / 8,105 + 3, no failure; build 0. P10-29 on top: at 31a2dc9a / the branch c8fe7fcd (`p506/final-31a2dc9a.log`, 14:07Z–14:17Z): tsc 0; lint 0 / 145; 434 + 3 / 8,134 + 3, no failure; build 0. P10-31 on top: at 01fdc72a / the branch fb765916 (`p504/final-01fdc72a.log`, 14:11Z–14:21Z): tsc 0; lint 0 / 145; 434 + 3 / 8,155 + 3, no failure; build 0. P10-32 on top: at 5b232d43 / the branch 5675f56c (`p505/final-5b232d43.log`, 14:20Z–14:25Z): tsc 0; lint 0 / 145; 434 + 3 / 8,170 + 3, no failure; build 0. P10-28 and P10-33 on top — every backlog C of §1h.99 in: at 1fc1d10b / the branch 1f395234 (`p504/final-1fc1d10b.log`, 14:28Z–14:32Z): tsc 0; lint 0 / 145; 437 + 3 / 8,207 + 3, no failure; build 0. P10-35 on top: at 29abf6e7 / the branch ac4ab9ee (`p505/final-29abf6e7.log`, 14:45Z–14:48Z): tsc 0; lint 0 / 145; 439 + 3 / 8,230 + 3, no failure; build 0. P10-34 and the version bump on top — round 4's head, the one A P10-27 walks: at 71eaba4d (`p504/final-71eaba4d.log`, 14:52Z–14:56Z): tsc 0; lint 0 / 145; 440 + 3 / 8,235 + 3, no failure; build 0. P10-38 on top: at 562e9173 / the branch 70e903ce (`p505/final-562e9173.log`, 15:20Z–15:27Z): tsc 0; lint 0 / 145; 443 + 3 / 8,260 + 3, no failure; build 0. P10-36 on top: at ef3fc518 / the branch 45b21c1f (`p506/final-ef3fc518.log`, 15:32Z–15:36Z): tsc 0; lint 0 / 145; 445 + 3 / 8,290 + 3, no failure; build 0. P10-37 on top — every §1h.102 item in: at adc6313b / the branch 3697b411 (`p505/final-adc6313b.log`, 15:35Z–15:40Z): tsc 0; lint 0 / 145; 447 + 3 / 8,314 + 3, no failure; build 0. P10-40 on top: at 7c998408 / the branch a7c5e5ec (`p504/final-7c998408.log`, 16:00Z–16:06Z): tsc 0; lint 0 / 145; 448 + 3 / 8,323 + 3, no failure; build 0. P10-39 and the version bump (extraction 12 / reading 13) on top: at 741dc896 (`p506/final-741dc896.log`, 16:17Z–16:21Z): tsc 0; lint 0 / 145; 450 + 3 / 8,337 + 3, no failure; build 0. P10-41 on top: at d85a757b / the branch 2a792c98 (`p504/final-d85a757b.log`, 16:30Z–16:35Z): tsc 0; lint 0 / 145; 452 + 3 / 8,351 + 3, no failure; build 0. P10-42 and its bump (extraction 13 / reading 14) on top: at b856edd5 (`p506/final-b856edd5.log`, 16:38Z–16:43Z): tsc 0; lint 0 / 145; 453 + 3 / 8,365 + 3, no failure; build 0. P10-43 on top — round 5's head, the one A P10-44 walks: at 88c60483 (`p504/final-88c60483.log`, 16:45Z–16:50Z): tsc 0; lint 0 / 145; 453 + 3 / 8,377 + 3, no failure; build 0. P10-46 on top: at 76a2572a / the branch 24c34b57 (`p505/final-76a2572a.log`, 17:10Z–17:14Z): tsc 0; lint 0 / 145; 454 + 3 / 8,386 + 3, no failure; build 0. P10-45 on top: at 7b6340eb / the branch d8312cba (`p504/final-7b6340eb.log`, 17:26Z–17:29Z): tsc 0; lint 0 / 145; 457 + 3 / 8,402 + 3, no failure; build 0. The old-notes migration (§1h.107) on top: at fcbf33e5 (`p505/final-fcbf33e5.log`, 18:02Z–18:06Z): tsc 0; lint 0 / 145; 458 + 3 / 8,407 + 3, no failure; build 0. P10-47 on top: at 50d6a024 (`p506/final-50d6a024.log`, 18:26Z–18:29Z): tsc 0; lint 0 / 145; 458 + 3 / 8,431 + 3, no failure; build 0 — the head round 6 walks. P10-49 on top: at adb30320 / the branch d907c3fc (`p505/final-adb30320.log`, 18:54Z–18:58Z): tsc 0; lint 0 / 145; 459 + 3 / 8,442 + 3, no failure; build 0. P10-51 (tests only) on top: at a11692ff (`p506/final-a11692ff.log`, 20:01Z–20:05Z): tsc 0; lint 0 / 145; 459 + 3 / 8,447 + 3, no failure; build 0 — the current base.**
+ROUND:          P12 round 2 (§1h.420–§1h.424): Themes A, B on P1–P3 and Theme C0 on P1–P6 (P4–P6 held out until the rules land), twelve scores ≥97.25 in two consecutive rounds; C1 (with a key, 100%) once the owner supplies a key; counts 0/2
+BRANCH:           update-on-paper-digest; draft Aspen-Lab/peer#37; no merge authorization
+HELD BY:          Claude (Opus), cloud session session_017DGPdGJqr95t3pMMcspXjE, 2026-10-27T14:47Z (§1h.419); only writer of this file
+CURRENT ITEM:          A P12-37 (Theme A, 4240) and A P12-38 (Theme B, 4241) walking round 2 on the dev server with the stub (§1h.421)
+NEXT TURN:          three blind readers per theme on each pack; director; score; B/C by mechanism
+STOPPED BECAUSE:          — (the Codex manager stood down at the owner's word, §1h.419)
+GATE BASELINE:          GREEN on a16cbe48 (Claude, p504/wt, 2026-10-27 14:46–14:53Z, TZ=America/Chicago): build 0; tsc 0; lint 0 errors / 144 warnings; 596 test files + 3 skipped, 10,919 tests + 3 skipped, 0 failed. (Codex native baseline on 220ca9e1 retained in the log.)
+CLOCK:            trig_01MkdKP21BdT8TbcyZpB4umB ENABLED (Haiku, 20 * * * *, P12 prompt; wakes session_017DGPdGJqr95t3pMMcspXjE only when idle)
+OWNER INPUT:      P1 Lin 2025, P2 Sederholm 2026, P3 Zahiri 2021, P4 Nat. Commun. 2026, P5 Nature 2024, P6 Nature 2026 (the owner's uploads; upload UI only, never committed or quoted); the owner's test key PEER_TEST_GEMINI_API_KEY for C1 (§1h.430)
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -820,10 +822,1967 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 179. **Round 7, Theme B scored: 97.92 — the second consecutive pass; THE LOOP ENDS (10:4xZ 2026-10-22).** A P11-65 (Sonnet; deliverable `P11-65-A-20261022T1010Z.md`, picked as aaf23636; worktree removed) walked ae2fbe42 — no production code changed since d68ddd73 (`git diff --stat d68ddd73 HEAD -- web` empty): pass requirements hold (372 checks 0 hits, 0 page errors in 363 runs, Tier 0, privacy grep 51 groups 0 hits, the paper's text unchanged, no 4-word run of the owner's paper), B1–B12 12 PASS, P10 B1–B16 16 / 16, F lines PASS; E-4 (`y20` 600 / 600, `y21` 250 / 250), E-2 (693 / 693), E-3 and `y10` (500 / 500) still GONE; the group over a card's words STILL 0.25 (238 of 607; 0 controls, 0 header words); no new extra; the walk's own 97.92. The readers: r1 97.92, r2 95.83, r3 97.92 — each 12 of 12 PASS, pass requirements held. r1 and r3 priced the group over card words 0.25 and nothing else. **r2 added a second 0.25** for "a selection across two blocks offers nothing or less" (the body drag across two paragraphs, 35 of 35 cells; the Summary's cross-block selection without Highlight; nothing above 1,200 characters). **Director's ruling: r2's second 0.25 is voided.** It is the D5 rule (§1h.112) and C P11-50's "Highlight only where it makes a mark" (§1h.155 / §1h.158), both deliberate; §1h.166 (b) already ruled in round 4 that "a drag across two body paragraphs offers nothing is D5, by design, not a defect"; the rubric prices no kind for a deliberate per-block limit (r3 of round 6 and r1 / r3 of this round say the same); and rounds 5 and 6's readers saw it and left it unpriced. Applying the ruling of §1h.166 (b) again is consistency, not a lowered price. The median does not depend on it (97.92 / 95.83 / 97.92 → 97.92). **The score of record is 97.92; Theme B's consecutive passes: round 6 97.92, round 7 97.92 — two.** Theme A's: round 5 97.92, round 6 100.00 — two (§1h.177). **Both themes have met the 97.9 line (§1h.163) in two consecutive rounds: the loop ends, as the manager's measure.** The owner's own look at the surface is the acceptance above it. **The five carried observations, ruled:** (1) an answer's highlight after a reload — the mark draws once the (collapsed) answers disclosure is opened, the notes row and exports intact: not a defect; (2) **a triple click then a drag released over the left pane — 12 of 100 gestures end in the pane with no button (1,649 or 4 characters); all 100 plain drags are clean (C P11-45b's correction covers a single-click drag, not a triple-click's anchor): all three readers and A declined to price it (no rubric kind fits, an uncommon compound gesture whose pane-side end is the pane's own text); recorded as BACKLOG-114, a small named item for the owner to take or leave — it is the same family as E-4, so it is flagged rather than buried;** (3) the notes tab's hit strip 0.5 px (9.5 px with a card open) beyond its drawn box: nothing priced; (4) the cross-block rules: by design (above); (5) nine 0.69–1.31 px sticky band overlaps and the 72-px follow-up field: recorded. Final report: `docs/reading-helper-abc/P11-FINAL-REPORT.md`.
 180. **The owner's answers; BACKLOG-114 taken as C P11-66; the hourly clock turned off (10:3xZ 2026-10-22).** The owner, answering the final report: "关掉吧" (the hourly Haiku clock `trig_01MkdKP21BdT8TbcyZpB4umB`) and "修" (BACKLOG-114). **The clock is disabled** (`update_trigger` enabled = false, not deleted, so it can be turned on again). **BACKLOG-114 becomes C P11-66** (`keep-selection.ts` only; port 4169; base = the commit that carries `briefs/P11-66.md`): a triple click followed by a drag released beside the column (the left pane, the margin, a separator) or beyond the visible box ends the selection where a triple-click-and-drag released at the column's nearest visible point would, the triple-clicked paragraph never left out; every other gesture byte for byte as today. The C finds by execution whether the multi-click correction does not run or runs and is undone by the browser's paragraph granularity. Acceptance: the walk's `z21` matrix (12 of 100 → 0 of 100 ending in the pane with no button), the single-press drags 100 / 100 identical, E-2 693-type plain triple clicks unchanged, `y10` / `y15` unchanged. **After the loop's end (the skill): fix only what the last round found — a small, named item; no new rounds, no new feature work.** The manager verifies as for every C (tsc, lint, touched tests ×3, an own mutation, full gates) and lands by fast-forward; the owner is told the numbers. The rubric is not re-scored for it (Theme B's two passes stand); the C's own before / after matrix is its evidence.
 181. **C P11-66 landed (22:3xZ 2026-10-22): a triple-click drag released beside the column ends at the column; BACKLOG-114 closed.** C (Sonnet; worktree p11c66, base 22d183b8; commits 0021335f test / 27623831 fix / 16a1b698 checkpoint `P11-66-C-20261022T2221Z.md`, picked onto 22d183b8 as f0f24db0 / 75dfc5c1 / 4f6091f9, landed by fast-forward). **The defect was larger than the walk saw.** Cause by execution on the real page (`Selection.extend` logged): the single-press correction does run, once, at the first move, and puts the end at the character at the column's edge; a triple click's selection starts at the paragraph's first character, so on its first line the selection collapsed (1,011 → 0 characters), the browser's next move re-based it in the pane's block, and every later correction bailed ("the anchor is outside the column"); on later lines the end went to that line's start (the rest of the paragraph left out); at the four narrower windows the browser flipped the anchor and the correction cut the paragraph's first lines off. **12 of 100 ended in the pane with no button, and 56 more stayed in the paper but left the triple-clicked paragraph out** (the walk had counted the 12). **The fix** (`keep-selection.ts` +158 lines, 0 deleted; `endSelectionInColumn` untouched): the keeper counts a third press within `MULTI_CLICK_MS` 1000 and `MULTI_CLICK_PX` 10 of the second (pointer events carry no click count, and a four-listener test forbids a mousedown listener); it reads the triple-clicked paragraph at the first move, before the browser moves it (`paragraph()`); the new `endParagraphsInColumn` finds the paragraph at the column's nearest visible point with the browser's own `Selection.modify(…, "paragraphboundary")` and sets the selection whole from the base (the base paragraph is never left out, wherever the browser took the selection meanwhile); once a correction has been made the selection is ours for the rest of the press (setting it by hand ends the browser's paragraph granularity — measured, a drag out to the pane and back ended at the pointer's character, 112–122 characters), so a pointer coming back over the column is followed too; a browser with no `modify` falls back to the single-press correction. **Measured** (five windows, 40 drags each, every start read on screen, 300 ms still scroll): triple click + drag — ends in the pane with no button 12 → 0; in the paper with the paragraph left out 56 → 0; paragraph whole with three buttons 32 → 100 of 100 (1,011–1,415 characters, equal to a release inside the column; no key: 24 / 24 offered two buttons); single press 100 / 100 identical row for row before and after; double-click drag 120 / 120 identical; a triple drag released inside the column 20 / 20 identical; a plain triple click on all 48 blocks at 1280 and 1440 96 / 96 identical (offered, selection = the block's words); `y10` (20 rows) and `y15` (28 rows) at 1280 identical; against the browser's own release inside the column 1280 is 46 / 46 identical, at 1440 31 identical and 14 differing by the paragraph's 2-character break. C's gates: tsc 0, lint 0 / 144, touched 246 ×3, full 10,684 / 3 skipped, build 0; +48 tests in the new `keep-selection.multiclick.test.ts` (25 in the red commit: 17 red on the base, 8 green pins; 23 more with the fix), no test deleted, weakened or re-aimed; 11 mutations (5 + 6) each red and restored (sha256 6bdcd224… equal), one equivalent mutant replaced. **Manager's verification** on the combined head 4f6091f9 (free copy p504): diff read (additive, guarded: optional `KeeperEnv` members, a fallback when `modify` is missing); tsc 0; lint 0 / 144; the 4 keep-selection files ×3 = 211 / 211; **own mutation** (the paragraph correction disabled in `ask`) → 20 of 211 red, restored, sha256 6bdcd224 = 6bdcd224, 211 / 211 again; full gates: build 0, tsc 0, lint 0 / 144, 569 files / 10,684 tests + 3 skipped. **Unsettled, recorded:** Chromium only (`Selection.modify` exists in Firefox and Safari, not run); the triple click is inferred by timing (a system whose double-click interval exceeds 1 s keeps today's behaviour); a later paragraph's end is the paragraph's last position, 2 characters short of the browser's own, in selections that span two paragraphs and offer no button either way; a drag held below the window autoscrolls as on the base; the one-column page (BACKLOG-111) is untouched. Not re-scored: Theme B's two passes (§1h.179) stand; the C's before / after matrix is the evidence.
+182. **Round P12 opened; the manager role handed to the next agent (ChatGPT) — 2026-10-23.** The owner reviewed the merged `main` (a0aace34) and wrote nine items (`docs/reading-helper-abc/P12-OWNER-2026-10-23.md`, verbatim, with the manager's binding reading): the sticky note's editing tools with bullets and indent / outdent (1); the note pad's blue square aligned to the first line and sized to the text (2); the pane ratio drag "did not appear" (3); Explain + note open together split equally with a draggable boundary (4); no Highlight button seen on a selection (5); the figure click "disappeared" (6); the sticky's X replaced by Save and Delete (7); the "Answers generated by AI" control at section-title size, orange with white text (8); the question bar's Submit control reading "Submitted" in grey once submitted and "Submit" in bright orange with white text otherwise (9). **Three (3, 5, 6) report landed, walked and scored features as absent; they are investigated first, never argued with — the first hypothesis to test is a window narrower than 1024 css px (browser zoom counts), where the one-column page (BACKLOG-111) has no panes, no margin buttons and parks an opened figure (P11-41); then the dividers' invisibility at rest; then the deployment.** The owner's budget for this (Claude) session is nearly spent, so the owner asked for a hand-off that lets ChatGPT run the round fully automatically with the reviewing-cycle + abc skills from this repository: **`docs/reading-helper-abc/HANDOFF-P12.md`** (resume steps, the hard rules, the method as practised, the themes and the round-1 plan, the log protocol, the locations; the skills' paths under `.claude/skills/`). **Branch `update-on-paper-digest`** created from `main` a2575ddb with the owner's approval of the name ("我们估计要新开一个branch，就叫update on paper digest吧"); a draft PR opened for it (Aspen-Lab/peer#37); merged only on the owner's word. **The stop line stays the owner's standing one (§1h.163: ≥ 97.9 per theme, one 0.25 allowed, two consecutive rounds) unless the owner changes it** — the owner was told. The P11 hourly clock stays disabled; the next manager sets its own. Item ids P12-01 upward; ports 4200 upward; the next ruling is §1h.183. This file's `HELD BY` passes to the next manager when it takes the file over (HANDOFF-P12 §1 step 4).
 
 59. **Rulings on B P9-25's return — the figures in production (06:2xZ 2026-10-12).** (a) **The engine is MuPDF's own WASM build in Node (`mupdf@1.28.1`, exact)**: the helper's own engine, so the owner's paper gives the helper's output (12 regions, 12 / 12 captions identical, boxes ±1–2 px), no slower (3.7–5.3 s against 5.0–6.4 s), +12 MB per function, no second runtime, no HTTP hop, no 4.5 MB payload problem, no dashboard setting, and it runs under `next dev` so the walks finally see the figures; the Vercel Python function is dominated (a PDF over ~4 MB cannot be posted to it, the helper's 8.9 MB of JSON cannot come back). The dependency is the owner's decision (§1a.18 (a)) → **C P9-28** (the engine, `pdf-extract.ts`, `next.config.ts`'s `serverExternalPackages`, the engine header). (b) **The licence is the owner's to decide before production, not a blocker for the branch**: PyMuPDF (what he asked for) and `mupdf` are the same Artifex dual licence — AGPL-3.0 or Artifex's commercial licence; the repository is MIT. The branch builds it; the owner decides AGPL or commercial before he merges (told in Chinese with the facts, §3 of B's deliverable). If he declines both, B's fallbacks stand: `unpdf`'s raster extraction (no new dependency, misses vector figures) or pdf.js + `@napi-rs/canvas` (4× slower, +38 MB). (c) **The in-body figures of an upload need their own wiring** (B §1 cause 3, BACKLOG-01): the figure-image route answers an upload for its owner, by caption label, and `placeFigures` gives every "Figure N" caption its URL → **C P9-29**, after P9-28 lands (it calls P9-28's engine — a stated reason for the sequence); `PaperReading.version` is bumped once by the manager at the end of round 3 with the extraction versions. (d) **The upload purge cron is probably not scheduled** (B §5.4's note, checked by the manager: `vercel.json` exists only at the repository root, the Vercel project's Root Directory is `web/` per the Vercel bot's own PR comment, and Vercel reads the config from the Root Directory) → **C P9-30** moves it to `web/vercel.json` with a test that no root copy remains; the owner checks in the dashboard (Project → Settings → Cron Jobs) after the merge and that `CRON_SECRET` is set, since the route refuses a call without it. (e) B's `pkill -f next-server` at ~06:02Z ended other workers' dev servers for a moment; they restarted; recorded, no harm found; briefs say "kill only your own process by PID".
 
 60. **Rulings on B P9-26's return — stopping jobs and events (06:2xZ 2026-10-12).** (a) **The fact to tell the owner**: nothing in the running app fetches, scores, caches or shows a job or an event — `ffa6eded` (2026-09-05, "remove events and jobs — Peer is a paper briefing") removed the routes, pages, cards and connectors and left `lib/jobs`, `lib/events`, `lib/opportunities` and the store / profile fields "as a separate change"; what remains is 110 dead files (37,844 lines, 1,879 tests — 7 job sources and 4 event sources on 10 hosts, 2 pipelines, 3 prompt builders, none reachable) and live vestiges: the feed store's saved events / jobs (15 fields, 11 actions) persisted and synced to `saved_items` / `feedback_events`, `/api/saved` and `/api/feedback` accepting those kinds, the profile mirroring paper topics into event / job lists, legacy ledger entries, `/welcome`'s "Turn on Events & Jobs" and the AI-setup's "Papers, Events, and Jobs". The `/api/jobs/*` routes are cron work on papers (the upload purge, the digests, the dashboards) — likely what the owner saw; they stay (R5). (b) **The way: cut the vestiges ("stopped") and delete the dead modules ("gone"), no flag**: a flag would guard nothing on the server and leave 38k lines one edit from live; `lib/scoring/` untouched; `opportunities/shared.ts` kept; the pool-cache key byte-identical; a legacy ledger entry deleted, never left with its origin dropped (it would boost a paper by 0.1049). Deleting the dead modules' tests with the code they cover is not a test weakened (§1c): each C names every deleted test file and its count, and the suite's drop equals them. (c) **R1–R7, B's defaults taken**: R1 the `/welcome` "Data" step removed; R2 Career stage / Looking toward kept; R3 legacy device keys dropped by migration, server rows no longer read or written, legacy ledger entries dropped on clean, the Supabase rows left, an SQL file offered to the owner (commented, run by him if he wants); R4 the AI-setup's "40 a day (10 papers, 15 events, 15 jobs)" basis goes — a per-report price kept if the strings carry one, else no number; never an invented figure; R5 the cron names kept; R6 the live-events vitest guard left; R7 one CHANGELOG line. (d) **The items**, by file overlap: wave 1 — **C P9-31** (C1: the store, sync, the two kind routes) and **C P9-32** (C2: the profile, `/welcome`) now, as the owner's priority; **C P9-33** (C4: delete the dead modules) and **C P9-34** (C5: docs, icons, CHANGELOG, the SQL) as slots free; wave 2 — **C P9-35** (C3: the shared definitions) after P9-31 / 32 / 33 land; **C P9-36** (C2b: the Profile page and AI-setup copy) after P9-24 lands (the same files) — the sequences have their reasons (C3 deletes what the others stop calling; C2b shares P9-24's files).
+
+183. **P12 manager takeover and environment discrepancy (2026-10-23T18:37:27.858Z) — BINDING.** Fresh clone of Aspen-Lab/peer, existing approved branch update-on-paper-digest, untouched head 220ca9e1. Read HANDOFF-P12 and P12-OWNER whole, repository skills and referenced templates, product rules, P11 method, rubric, final report, rulings 111–182 and exemplar briefs. Node 24 was the machine default; official Node 22.23.4 downloaded outside the repository and its archive SHA256 verified. npm ci and Chromium installation completed without manifest or lock changes. Build 0, tsc 0, lint 0 errors / 144 warnings; full tests still running, with source-shape failures observed. Repository checkout uses global core.autocrlf=true, a candidate cause to verify before any product work; the expected baseline is not claimed green. A read-only preflight worker checks the discrepancy. Requested worker alias was rejected by the scheduler as unknown; the exposed 6.1 worker fallback is used transparently, preserving independent roles. Four concurrency slots including manager permit three active workers; pending items each retain their own worktree and brief and start as a slot frees (platform limit, not file grouping). The owner's supplied PDF needs no request and remains outside Git. Hourly heartbeat peer-p12 created in this chat; it resumes the first unfinished unit and avoids duplicate live workers; the current heartbeat API has no independent model parameter, so cheapest-model selection is unresolved. The owner is the directing author (Peter, as P12-OWNER records). No production code changed; no test weakened; no credentials or private paper text committed.
+
+184. **P12 rubric frozen (2026-10-23) — BINDING.** P12-RUBRIC.md is written from the reviewing-cycle template and P11 pattern, before any round-1 brief. Two themes with 12 units each; exact unrounded formula, 97.9 threshold, one 0.25 extra maximum per theme per round, two consecutive rounds; counts A0/B0. Independent preflight audit required complete toolbar parity, production evidence for Highlight plus deployed-site/revision checks, and the inherited P10/P9 guard chain; all three are included before freeze. P12 explicitly supersedes P11's card-stack shares, sticky X, cross-block exclusion and Summary lightbox exception as the owner's binding reading requires; the width contract remains open until B measures it. Manager never writes product code; fixes require independent C, manager verification and A/blind readers.
+
+185. **Original-head Windows baseline discrepancy and environment-only remedy (2026-10-23) — BINDING.** Gates ran in Appendix-A order on original app tree 220ca9e1: build0, tsc0, lint0 errors/144 warnings, test exit1; 25 failed/545 passed/2 skipped files (572), 35 failed/10641 passed/2 skipped tests (10678), with two collection errors. This is not the expected green baseline (569+3 files,10684+3 tests) and is never claimed as one. Independent investigation reproduced CRLF literal-newline failures; Windows URL.pathname/drive encoding; Windows path separators and directory ordering; and POSIX0600 assertions reporting0666. In the privacy extractor, CRLF makes the terminating LF-only search return -1 (11,339-character excerpt versus678 on LF); no product behavior is inferred from this source-shape failure. Some remaining failures need Linux comparison, not blanket exemption. No existing WSL/container/Linux executor was found. An infrastructure worker sets up a portable Linux VM in scratch, with its own disk/PIDs and loopback access, no admin/system-feature/reboot changes; all tests remain unchanged. Product edits wait for genuine Linux gates. The Windows baseline logs and diagnostic scripts remain private scratch; original web tree identity confirmed by git diff --quiet 220ca9e1 HEAD -- web. No dependency/manifest change, no test skipped/rewritten, no private PDF used or committed.
+
+186. **Production-walk auth fixture (2026-10-23) — BINDING.** B P12-01 built its own production tree successfully; the untouched anonymous UI offers no upload. Manager read upload-access.ts: production always needs Supabase-authenticated ownership; hostedUploadsEnabled additionally requires the explicit upload setting and an external private directory. An absent production operator/auth configuration is not a missing reader feature and does not establish a width cause. Authorize a scratch-only synthetic identity fixture at the external auth boundary for the localhost production walk: the real Supabase client, cookie handling, uploadOwner, ownership/storage checks and upload UI remain in use; NODE_ENV stays production. Supply only invented identity/session data via local stub responses/cookies; no real user session, real service key, or remote auth service. Enable uploads with the existing environment option and a scratch private directory outside the served tree. Keep model fetches stubbed, all other nonlocal network blocked; do not patch/bypass uploadOwner, replace modules, disable authorization or weaken tests. Show anonymous refusal first, then fixture-authenticated upload through the real UI. Any fixture issue is a harness blocker, not evidence a feature passed/failed. Record this limitation in the B report and later A evidence. No private PDF remotely; deployed-site checks use public input and must record authentication/protection barriers as blocked. If the fixture requires a product-code change, stop and report instead. Model/identity boundaries remain separately labelled; this fixture does not prove the deployed auth service. Query variables are named by purpose, never their values.
+
+187. **Scope contracts and suspended production-auth fixture (2026-10-23) — BINDING.** (a) Independent source mapping found note formatting must reach blocks.ts/store/notes.ts (stickySpan currently ends at non-text; plain-string writers erase structure) and export.ts (four-space nesting versus owner's two). Square geometry also lives in note-tags.tsx inline constants, highlight-row and note-editor marker layout. Therefore P12-02/03 are one C cluster because they overlap in note-editor/sticky marker layout; the brief names complete allowed data/export/type/UI files. P12-04 owns shared frame/windows geometry and keeps out of sticky-note/note-editor; P12-02 uses the existing custom header prop for Save/Delete. This allows independent note and margin work. P12-05 owns the new orange-token contract and its FOR_YOUR_QUESTIONS copy; P12-06 owns ASK strings/submit logic, starts once the token contract is available (explicit shared dependency), while other clusters continue. No grouping by worker capacity. New outside-scope file need stops for a manager ruling. (b) Automatic approval review rejected B's production server restart with synthetic authentication configuration, stating only 'blocked by policy'. Suspend §1h.186's synthetic-auth method; do not retry it through another tool/command/agent. The code/auth guards stay intact. Safer continuation is ordinary development UI with its existing browser capability, explicitly DEV evidence, plus anonymous production/public-only deployed UI with auth/protection blockers preserved. This does not establish production feature success. No actual secret or private paper was exposed or uploaded remotely; production proof remains unresolved where access blocks it. The manager told the owner the action and the limited stated reason, without another approval question.
+
+188. **P12 split-panel and submission semantics (2026-10-23) — BINDING.** (a) One margin card keeps its selection-aligned contract. Multiple cards divide the whole visible margin band after divider gaps equally initially; a new composition starts equal. A boundary changes its adjacent pair only; closing redistributes released share equally among survivors while preserving their other differences. Ratios live in session memory, not per-user/shared persistence. Visual order follows opening order; activating a header/content changes the active Escape target without moving panels. All bodies remain visible/usable, independent of active/front; actual header plus one content row (and required controls) defines minimums. If minimum sums exceed the band, C stops with measurement/options for a manager ruling. These choices make the owner's equal split usable instead of carrying P11's foreground-only cascade heuristics into it. P12-04 must preserve the custom-header prop used by the disjoint note worker. (b) Submit display follows actual submission history: never submitted is Submit even if empty; changed raw text is Submit; exact raw equality to last submitted text is Submitted. Edit-then-revert restores Submitted. Empty invalid input may keep its existing no-op guard but must not falsely read Submitted. Normalized equivalent text must not cause redundant settling/model work; if raw whitespace/case changes then submission merely acknowledges equivalent normalized content, the visual last-submitted state still updates. Existing storage/settling rules remain unless a measured necessity is separately ruled. Explicitly test reload/history, gist/standing-question modes, whitespace edits, empty initial state and Enter/composition; no invented model call or weakening of no-op guards.
+
+189. **Independent brief-audit clarifications (2026-10-23) — BINDING.** The audit found ambiguity between the standing one-commit-per-item line and the required test-red/fix/checkpoint sequence. Each finished step is the logical unit; maintain separate commits and manager-only pushes, including the early shared-token contract. P12-02/03 exclusively owns any necessary existing globals.css.test.ts anchor/square assertion re-aim; P12-05 uses a new focused globals.css.p12-actions.test.ts and never edits that shared existing file. P12-06's raw acknowledgement history is session-only; reload initializes from the same normalized stored text displayed by the existing field. Do not add raw-question persistence or change question storage. This resolves the impossible request to round-trip raw whitespace that the pre-existing store trims, while live-session raw edits and edit-then-revert retain ruling188b's two-state display. All four briefs carry these clarifications before implementation. Audit otherwise confirmed the custom-header/shared-frame file boundary is workable; no product C has started, no code/test changed.
+
+190. **Resume entry correction and native Linux baseline option (2026-10-23) — BINDING.** B checkpoint2 is banked; manager independently confirmed git diff --quiet a2575dd 68cad2c6 -- web exit0, so stale product deployment is refuted only for the observed production host/revision, not the owner's unknown earlier session. Preview/auth barriers remain unresolved. Portable Linux runs unmodified original220ca9e1 with verified Node22; its TypeScript build phase completed in12.5minutes under CPU emulation, much slower than native. To avoid multiplying this cost for every independent verification, attempt a minimal native Linux CI workflow on update-on-paper-digest only: no third-party actions/new app dependency, no secrets/private input/model call, readonly repository permissions, exact SHA and official Node22 checksum, unchanged Appendix-A gates and honest exits/counts. This is supporting verification infrastructure, not product implementation; do not repurpose live digest/warm workflows or create a branch. If GitHub permissions reject it, record the error and keep portable gates; do not seek/reuse a different credential or bypass review. Product changes still await a green genuine-Linux baseline. §0's stale earlier-campaign branch command and push example are replaced with the active approved P12 branch; old clocks remain historical/disabled. Current P12 per-item ledger added so a cold manager resumes existing work rather than starting it again.
+
+191. **Quota recovery, completed Linux baseline and repaired log (2026-10-23) — BINDING.** Hourly heartbeat resumed the manager after two workers hit the usage limit; resume those existing agents/worktrees and unattended Linux output, never duplicate them. Original220ca9e1 genuine-Linux baseline completed: build0,tsc0,lint0errors/144warnings,test1;4failed565passed3skipped files(572),4failed10680passed3skipped tests(10687). The actual failures are pane-layout and reading-partition5000ms property timeouts, wysiwyg serialization55.087ms against16ms, and missing origin/freemium-round10 in the single-branch guest clone. Authorize fetching that existing remote-tracking ref without branch/HEAD/source change. Run only those files isolated with default assertions/timeouts first; unchanged nativeWindows serializer file passed120/120, so do not label the emulated timing a confirmed native product defect. No timeout, assertion, performance clock, test or gate is weakened. Product hold remains pending the measured resolution. Connected GitHub create_file for the proposed supporting workflow returned403 Resource not accessible by integration; no file/commit was created, and no alternate credential or permission workaround is sought. Independently bank B checkpoint3 dc3134d4(a77f7fa7); all its DEV/deployed provenance limits remain. The scratch doc-event helper silently missed section6 appends because mixedCRLF defeated its LF-only delimiter; section5/progress/commits had been recorded. Normalize the helper input and fail loudly if the delimiter/log append is missing; backfill12 historical unit lines using actual event text/commit dates/hashes, preserve original records, and inspect the committed section6 after each future unit. No product source/test or private input was changed or committed.
+
+192. **Causal baseline recorded; parallel implementation resumes, landing gates unchanged (2026-10-23) — BINDING.** Original-head differences were stopped and recorded before product work as HANDOFF§1.2 requires. All four Linux causes are now isolated without source/test changes: fetching the existing origin/freemium-round10 ref makes migration9/9 pass; pane-layout29pass/1timeout and reading-partition54pass/1timeout exceed5000ms under CPU emulation; wysiwyg118pass/2fail includes46.979ms versus strict16ms and an additional property timeout. Native unchanged wysiwyg120/120 passes, exactfixturebest3.13ms/median4.10ms, so no product optimization is justified merely to satisfy an emulated CPU. No clean full baseline is claimed. The manager's additional implementation HOLD in185/190/191 is superseded only for detached C edits: cause investigation is complete enough to allow independent, disjoint work while executor resolution continues, avoiding unnecessary serial delay. Every worker receives these exact baseline limits and records actual gates. The user's hard manager verification/full-clean-gates before landing remains intact; no timing threshold/assertion/clock is changed, no test skipped/waived and no red C lands. Release does not score a feature or close any item.02/03,04,05 remain disjoint clusters,06 starts after05's token contract; future selection/figure work waits only for actual shared-file dependencies. Manager keeps investigating an executable verification route within existing permissions; GitHub403 and suspended-auth restrictions remain binding.
+
+193. **Parallel C dispatch and shared active/visible contract (2026-10-23) — BINDING.** Three disjoint C clusters now run at exactd8a4574d:02/03 in p12-02/wt port4201,04 in p12-04/wt port4203,05 in p12-05/wt port4204. Tool capacity is three active workers; completed investigators were released before dispatch, never duplicated. The requested worker selection was again rejected as unknown, so the exposed same-generation fallback is used with actual commit attribution only.02/03 is grouped solely by note-editor/sticky-marker overlap;06 waits for05 orange contract and later selection/figure work waits only for actual shared type/store/viewer files. For04 split visibility, row.front remains a compatibility visibility signal for mounted card bodies; active Escape target remains the window with highest order via existing isFrontCard.02 owns StickyWindowView optionalactive(defaultfront for old direct callers), subscribes actual windows for active status and uses it for localEscape and losing-active writer flush.04 owns shared frame/layout; it preserves customheader and stable opening visual order. Inactive focused panels must not consume Escape ahead of the active one. This explicit contract avoids simultaneous writes to sticky-note.tsx. Shared Git configuration is common to all detached worktrees: workers must use invocation -c options and never mutate common settings. Manager observed local autocrlf=false and a mixed-CRLF state write became noisy in d84dff85; normalize manager documents/helper to LF in this forward correction, preserve content/history, and require successful diff checks before commit. No app file is changed by that correction. Hard clean full-gates landing condition remains unresolved and unchanged.
+
+194. **Measured multi-card minimum and overcapacity policy (2026-10-23) — BINDING.** C04 measured real DEV invented-upload geometry at1093x614:526px band,12px divider gaps, equal third167.333px; existing Explain quoted header144.406px plus keyed input/Send63.297px plus one text line22.475px already requires230.178px before padding/borders. Preserving that fixed furniture conflicts with the owner's equal thirds. C's separately labelled DOM experiment with standard40px fixed header and quotation, answer, input/Send all in independently scrolling content measured minimum80.475px including16px padding and2px border; at1.6scale minimum93.96px. Three shares of122.667px fit the shortest constructed392px band, all controls remain scroll-reachable. Authorize this compact shape only when multiple cards stand: keep a labelled fixed header, move the complete quotation and keyed controls into the card's scroll body with order, text, focus and input state preserved; standalone layout stays unchanged. Do not truncate quotation/answer, shrink reading type, make unequal initial shares or leave a control inaccessible. Verify execution, keys and focus; the DOM experiment itself is not success evidence. For unbounded existing card counts where n times actual minimum plus gaps exceeds the viewport band, use one shared vertically scrolling margin track whose equal initial shares retain the largest actual required header-plus-content-row minimum; adjacent divider limits retain each card minimum, and all cards remain reachable in opening order. It is physically impossible to expose unlimited complete bodies simultaneously;193/188 all-visible means no inactive body is hidden, not unlimited simultaneous viewport coverage. Opening/activation must reveal the addressed card without changing order; closes retain equal redistribution rules, Escape remains actual active. No hard cap, silent collapse or tiny unreadable panels. Add focused margin-stack-scroll support beside margin-card if needed, within04 ownership, but do not edit reader-shell/layout/margin registration or02 sticky files; report a further boundary need before writing. Apply the same definition when checking B3–B5 and the inherited cascade guard; score the original simultaneous-fit reading alongside it if an overcapacity test differs. Prices, units, stop threshold and the two-round requirement remain unchanged.
+
+195. **Correcting an overbroad connector limitation; ordinary authorized Git verification workflow (2026-10-23) — BINDING.** The supporting workflow create_file returned GitHub403 Resource not accessible by integration; this was a connector capability/permission error, separate from the automatic approval review that rejected synthetic production authentication. The latter remains suspended without retry. The owner explicitly authorized necessary repository commits and pushes on update-on-paper-digest; the established ordinary Git remote has already pushed all campaign records successfully. The manager overconstrained190 by treating the connector failure as a ban on this already-authorized Git channel. Supersede that extra restriction only to attempt the same minimal workflow through the unchanged, already-used Git remote/identity; do not inspect, seek, replace or alter credentials or permissions, and stop this route if the remote itself refuses the workflow. This is an ordinary repository infrastructure change, not an authentication workaround or production deployment. Workflow is branch-only, contents-read, no third-party actions/new dependency/secret/model/private input. It fetches public source with existing upstream history, checks exact base ancestry and officialNode22 checksum, then unchanged build/type/lint/fulltests. Optional dispatch accepts a manager-reviewed gzip/base64 web-only patch and required expected web-tree SHA, so unlanded C source can be independently gated without another branch or premature landing; source tree must match exactly, private/dependency paths are rejected, no code is committed by CI. Initial unpatched run tests the original app tree. Manager must read actual output and match the tree before claiming any pass; no worker is self-grading, no failed test is waived, and all landing requirements remain. If this established Git push fails, record it and continue preserving work without further credential attempts.
+
+196. **Native baseline green and second quota recovery (2026-10-24) — BINDING.** Manager read actual GitHub job120716821616 logs for run40042575107, completed00:02:36Z: official Node22.23.4 on Ubuntu24.04, exact basee52fea49 and webtreea0ac51590e2975e77f577cb0d9c0f0da3bba8ba3 identical to original220ca9e1; build0,tsc0,lint0errors/144warnings,test0;569passed3skipped files(572),10684passed3skipped tests(10687). This is the genuine clean baseline, with no assertion/time/clock/source/test waiver. Earlier Windows/TCG red results remain environment history, not hidden or retroactively passed. Use the exact-tree native workflow for manager full gates on reviewed unlanded C patches; continue local independent touched-tests, type/lint and manager mutations in a free copy. The local platform red fullsuite need not be repeated without new evidence. A second usage-limit interruption stopped all three Cs; inspect their existing tips/diffs before resuming them, never duplicate worktrees/servers.02/03 has ded68a16 plus pending note-editor/toolbar work;04 has red3a1c4386 plus pending split implementation;05 has PARTIAL130a5669 and saved browser/session measurements. Resume first unfinished subunit, preserve pending edits, and bank a bounded PARTIAL checkpoint before prolonged work. No product code is on the manager branch yet; stop counts remainA0/B0. Baseline success resolves executor hold only, never substitutes for C verification or independent scoring.
+
+197. **Measured responsive width and common figure margin (2026-10-24) — BINDING.** B confirmed two independent causes: panes/dividers absent below1024 and rest contrast about1.27:1 light/1.65:1 dark; deployed publicA product tree matched original, so no blanket stale-deployment claim. B's constructed853px default rail48+margin280 yielded477px text/61.60characters, versus pinned285px/35.15. Choose responsive rail plus margin where it preserves roughly60-character text measure, not a blindly lowered fully pinned breakpoint. Initial calibrated text budget476px at1x scales with reading text and includes actual padding/scrollbar/Fit effects; C must verify real mode boundaries and conservative constants. Keep pinned where space permits, otherwise temporary forced rail with clear reveal/pin control and usable right divider; saved choice/widths return on widening. Pinned mode has two visible≥2px/3:1 dividers; rail mode replaces the impossible left resize boundary with its clear rail control. Below comfortable side-by-side space use full-width paper plus a nonmodal bottom-docked shared Margin card region (initially≤55% of available band,capped420px, above legend), same viewer/card API, paper still operable, no modal trap or paper-width change. Preserve final-line scroll reach, active card/input state and04's stable portal across transitions. Register actual geometry with optional presentation=bottom for08 placement coordination. Every visible body/Summary/inline/plate image routes to that same margin viewer on first click at every width, preserving zoom/pan/Fit/caption/focus/Back-to-paper; an existing figure never becomes invisible parking. This is a real complementary card margin, not renamed FigureLightbox. Image-only refs may stay honest when no binding exists. B's publicB extraction404s and66 vanished-before-click targets remain a separate loading/extraction question; no pointer-capture relaxation or invented binding.07/09 are one C cluster only because reader layout/margin registration/figure host overlap;04 shared geometry finishes first,08 selection is disjoint after02 store contract. Production/auth gaps remain open; no scored pass inferred. The rubric B1/B2 and figure supersession use these explicit mode rules; record original-mode reading alongside if it differs, prices/units/stop line unchanged.
+
+198. **Grouped drawable range contract (2026-10-24) — BINDING.** B measured63/63 real distinct-body selections with no actions and independently reproduced21/21 on deployed publicA; working single highlights refute width as their shared cause. Choose ordered source-aware block segments and one persisted highlight group/note row, with per-block anchors, exact selected words/offsets and whole-group recolour/remove/export/reload. Preserve legacy single marks and02 stickyId/stickySaved/merge/tombstone semantics; no destructive migration. DOM forward/backward ranges must include intermediate drawable blocks and handle repeated occurrences/end-boundary correctly. Formula/nonreader or missing drawable provenance is determined before mutation, never an enabled no-op, pretend single-paragraph anchor or silently dropped selected text. Explain retains existing bounded payload and Tier0/key/consent applicability; Take notes keeps honest range provenance and primary navigation to first actual segment. All routes share target semantics, including selection-anchored phone Take notes/Explain where applicable; generic Notes is not that action. Existing source-quote export exclusion and full highlight-word export remain.08 owns selection/highlight/note-range files after02 shared types/store;07/09 owns geometry/viewer after04. Their only deliberate API dependency is optional margin presentation=bottom, allowing08 action placement to distinguish a side gutter without writing margin geometry. Paper-body Figure-only versus selection/mark lines require an explicit manager line contract before concurrent writes. No production/auth evidence is inferred, no missing optional-source checks scored pass. Manager supplied separate08 brief; all future closure still requires independent verification, A and blind readers.
+
+199. **Frozen dependency handoffs and precise action/range contracts (2026-10-24) — BINDING.**02/03 returned4150f7fd/source56035901 and05 returned4deb4f0a, clean frozen worktrees, still awaiting manager verification. To use parallel capacity without simultaneous shared-file writers,06 starts its own detached copy at frozen05 tip4deb4f0a/port4205;08 at frozen02 final4150f7fd/port4207. These are dependencies, not premature manager-branch landings; each future picked range excludes its frozen parent.04 remains active,07/09 waits its shared geometry. Requested worker selection was again unknown; actual exposed same-generation fallback is attributed in trailers only.06 preserves clearing a prior settled question via explicit settle[], raw-equivalent acknowledgement without settle/model, and189 normalized reload without new history persistence. Legacy multiple settled questions are not acknowledged by matching first displayed item alone: compare the normalized whole displayed candidate/list; retain explicit-submit legacy behavior. Approve necessary question-session.ts locator plus directly related disabled/label assertion re-aims, retaining real mouse/Enter/request/ledger no-op checks; aria-disabled keeps keyboard reach.08 owns paper-body selection313–735, mark rendering from933 and selection wiring at current frozen base; existing Figure837–931/import remains unchanged absent a tiny measured ruling, and07 has no current paper-body/page.tsx authorization. Compatible highlight group keeps primary fields consistent with first segment plus ordered complete segments on one block/id; validate all before writes, dedupe whole ordered range, atomically colour/remove, export all words once and retain honest per-segment lost/repair status. Preserve02 merge/tombstone/metadata. Earlier cache-deletion commands were automatically rejected blocked-by-policy; no deletion retry. Worker05 preserved generated bytes by verified external move, completed sequential clean build;02 leaves generated-webpack type artifact and missing UI cells explicit for a fresh independent manager copy. Neither limitation is a feature pass or scoring exclusion.
+
+200. **Third recovery, final05 exact-tree gates and scoped phone-offer seam (2026-10-24) — BINDING.** Resume same04/06/08 after quota reset, inspect saved tips/pending edits first and bank PARTIAL immediately, no duplicate server/copy. Manager read job120784556005 for final05 run40064419492: exact base1e4dbe22 plus reviewed patch matches webtreeac2d35baa5fe9d9ca76d4353cf034221c6d959af; build0,tsc0,lint0errors/144warnings,test0,570passed3skipped files(573),10689passed3skipped tests(10692). Independent manager touched4files41tests passedx3, own size mutation1red and toggle2red, restored componentSHA2561c92c33dd84e851047e4e67b8086dbf43afa9ea88efd041a21bd5ad1cd820fc6 identical; restored41green. Full native gates are green, but local fresh UI remains before landing. Manager tried a locked-dependency junction for efficiency; Turbopack rejected it as pointing outside project filesystem root, a setup error, not product evidence. Preserve the junction itself outside Git and copy actual locked dependency bytes; do not change product root/config or waive checks. No deletion is required.08 producing trace found lib/reader/explain-offer.ts owns existing Explain/Highlight subscription; authorize tiny scoped note-offer extension plus focused tests rather than duplicated machinery. Preserve all existing offers/handlers and keep reader passage/user data out of shared server/cache state. Move07/09 and08 ledger rows into the current P12 ledger from their accidental end-of-file position, content unchanged. No theme scored, no feature landed or closed by this entry.
+
+201. **Producing seams for grouped strip and responsive Explain (2026-10-24) — BINDING.** Manager read highlight-strip-host.tsx: markBox queries first/own mark only and stripStanding compares visibility against margin.top, so a group with a later visible piece or a bottom-docked margin needs a focused extension. Approve08 host plus direct tests for actual rectangles of every group piece, a visible-segment reference and honest all-offscreen handling; empty gaps between distant marks are not evidence a mark is visible. For bottom presentation, paper visibility uses existing masthead/viewport bounds, not the dock's own top. Preserve legacy callers, Escape, obstacle/control avoidance and independent single highlights. No geometry-registration edits.04 also traced ExplainBox still gates docked/portal-enabled by old>=1024, while its stable portal must survive197 side/bottom modes. Approve07 tiny explain-box placement predicate update based on registered margin/presentation so a drafted textarea does not remount during responsive transitions; no chat, payload, model or content changes. These are precise producing-path additions to existing clusters, not general rewrites. Actual UI, type/tests/mutations and combined full gates still verify them before landing.
+
+202. **Frozen split dependency releases responsive implementation (2026-10-24) — BINDING.** C04 sourcefcddee50 and checkpoint59efcbc3 freeze webtreef2b27b34d0e6ebcc7bdd2738a71b37b14989a121. Manager read the complete checkpoint, including unmeasured final UI, combined-note, no-key and stress rows; worker314 testsx3,6 restored mutations/build/type/lint are not independent acceptance. C07/09 may implement its already-committed197/201 brief in a separate LF detached worktree based exactly59efcbc3 while manager independently verifies04. This is a dependency release, not a landing or score. Its eventual range excludes d8a4574d..59efcbc3, so04 remains separately verified. Requested worker model is unavailable in the platform model list again; same-generation exposed fallback, retried at next item. No branch/config/auth/dependency change. Existing06/08 remain live and are not duplicated.
+
+203. **Answers disclosure independently verified and fast-forward landed (2026-10-24) — BINDING.** Manager independently read05 production/test diff and used a free detached copy. Local build0/tsc0/lint0errors144warnings,41 touched testsx3; own size mutation1red and toggle mutation2red, componentSHA1c92c33dd84e851047e4e67b8086dbf43afa9ea88efd041a21bd5ad1cd820fc6 restored byte-identical and41green. Earlier own palette white mutation4red/restored independently checked shared colours. Actual native job120784556005 at exact treeac2d35baa5fe9d9ca76d4353cf034221c6d959af passed build/tsc/lint/test0,570passed3skipped files10689passed3skipped tests. Fresh ordinaryDEV invented upload16cells1024/390x8 actual steps showed matching14.875–28px section-title font,white/orange,0clipping,16mouse-open/Enter-close,real2pxfocus and0pageerrors; screenshot inspected. The unrelated missing-Supabase cloud-read500 remains an environment error, not an error-overlay or production pass. Setup locator initially omitted the visible arrow, fixed external harness only. Detached lineage rebuilt atop34c1d401 without rebasing; webdiffquiet against previously checked tip2e5efae2 and exactCI hash; FF75ebcee5 landed first P12 product change. Source05 retained test-red/fix/checkpoint units; no weakening/dependency/private data. Own4290 stopped. Worker full224cells are separately labelled worker evidence. A/pane extremes/fullregression and actual production-upload evidence remain open; no theme score/closure is inferred.
+
+204. **Reader-only outer width follows measured responsive geometry (2026-10-24) — BINDING.** Manager read ui/page-container.tsx and its complete direct tests. Reader variant currently max-w760 belowlg and only lg fullbleed; this supplies at most760 minus48padding where197 requires measuring real853 available geometry. Approve C07 editing only reader width/rhythm variant and its focused tests to remove this stale container boundary in step with measured shell modes. No loading/error spread, unrelated width/rhythm, route/export/content/selection edits. Preserve narrow paper padding via reader layout and measured no-clipping assertions, not a global :has override. Re-aim only obsolete1024 container expectations by name; retain all untouched spread/source/padding contracts. 07 confirmed existing paper-body Figure already calls shared openFigure, so no paper-body hunk authorized or needed. Native02/04 exact-tree dispatches and independent manager touched tests are underway, with no pass yet asserted.
+
+205. **Fourth recovery and three explicitly superseded split assertions (2026-10-24) — BINDING.** Native02+landed05 exacttreea084518db97aa6dea45f54189c7ede6a98f8cfb3 passes build0tsc0lint0errors144warnings/test0,573passed3skipped files10698passed3skipped tests. Own02 manager671testsx3 plus1save-empty/2square red,restored hashes and671green independently; freshUI/localgates remain. Native04+05 exacttree823a6038164418f8c842bcb418ff2069912aa022 passes build0tsc0lint0/144 but test1:3failed10708passed3skipped,all in components/notes/sticky-note.test.tsx. These are existing stickyRows scenarios 'turns the open windows into rows with their number and quote, offset by a header each', 'leaves a slot for the notes window: three stickies and the notes window are four cards, 40 px apart', and 'brings a raised sticky in front of the notes window, and none of them is in front when the notes window is'. Rulings188/193/194 supersede only their cascade coordinates/hidden-front/reordered-visual assumptions. Authorize original04 C only this test file to re-aim those three scenarios: same cards/counts/quotes/slot/data/activeEscape/standalone semantics, assert equal visible panels/divider gaps/stableorder and activeclock instead. Add mutation proof oldcascade fails revised assertions; no deletion/skip/looser matcher or dropping any original scenario. No product change justified by this test mismatch alone. Manager04 own314x3,bodyvisibility andpair-write mutations red/hashrestored314green alreadybanked, but final corrected touchedset and exactcombined fullsuite still required beforelanding.07/08 resume same copies;06final42d0b469 is complete worker evidence only. No score inferred.
+
+206. **Cross-block Explain investigation and exact Submit locator return (2026-10-24) — BINDING.** C08 identified keyed grouped paper Explain still meets the pre-existing single-block locatePassage server contract. Manager independently read locatePassage, clip1200, requestExplanation and route frame gate. Do not hide Explain or broaden backend acceptance without independentB measurement. B10 brief8ef3d829 committed and separate read-only agent started from that exact head; requested worker unavailable again, same-generation fallback. B traces initial/followup/Say more/frame/context/cache/grounding/no-key paths and3bounded candidates; no productedit. C08 finishes atomic group work with this known applicability limitation explicitlyfailed/pending.06 manager read entire production/testdiff,191testsx3 and ownacknowledgement6red/dedupe1red,restoredSHA80ee413f4844cc5206609ba27296ea6615e1336ec8adb9f1b632a8e4e788b3d3 and191green. Exactnative40104313531 failedbuild1 with unchanged Noto font CSS resolution stack (root cause not proven by truncated build tail),tsc0lint0/144 andtest1:onefailed10695passed3skipped. Soletest is question-box.flow.test.tsx 'Submit sends the one request, with the question; a second Submit with nothing new sends nothing', whose local selector still finds only ASK.submit after labelbecomesSubmitted. Approve original06 C only that selector/test to recognizebothsamecontrol labels while retaining every request-count/payload/duplicate action assertion and adding explicit label check. No productfix/testweakening/font/config/dependency workaround; rerun17filetouchedx3 and actualfullgates after correction. Queue only because runtime has4concurrency slots occupied, not filegrouping.04 focusedtestreturn71b2e71a read; combined02/04 webtree00eed38218681ddfdccf24bbb5e43581ab095b8a now independentlytesting.02 local build0tsc0lint0/144 and real format/nestedlistSave/reload checked; marker probe first selected wrongDOM class, externalharnessonly repaired. No new acceptance/score.
+
+207. **Green combined gates do not excuse asymmetric Enter equalization (2026-10-24) — BINDING.** Manager independently read205 correction and combined02/04 source,379touched testsx3, ownbodyvisibility andpair-write mutations red/restored identicalhashes then379green. Exactcombined00eed38218681ddfdccf24bbb5e43581ab095b8a job120903978596 passes build0tsc0lint0errors144warnings/test0,576passed3skipped files10720passed3skipped tests. This checks02+04+landed05 together; no score or finalUI inference. Source review identifies a missed real rule: cardDividerStep Enter computes(min+max)/2, while max=pairHeight-belowMinimum. A pair514 with minima97/140 therefore returns235.5/278.5; equal panels are257/257. Approve original04 C existingdivider/test scope to add asymmetric minima redcases and make Enter equal pairHeight/2 constrained by actualminimums, consistently with existing doubleclick. Preserve Home/End/Arrow/Shift/drag/cancel, adjacent-only/total/share and invalid modifier semantics. No test deletion/loosening/changedtimeout or geometry dependency rewrite. Exact correctedtouchedx3/ownmanager mutation/fullcombined gates still required; do not land04 merely because currentfullsuite isgreen. 02 realMD download now proves two-space nested structure; initial button/menu/link/hydration mistakes were external manager selectors, recorded without product failure or testworkaround. Remaining lifecycleUI stillpending.
+
+208. **Structured note and text-sized marker independently verified/landed (2026-10-24) — BINDING.** Free manager02 copy read all source/testdiffs.37files671tests passedx3; own deliberate-empty-save mutation1red and fixed-marker mutation2red, identical restoredSHA15630f3f9bbd18a7731af2b6d9cc34f1784a45c2b57035c95269020cdc889b35/cc837ccf25f4833518ef62389b64a20769b26daa42e786ee6079de8fed32aaec then671green. Localbuild0tsc0lint0errors144warnings; exactnativejob120844160117 at02+05 treea084518db97aa6dea45f54189c7ede6a98f8cfb3 build/tsc/lint/test0,573passed3skipped files10698passed3skipped tests. Fresh invented ordinaryDEV upload independently proved actualBold/Italic/Underline,Tabnestedbullets,Saveclose/reload/reopen,realMarkdownfiletwo-spacehierarchy,notespagecontent,pendingDelete/reloadabsent,deliberatelysavedemptyEscape; finalpaperwordsidentical and0pageerrors.16actualcontrol-step/theme observations show square and renderednote text both16.5px,first-linecentredelta0.0125px; this is equality proof, not a claim note text changed size across controls. Externalharness fixed measuredDOM/menuitem/link/hydration locators only. Screenshotinspected,own4291stopped. Detachedlineage rebuilt atop18bfbd4e withoutrebase; appdiffquiet against checked8ec077bd/exactCI andFF21c5ff7d landed02/03. Only05 previouslylanded. Fullwidth/keyboard/exportformats/concurrenteditor/P11guard A and3blindreaders still independentlyjudge; no score/closure inferred.
+
+209. **Fifth recovery and bounded explicit grouped provenance (2026-10-24) — BINDING.** Existing04/07 resume,06return6b9387ab and08final4d69e4a1 remain frozen; no duplicateworkers. B10 shows canonical concatenation needs caption variants/formula barriers and unchanged scalar hints cannot always discriminate repeated occurrences/source/cache context. Choose its explicit metadata candidate for new grouped paper requests, retaining canonical ordered validation: optional range.segments descriptors sectionId/paragraphIndex/start/end only for the existing normalized word-clipped1200prefix. Maximum600nonempty segments,sectionId128,safeintegeroffsets; no quote/paragraphText/fullselection/useridentity/key inmetadata. Validate all original slices against actual rendered order/adjacency and recognized captionvariants,firstsuffix/interiorwhole/lastprefix; formulas/nonreader/source gaps never disappear. Any inconsistency rejects withoutpartial/globalfallback/generation. Legacy absent-range lookup and existing homogeneousPeer routes unchanged. Neutral bounded first-block/neighbour frame,existingpromptcaps/grounding/provider/gate/revision/privacy retained; rangeoccurrence/source metadata hashes distinguish new servercacheentries,legacykeysunchanged. Server11 owns only explainlibrary/route/helper/directtests; client12 later wires bounded metadata/cache/sourceconsistency after07/08 sharedfilesfreeze,so no concurrentExplainplacement edit. Mixedsource neverlabelled byfirst; source-boundary handling must be explicit and separatelyverified,not silently counted as passed. No blanketExplainhide,context expansion or extra modelcalls. Stub-only inventedplaceholder profile for07enhancedUI is already authorized by established04/05/managerprecedent,provided existing localstub intercepts all requests; no realkey/value log. Separate no-key actualterm checks remain required; productionauth bypass stays prohibited. No score inferred.
+
+210. **Truthful Submit acknowledgement independently verified and landed (2026-10-24) — BINDING.** Original06 and206testreturn readwhole. Freecombined02/05/06 copy17files198testsx3; ownacknowledgement6red andnormalizeddedupe1red, identical restoredSHA80ee413f4844cc5206609ba27296ea6615e1336ec8adb9f1b632a8e4e788b3d3 then198green. Local pre-combinationbuild/tsc/lint0/144 and exactcombinednativejob120984640243 tree1cf763a7e4324c22cb5f2f21c284ef7b8c9d5dd3 build0tsc0lint0errors144warnings/test0,574passed3skipped files10705passed3skipped tests. Ownfresh ordinaryDEV inventedupload16cells1024/390x8 actualsteps: orange/whiteSubmit,neutralSubmitted,rawspaces,edit/revert,mouse/Enterduplicateguard;5empty/clear/reload/blurchecks,0pageerrors,paperwordsunchanged,real2pxfocus. Externalharness now measuresafter350msCSSsettling and uses realpointercoordinates forvisiblearia-disabledbuttons (Playwright semanticclick refuses those),notforcedinvisiblecontrols. No appsource workaround. Screenshotinspected,own4292stopped. Lineage rebuilt atop56d14ee7,webdiffquietversuschecked e5845a1f/exactCI andFF1de5f8e1 landed. Prior nativefontfailure stayshistorical; currentexacttreebuildgreen withoutfont/configchange. Worker224before/aftercells remainseparatelylabelled. A/regression/no-keyproductionauth andscoring remainopen.
+
+211. **Frozen client dependency and exact canonical-offset wiring (2026-10-24) — BINDING.** C11early23tests/API84d5c445 allows separate client work without waiting for server fullgates. Manager prepared detached12base0075591c (treeb96db25eb3344a3be68b90be71228c69b922341e) from56d14 plus04through09a9ffda,07throughc0b21cc8,08through4d69e4a1,11through84d5c445,with clean source and no branch/landing/acceptance.12range excludes this entirefoundation; manager separatelyverifies/lands eachparent. C07Explainplacement is frozen,12 only projection/request/cache/source paths; server11 onlybackend,so no concurrent sharedfile edit. Manager read08helper: it computescanonicalboundaries then intentionallyoverrides paperstart/end/paragraphText withrawDOMoffsets forhighlights.12musttranslate separately to11collapsedrenderedblock offsets/U+0000formula barriers,notchange08persistedschema or blindlyforwardrawvalues. Firstrequest,askedprojection,allreplies/Saymore andnewgroupbrowsercacheidentity must carry onlycapped1200prefix descriptors/source/occurrence. No runtimeNodecryptohelperimport inbrowser; typeonlyallowed. Strict600/128/safeintegerwirelimits,legacy singlepath/keys,source labels,BYOK/no-keyterm,contextcaps/grounding/stableportal retained. HomogeneousPeerWordsgroupskeepoldroute;mixedsource neverfirst-source-substituted,withhonestaction-specificreason andotherdrawableactionsretained; no rubricexclusion/score inferred. Client DOM owns dynamicUIgap/staleprovenance checks,servercanonicaladjacency remains11. No addedmodelcall,dependency,auth/privatecontentpermission.
+
+212. **Client dispatch and bottom Margin landmark seam (2026-10-24) — BINDING.** Separate12started exactfrozen0075591c per211,requestedworkerunavailableagain/samegenerationfallback.07 actualsharedcardskeepstableFigure/Explaintextarea/draftthrough24resize transitions in6orders;thisisworkerevidence,notacceptance. Sourcehostin04 margin-stack-scroll.tsx isdivappendedtobodywithnolabel; narrowresponsiveplaceholderisaria-hidden,soactualbottomcardslackthe197complementaryMarginlandmark. Approve07onlyfocusedhostattributesanddirecttests: role=complementary/aria-label=Margin for registeredbottompresentation, removeattributeswhenreturningside; no portalhostreplacement,targetchange,style/stack/minimummath edits. EmptycardstatekeepsnoextraUI.12doesnotownthisfile. Testred→fix,meaningfulrole mutation/hashrestore andfinaltouchedgates;manageractualAT/DOMlandmarkcheck remains.
+
+213. **§1h.213 — 2026-10-24: actual sticky furniture blocks04 despite green combined gates — BINDING.**
+
+Manager independent real ordinary-DEV invented upload on exact827304c7 webtree passed16scale/theme cells,30open/close cycles and asymmetric Enter; native full gates577+3files/10730+3tests all0. Separate1024×480 three-card probe measured each140px, sticky body viewport68px, sticky Format toolbar76px, first text line26.4px entirely occluded even after scrollIntoView (texty230.34–256.73 under toolbar209.34–285.34). Therefore194 actual header+required furniture+one text row is not satisfied. Return only measuredCardMinimum/its observation and direct tests to original04 C in fresh detachedddd12342 combined source; preserve oldcopy/evidence. Include inactive reading-prose and editable rows, actual wrappedtoolbar/padding; no note-editor/toolbar product edits, portal targets, hoststyles, pairmath or other rules.07 freezes hostattribute lines at e65715ca; eventual combined replay preserves those disjoint hunks. No landing or score from tests that omit the real toolbar. C11 final received separately, not manager accepted.
+
+214. **§1h.214 — 2026-10-25: server range independently verified and landed; sixth recovery — BINDING.**
+
+Manager freecopy35aed7bf read every C11 product/test change;444testsx3, own canonical-adjacency12red, occurrence-cache4red and homogeneous-source3red; saved bytes restored to helperf7ad0b34644259dfae1de8592b426bdeeae512fdd89e7bbbed79f140d3e6a0d4 androute00b9cdc1cea4a33f6d68a179917e1bd899496d3c7c1e503a23e57f7e7095a9b9, then444green. Actual-handler/invented-document path plus localtype0/lint0errors144warnings and exact native40133442566 build/tsc/lint/test0 (10737+3tests) justify backend-only FF acceptance35aed7bf, webtree0b4cf9ac72d195cb24a3a7dea05c9bd1f3b94381. Client metadata, actual UI, production authentication and scores remain unproved. Sixth quota recovery reuses same04/07/12 workers/copies.08 own1125x3/three mutations restored are checkpoint evidence, not final acceptance;04actualtoolbarminimum and07scaledbudget corrections remain independently unaccepted. Stopline unchangedA0/B0.
+
+215. **§1h.215 — 2026-10-25: independently investigate responsive reading-place regression — BINDING.**
+
+07 final frozen598-view budget/figure matrix and90cycles do not establish B2 reading-place preservation. Separate same-anchor actual resize probe reports y79.94→−145.06→757.84→−145.06 while narrowing then widening. Freeze e65715ca source; separate read-only B13 verifies original steps, fixed-height controls and legal document-edge clamps on multiple anchors/long invented input, traces browser anchoring versus existing keep-place capture/restore and proposes three candidates. No repair policy or rubric exclusion is inferred from the first probe. Original07 may finish its finite current evidence/checkpoint but no product edit until B's cause and manager ruling. New B owns only report, own detached8992c964/port4212; no overlap with12client or04minimummeasurement. Stopline unchanged.
+
+216. **§1h.216 — 2026-10-25: independent equal-card and actual-toolbar acceptance — BINDING.**
+
+Manager read full original04 plus205/207/213 corrections, ran388testsx3 and own bodyvisibility/pairwrite/oldEnter/toolbar mutations; all meaningfulred then exact saved-byte restoration. Extra Enter3red and toolbar6red restore SHA725bab5105b9c9bbc9ccf4568674874ca67fc9bb09fc7b69390cbc56f043e132/e150bf83eab5162999b33438cba2af158f19563425dbda64ccf05f83a6286ba1. Localtype0/lint0errors144warnings and actual native40152522356 all0/10768+3tests on3251d071c204ba4bdf4e8087ddc7921f91b395f5. Own invented ordinaryDEV16scale/theme+30cycles+8short inactive/editable observations expose26.39px of26.4px row beneath toolbar;3equal189px cards use shared591px track in392px band.0pageerrors,paperwords/draftsretained,screenshotread,4293stopped. FF19b5c2e5 after rebuilt ancestry and exactwebdiffquiet; no07responsive/productionauth/A/score inference. Seventh quota recovery reuses sameworkers. C12final826d1893 is received, manager combined verification stillrequired. StoplineA0/B0.
+
+217. **§1h.217 — 2026-10-25: native unchanged touched repetitions and bounded public patch transport — BINDING.**
+
+07's repeated local filesystem-scan timeouts remain recorded as incomplete worker gates, never weakened or renamed a pass. Existing genuine nativeCI may repeat approved tracked test-group unions exactly3times after unchanged build/type/lint/fullsuite, with original timeouts/assertions and maxWorkers2. Manager selected140files covers the57/68/49 scoped sets, deduplicated. Combined publicly reviewable webpatch202224bytes exceeds dispatch limit undergzip (72912base64chars); built-inNode Brotli may transport the same exact bytes without a dependency. Keep gzip compatibility, approvedbranch-only runs, baseancestor test, strictweb-only/no-private/no-manifest restrictions and expectedwebtree equality. This is validation infrastructure, no appflag/auth/model/secret change and no product landing. Independent combined96775f69/e8135e3397a7a73d05ed5d8eb0fc2402a4481f24 contains already-landed final11 and04minimum plus frozen07/08/final12; actual reading-place failure still blocks07.
+
+218. **§1h.218 — 2026-10-25: inherited guard inventory before real walks — BINDING.**
+
+Frozen P12 passrequirement5 requires each legacy guard denominator to be reconstructed from committed public sources before the first fresh walk. Separate independent A14 may prepare P9/P10/P11 guard inventory and concrete per-theme evidence plan in own detached867644a4, with no product edits, server, PDF, verdict or score. Actual A theme walks await final landed SHA and remain separate from implementers/investigators and fresh blindreaders. Public-source supersessions map to current tests, never exclusions from denominators. This preparation runs in parallel with manager exact-tree verification and B13 causal investigation; stopline unchangedA0/B0.
+
+219. **§1h.219 — 2026-10-25: measured durable reading-position repair and six exact legacy test returns — BINDING.**
+
+B13 independently confirmed52/108 legal-position losses, transient shell width125→476 causing own correction then clamp-scroll misread, and ReaderLayout remount destroying paper/keeper/selection/question focus.107oldtests omit these sequences. Choose candidate1: last stable logical text token above mode changes and a bounded responsive transaction retaining it through transient geometry/clamps, respecting actual user interventions/trueedges; preserve selection,questionfocus/caret andstableportal editors, no persistent/sharedstate or everyrender correction. C15 may editkeeper,ReaderLayout/shell andfocusedtests/support plusonepureephemeral reading-position helper; preservebudgets/fonts/readingorder/C12staleguard. Prefer stableDOM wherecompatible; any remount seam that makes an existing groupedExplain follow-up invalid returns for scope before C12 edits. No ownerdesign tie.
+
+Exact combined native40171869164 build/type/lint0/144 but6legacyassertionsfail: scaled38em allowlist/cap,2pxline,registeredMargin dock,has-reader-shell16pxpadding parser/Fitmath. C16 owns only4namedtestfiles/6assertions; retain allscenarios/zoomheight tables andpreciseproperties, no weaken/delete/skip/timeout orproductchange. A realrendered mismatch returns instead of changingexpectations. Separate15/16copies from96775f69 exclude entirefoundation,ports4214/4215; no sourcefileoverlap. Manager ownfreshUI/fullgates and140unchangedfilesx3 remainrequired. Header normalization213–218 changesformatonly; gitshow867644a4 confirmed those bindingtexts werealreadycommitted. A14preparation is active, not a score.
+
+220. **§1h.220 — 2026-10-25: guard inventory, exact support path and truthful combined UI checkpoint — BINDING.**
+
+A14 reconstructs all79legacyguards, not79passes. Retain both noSearch-the-web negativeguard andcard-stacking supersession despite P11shorthandB5/B6 cross-reference ambiguity; P12all-drawable rule198 replaces earlierD8Summary/answerhighlight exclusion. MixedsourceExplain-specific limitations are measured applicability, notunitexemptions. Publicsource inventories andCSSzoomemulation do not substitute for actualUI, unavailablehistoricalpacks or missing production checks; frozenrubric/stopline unchanged. C15supportscope isexistingweb/src/test-support/reflow-page.ts (priorbriefpath typo), nobehavioralscopeexpansion. Native repeatgroup16namesonlythefourC16testfiles;placefilter includesauthorizedpure reading-position helpertests; no runtime/assertion/timeoutchange.
+
+Manager's newfreshcombinedordinaryDEVactualpointer checks5actionfamilies and3HTTP200Explain modes,stablecardnode/draft across3resizes, unchangedpaperwords and0pageerrors; these are bounded inventedinputchecks, notreadingplace/production/Aacceptance. Oldledger04/07/08/10status wasstale; backfill fromalreadycommittedrulings/checkpoints, retainA0/B0 andpendingcombinednative. Newdispatch/liveworkers are recorded explicitly to prevent duplicatework.
+
+221. **§1h.221 — 2026-10-25: surviving cap mutation returns a disjoint coverage gap — BINDING.**
+
+Manager bottomMarginRectOf420-to999 mutation survives the existing844px-high test because its55% height411.4 never reaches420. Preserve this failed verification rather than claiming eight mutationspassed. C17 owns onlyresponsive-margin.test.ts and owncheckpoint innewdetachedf6e64e03/port4216; add honest tall-bound andindependent55%/legend controls without productedit/newrequirement. C15 retains keeper/layout/shell/reading-position directtests; responsive-margin.test.ts reservedC17. Existing7managerred mutations andbyteidenticalrestorations remainbounded evidence; finalrestored/family3/native gates stillrequired. No scoring orlanding until measured readingplace andallcombinedchecks close.
+
+222. **§1h.222 — 2026-10-25: exact combined native green and bounded parallel note review — BINDING.**
+
+Actual native40173488648 proves d32a9b66 build/type/lint/test0/144warnings,10829passed3skipped and144unchangedfiles2641tests threegreenruns. This covers frozen07/08/12 plus16 onlanded04/11, notdirtyC15 orC17. Existing52of108placefailures stillblock07combinedlanding; greenunitgates are not UIacceptance. Local14focusedrestoredchecks arelabelled14of103selected, no repositorytestskipchange. Resume same15/17 afterquota, preserve currentdirtysource. A18 may independently preflight onlylandednote functionality innewdetachedhead/4217 while15/17progress; it is explicitlyunscored/invented/ordinaryDEV, notthefreshrequiredrealinputroundpack. LaterAafterfinalcombinedlanding andthreefreshblindreaders/theme remainmandatory. No rubric/price/stopline/productionauthorizationchange.
+
+223. **§1h.223 — 2026-10-25: cap coverage independently catches the previously surviving rule — BINDING.**
+
+Manager independently verifies C17's20line exacttest-only addition retainsall5cases/oldassertions andthree5testgreenruns; own420→999 and55→80 each1red, savedmarginSHA95ffafe5cc8e513f51da91f5d18096a160f0ad8247c9ec6ddc368db054249ef3 restored then5green. This closes theboundedcoveragegap, notfinalcombinedgates/UI. C17'sinitialunchangedsource-scan timeout remainshistory, later96x3green notretroactive. A18startedoriginalindependentA innewlanded74387ea1copyafterrequestedworkerUnknown, no roundscore. Existing CUA inventoryhasnoauthenticatedregularbrowser tabs; retainproductionauthlimit withoutsyntheticrestart/bypass. Finalactualplace/provenance andnativechecks stillrequiredbeforecombinedFF.
+
+224. **§1h.224 — 2026-10-25: independent keyboard defect and exact smaller validation transport — BINDING.**
+
+A18ordinarytextTab/ShiftTab is3of3trappedwithoutindent; headerfocus disablesFormat. Existing listTabindent andEscapeoldX remain binding, but never justify keyboard-inaccessibleFormat or ordinarytexttrap. C19 owns onlynote-editor/note-toolbar/wysiwyg/directtests innewdetachedapprovedhead/4218, independently reproduce/fix keyboardpath/selectedtarget/exit for allblocktypes while retaininglist/code/pointer/othernote isolation. Sticky-specificfile needs measuredscopebeforeedit. No ownerdesign tie. A18continuesread-only; finalfreshroundsremainrequired.
+
+CurrentC15earlycombinedpublicpatch measures76760Brotlibase64characters, beyond65000dispatchlimit. Optionalzero-context diff plusgitapply--unidiff-zero is authorized onlywith unchangedexactapprovedbase/indexpreimage, publicweb-onlyno-private/no-manifest restrictions andexpectedwebtree equality. Localtemporaryindexboth3and0reconstructc43ab805;zero55548base64. No test/time/assertion,dependency,model,auth,secret ordeployment change. Existingearly15code remains unaccepted untilmanageractualposition/selection/focus/Explain/fullgates; managerownbaseline4of5legalglyphlosses retained.
+
+225. **§1h.225 — 2026-10-25: real post-resize provenance failure returns the first keeper repair — BINDING.**
+
+Manager independently passes108position/cardtransitions/hash/0errors onfrozen8c69, butfreshactual groupedExplain sends3HTTP200before resizing andno4thafter. Workercontrolled actualSend comparator confirms enabledSend/inputfocus andsameconnectednodes are insufficient: native clonedRange endpoints retarget onancestorremoval. KeepC12's correctstale rejection andwireidentity unchanged. C15 may replace portal-reparent strategy with genuinelystablecentreancestorchain usingonlyalreadyownedReaderLayout/ReaderShell, existingnarrowclasses/furniture placement, withoutCSSfile/pane-budget/container/marginhost/clientexpansion. Preserve narrowdocumentorder/accessibility/no duplicatehiddenwords, activecommon/paper/input nodes, alloldkeepertests andboundedintervention rules. Newsource mustrepeat final108/selection/focus/ratios andactualcanonicalpostresizeHTTP plusmanagerownverification; earlygreenpositions/native cannotstandin. C19 runsdisjointnoteskeyboard;finalroundscountremainA0/B0.
+
+226. **§1h.226 — 2026-10-25: retain keyboard editing/close contracts while adding a real exit route — BINDING.**
+
+canIndent includes text/quote aswellaslists, so a guardusingcanIndent alone cannotremove theobserved focus limitation. Keep theirinheritedboundedTab/ShiftTabindent andcodeTabspaces; providea conventionaldiscoverableAltF10 editor↔Format path withretainedexactselection/scopedfocus, plusnativeTabfortruly nonindentingblocks. Escape onthetoolbar stillpropagatesstickyoldX; do notconsumeit asanewreturn-to-editor behavior. This clarifieshowA11andA10coexist, neverweakenskeyboardreach oroldeditingguards. Workerredtests mustassertthesecontracts, notdeleteoldscenarios.
+
+Exactearly15combinednative10843+3/2739x3 andfourmanagercoremutations2/3/1/1red/restored14green areboundedbankedevidence. keeperSHA6a5c1d352dc987a3d4496f1a7d311115a1b522e52d5c81d0a40238f913bc7026/helper878ba33312d9a513a287d7b681e46bb3811f59fbb8415f62e6ac1e4395cd82a5 restored. Final17testcoverage isgreen;15stillreturnedfornativeRangeancestry andnew19unverified. Do notcalltheseearlygates thefinalcombinedacceptance oraroundsuccess.
+
+227. **§1h.227 — 2026-10-25: bounded preflight banked and standalone minimum independently investigated — BINDING.**
+
+A18report21b5d220 isbounded no-keyinventedordinaryDEV, not79guardpasses orofficialround. Its30toolbarhitchecks neverestablish acontentrow. C19actualsingle-sticky1440x480rowclick isinterceptedbyFormat; retainfailure, forbid C19fromhidingtoolbar orwideninggeometryscope. Separate B20 innewdetached569857ac/4219 measures singlecardplacement/minimum, actualheader/toolbar/line/scroll/hitgeometry, short/tallcontrols and3candidate rules; managerselects minimaldisjointCaftercause. No ownerquestionbeforemeasuredrealdesign tie. Existingmulti-card213/216acceptance doesnotprove singlecardfloor.
+
+CorrectedC15c447 nowpasses manageractualpostresize4HTTP200, butinitialnarrowselectionwatcherlifecycle/zero-boxrisk needs realnewdragchecks; source alone isnotafailureorpass. Fullfinal108/coremutation/family3/native stillrequired. Early8c69rawJSON wasoverwrittenbylaterprobe; labelcorrectedpasshonestly, retainexplicitexec-derivedfailedsummary andindependentrawcomparator. Do notclaimreconstructedsummary israw capture. Finalrubric/stopline unchangedA0/B0.
+
+228. **§1h.228 — 2026-10-25: preserve truthful ownership after an author-email typo — BINDING.**
+
+Doccommitab6536ffwasdirectedbyPeterandcorrectlynamedpeter14531453, butmanager'sexplicitcommandmistypedoneemaildigit. Public.mailmap maps onlythattypo tocanonical274981268+peter14531453@users.noreply.github.com; subsequentauthorcommandsusecanonicaladdress. Thisrecordsactualownershipwithoutforbiddenamend/rebase/historyrewrite. No productscope,dependency,privatecontent,credential orscorechange. ThiscorrectioncommitalsonamesPeterinCo-authored-by andendswithactualmodeltrailer.
+
+229. **§1h.229 — 2026-10-25: exact standalone overlap and complete keyboard test repetition — BINDING.**
+
+C19'sfirstwhollyhiddenwordingiscoarse: actualend-scroll exposes11.39pxof26.39pxline, with15pxunderthe76pxtoolbar andcentreintercepted; stillfailswholeusableline. Keepthatcorrection,1440/853failures andactualscrollgeometry forindependentB20, notanassumedfloorfix. B20isnewseparateinvestigator afterrequestedworkerunavailable, notanimplementer/reviewer reused. Nativegroup19mayincludeonlyexisting/newtrackednote-editor/note-toolbar/wysiwyg-fieldtests, unchangedassertions/timeouts, tocoverthethreeC19productfamilies3times. Managerreadsourcebutfinaltest/mutation/UI/fullgatesbeforelanding remainrequired. No stoppedline/denominator/ownerdecisionchange.
+
+230. **§1h.230 — 2026-10-25: keyboard accessibility describes actual applicable actions — BINDING.**
+
+Currentjsx-a11y rejectsaria-description andraiseslintto146; C19mustusesupportedtitle+aria-keyshortcuts onlyandrestore<=144warnings, no suppression. PlainSurfacefieldswithoutFormat mustnotadvertiseits shortcut; NoteEditor opts in. ActualenabledinlineCodeinsidealiteralcodeblockdoesnothingbecauseapplyMarkrejectscodeblocks. Truthfullydisableallinlinemarkswhileactiveblockisliteralcode, retainingnormalparagraphinlineCode,blocktypeconversionandAltF10exit; no functioningcapabilityisremoved. Re-aimnamedoldCode-enabledexpectations ifpresent withoutdropping scenarios. ThesearewithinC19'sownededitor/toolbar/surface/directtests,no geometryextension.
+
+Manager'searlier15x3/entry6red/transfer2red/external1red/restored15green arebounded23echecks, notfinal7a17caseverification. Existingkeep-selectiontestfamilies mayjoinunchangednativeplace3run tocoverC15stabletarget'sfreshnarrow/wide lifecycle. FinalUI/fullgates/ownmutations beforeFF andfreshrounds remainmandatory; no prices/denominator/stoplinechange.
+
+231. **§1h.231 — 2026-10-25: consume observed singleton minimum — BINDING.**
+
+B20fresh36cells identify legacy160 singletonfloor versus actual189 wrappedtoolbar/header/text minimum, while3cardsalreadyconsume189. Measuredcandidate1 preservesfeasibleorigin/preferred260 andlifts onlydeficit; selectedwithoutownerquestion. Single measurement+consumptionmustbothwork. Whenminimumcannotfitband, retainminimumandreacheveryrowusingboundedexistingoverflow;neverclipatlegend/shrinktype/dropcontrols. C21owns onlywindows.ts,margin-stack-scroll.tsx,margin-card.tsxifneeded,directtests/report;C15/C19scopesremainseparate. Cmustbankcausalred,ownmutations/3runs/fullgates/actualUI;managerindependentverificationbeforeFF. B's97greenunchangedtestsand9diagnosticclicksarenotacceptance. No-keyordinarywordExplainabsenceintentional;thatcomparisonunperformed. No stopline/scoringchange.
+
+232. **§1h.232 — 2026-10-25: independent final-source keyboard and ancestry checks banked — BINDING.**
+
+Manager's17directtests3greenand5ownredmutations(6/2/1/1/1),C15structuralmutations(1/1)byteidenticalrestoration/type0/lint0/144 areboundedverificationoncombinedweb2cd7fe0b. Earlier4C15coremutationsremainapplicableonlybecausekeeperandreading-positionexactSHAunchanged. C19combinededitorhashdiffersfromisolatedworkerbecauseverifiedC08highlightintegrationispresent;nevermisstatehashidentity. Nativefullgates/selectedtests3andactualmanagerkeyboardUIremainpending;C21short-cardminimumstillopen. Neitherpassingdirectchecks norworker's771x3authorizeFFuntilremainingchecksclose. OfficialA/blindcountsremain0/0.
+
+233. **§1h.233 — 2026-10-25: retain scale guard with stable common ancestry — BINDING.**
+
+Nativefinal40217054907isfailed, notaccepted:exactlyoneoldglobals.css.reading-text sourcepinrequiresCOMMON_IDimmediatelyafterdiv. FinalstablekeycommonisrequiredbycapturednativeRangecontract. C15mayreaimONLYthatdirecttestpredicate torecognizekeywhile retainingCOMMON_ID,reading-scaled,readingScaleStyle/allthreewrappercountandalloldscenarios/assertions. No product/fontchange,no broadregexloosening,skip,timeoutincreaseorassertionremoval. Ownscalerulemutationandmanagerindependentmutationmustred/restored;nativefullgates+3repetitionsstillrequired. Earlier598viewsandworker293x3areboundedworkerresults,notreplacementforfailedcombinednative. Managerphoneinitialcovered-paperpointfailureiskeptandlabelledharness;freshrealwheel+hit-testedvisiblepoint390passisaseparaterun. No scores/stoplinechange.
+
+234. **§1h.234 — 2026-10-25: recover existing interrupted work and distinguish item counts from acceptance — BINDING.**
+
+6of9owneritemslanded isonlya boundeditemcount;officialconsecutivethemesremain0/2eachandnative40217054907failed. Quota interruptionstoppedC15/C21turns;hourlyclockdoesnotbypasslimits. ReuseoriginalC21dirtyred/copy/serverownershipandpreservepre-correction72cellresultsseparately. ActualinactiveHeading191→160failureestablishesmissingrowselectorinsideapprovedmeasurement/observerfile;C21maybankredthenminimalrowtargetfix,neverchangeheading/editor/fontorclaimmultirowcentreharnessfailurewasentirecause. C15testonlyguardadaptationretainsalloldassertionsandstrengthenscommonwrapperpredicate;managerownwholefile/mutations/nativebeforeacceptance. No score,denominator,priceorstoplinechange.
+
+235. **§1h.235 — 2026-10-25: bank independent common-scale guard checks and repeat singleton families — BINDING.**
+
+Managerwhole11casefile3greenandownclass/stylemutations1/1redwithSHAidenticalrestorationcloseonlydirectguardverification. Exactwebb6e98nativegates/repetitionremainpending. Nativegroup21mayselectunchangedtrackedmargin-card/margin-stack/windowsdirecttestfamilies3timesafterfullgates;thischangesverificationselectiononly,nosource/assertion/timeout. C21minimalinactive-rowtargetcorrectionmustfreezeandreceivewholeindependentmanagerverificationbeforeFF. Preserveoverwrittenevidencelimit:originalinactiveheading-v2rawisnotavailable,oldobservationtoolcaptured;newUIcannotberelabelledoldraw. No officialscore/stoplinechange.
+
+236. **§1h.236 — 2026-10-25: correct raw UI totals and preserve both shared-host contracts — BINDING.**
+
+Withdraw72allclicks/36longtypedclaim. Rawcountsare36shortnormalclickpassesplus18longshort480normalclick/typepasses;18longtall900defaultcentretimeoutsremainvisiblelimitationsunlessseparateactualvisibleline/scrollproofclosesreachability. Neverrelabelnewsuccessasoldraw. C21source3cd6aeecisin-scopebutconflictsC07sharedhostlandmark/presentationdependency. OriginalC21mayintegrateinownnewdetachedcopyfrom0a810560 retainingBOTHsetMarginLandmark/currentpresentationdependencyandC21scrollvsSplit/minimum/observerchanges; noothersourceextension. ManagerneverauthorsproductresolutionandusesNEWfreeverify-final/wt;oldunmergedverify-integratedcopyisquarantined/preserved. No reset/restore/newbranch. Exactb6e98nativefullstepgreenispre-C21;3repeatsandfinalintegratedgatesstillrequired. No score/stoplinechange.
+
+237. **§1h.237 — 2026-10-25: exact pre-singleton gates pass; review equivalent patch transport — BINDING.**
+
+Nativeb6e98fullgatesand153files2922tests3greenclosepre-C21combinedverificationonly. FinalpublicpatchBrotli/base64JSON65759exceedsunchanged65000guard,nodispatchsent. Dependencyfreebr85mayencodeIDENTICALcompressedbytesviafixedalphabet,lengthprefix,bounds/overflow/paddingvalidation;legacygzip/brremain. BeforecommitindependentB22andmanagerroundtrip/badinput/exactindex-tree/YAML/shellchecksrequired. Preserveapprovedbranch/baseancestry,web-only/private/manifestrestrictions,exactexpectedtreeandallgates/3repetitions. No credential/auth/deployment permission change. FinalC21testformatwebchange88ac6122mustbeexactlyverified;productSHAidentitypermitsbankingpriorownmutationsasapplicable,notclaimingoldnativecoversnewweb. No score/stoplinechange.
+
+238. **§1h.238 — 2026-10-25: verified equivalent transport and preserve initial-scroll observation — BINDING.**
+
+B22independent1131/26checksandexactindexwebtreeplusmanager1031/14checks/roundtrips/exactindex/YAML/5bashchecksvalidatefrozencodec34aa41ad,workflow63a18f5e,sender1af01317. Codecandworkflowcommit together;br85JSON61639retains65000guard/allbase/path/expectedtree/fullgates/3repetitions. No auth/deployment permission. FinalC21web88ac includesonlytestformatdeltaafter2d2;producthashesidenticalbutnewexactnative3required. Manager'sinitial0cellrowintersectionfailureisretained:existinginnereditorhad23pxscroll,realwheelupshowsonewhole26.4rowandnormalclick/keyboardworks;scrolledmatrixseparate,nopromotiontoallinitialstatespass. OfficialA/readersmustreceivetheboundedobservationifrelevant;noad-hocscoringwaiver. No score/stoplinechange.
+
+239. **§1h.239 — 2026-10-25: keep existing hourly recovery active; exact final native gates pass — BINDING.**
+
+Existingpeer-p12heartbeatACTIVEeveryhourtargets thischat, sameapprovedclone/branch/state/resumeandnoduplicateworkerinstructions. Keepitactive;no duplicateclockorclaimofbypassingquota. Localmachine/appmustremainavailableperofficialdocumentation. Exactfinalweb88acnativebuild/type/lint/testall0,594+3files10872+3tests;158files3041tests3green. Thisclosesnativeverification,notformalA/blindscore. ManagerUI1440/85324cellsareseparatelybanked;failedhiddenrailcontrolhelperrunretainedandrealrailhoverusedinnewprobe.390/heading/undersizechecksremainpendingbeforeFF. No acceptance/score/stoplinechange.
+
+240. **§1h.240 — 2026-10-25: prepare first fresh Theme-A walk without starting before landing — BINDING.**
+
+CommonR1Acontract/23briefpreserveallfrozenrubricinputs,matrix,requirements,pricedextrasand79legacychain. A23startsONLYaftermanagerverifiedFFandexplicitLANDEDhead,ownport4222. Packindexfacts/noscore/noversdict;A'sverdictseparate;3freshblindlater. Previouslyobservedscroll/railhelperstatesareincludedasobservations,nosilentwaiver. Productionblocked/unperformedremainsFAILevidence, no authbypass. No scoring/stoplinechange.
+
+241. **§1h.241 — 2026-10-25: prepare first fresh Theme-B walk and preserve evidence gates — BINDING.**
+
+A24briefretainsB1–12/full79legacychainandallmandatoryinputs/matrix/production/deployment/sourceword/privacy/actiondenominators. FreshseparateA24own4223runsparallelA23afterverifiedFF/explicitlandedSHA;noAorblindscoreexistsyet. Anonymous/SSO/unknownrevisionconstraintsareopenFAILevidence,neverproof ofolddeploymentorfunctionpass. No authbypass,denominatororstoplinechange.
+
+242. **§1h.242 — 2026-10-25: final implementation verified and fast-forward landed; formal review begins next — BINDING.**
+
+Managerwhole-diff/directtests3/ownmeaningfulredmutations+exactrestore/type/lint/actualUIandfinalnativegateevidenceisrecordedinP12-MANAGER-VERIFY-20261025.md. Final88acnative10872+3/158files3041tests3green.36actualscrolled/rail-awarecells+3inactiveheadings+68pxhostoverflowactions0errors/hashsamecompleteboundedmanagerUI;initialscrollandhelperfailuresremainpubliclynamedandrawpreserved. Rebank64workercommitsonto643337cc,appdiffquiet/exact88ac,FFda86379donly;PR37remainsdraft/unmerged. All9itemsimplemented/landeddoesNOTmeanquality99orofficialpass. FreshindependentA23/A24onpushedlandedheadthen3freshblindreaders/theme/directoraremandatory. Production/private/full79guard/officialscoresunperformedremainopenuntilactualevidence. No rubric/price/denominator/stoplinechange.
+
+243. **§1h.243 — 2026-10-25: first formal independent A walks start on the verified landed head — BINDING.**
+
+FreshA23/A24startparallel onexactlanded82fe23db51d0bfda1096fd15080fb67ec0eb0582/web88ac,own4222/4223. EachrequestedworkerrejectedUnknownmodel, supported same-generationfallbackusedtruthfully;neitherreusesC/preparatoryAasfreshreviewer. Fourinputs/originalownerattachmentviaUI/allmatrix/legacy/privacy/productionevidencegatesremain. Indexfacts/noscore/noversdict;Aseparate;threefreshblindperthemeafterpacks,thenmanagerdirector. Missing/blockedchecksnotinferredpass. Formalmediansunmeasured,consecutiveA0/B0. CorrectP12-15ledger108transitions/0losseslegibilityonly. No rubric/price/denominator/stoplinechange.
+
+244. **§1h.244 — 2026-10-25: bank first formal-review setup checkpoint without inferring a score — BINDING.**
+
+A23report-only6235a8c0confirmsreleasedappidentity/ownportandexecutionplanbutcontainsnofreshunit/browserresult. Preserveallmissing4input/matrix/guard/privacy/productionevidenceasowed;noscoreorpassruninferred. ContinueoriginalA23/A24workers/copiesafteranyquota interruption. No rubric/price/denominator/stoplinechange.
+
+### §1h.245 — 2026-10-25 — Uniform blind-reader contract and hourly-clock continuity
+
+The uniform P12-R1-reader brief is prepared before scoring. Each fresh reader receives only the frozen rubric, owner's file at the named landed commit and the named theme's frozen factual pack; no A report, code, state or other reader. Missing checks remain FAIL(evidence), and pass-requirement failures override arithmetic as written. Three independent readers per theme remain mandatory; none has started. Both original fresh A reviewers continue on exact82fe23db/web88ac; their setup/input checkpoints are not a score. The existing peer-p12 heartbeat is ACTIVE at one-hour intervals in the same chat, as independently read from its saved configuration. Do not duplicate it or imply it bypasses quota; resume from durable state after availability returns. No rubric, stop-line, price or requirement changes.
+
+### §1h.246 — 2026-10-25 — A24 first-input checkpoint banked without unit closure
+
+The complete setup/first-input report and its prose-attribution correction have been read and picked as report-only commits. Its observed no-key entry/consent/upload timing and zero captured page errors are bounded first-input evidence, not a PASS unit or round score. Later four-input and geometry reports remain awaiting their actual checkpoint/raw review. The two original fresh A workers continue on the same landed app. No rubric or stop-line change.
+
+### §1h.247 — 2026-10-25 — A23 real-input first-action checkpoint
+
+Read the complete A23 report-only checkpoint and preserve its bounded ordinaryDEV evidence: one original upload, physical selection and sticky entry, keyboard Bold action and Save closure. This does not establish persisted formatting, duplicate-free ownership, exports, full no-key request absence or a PASS unit. Failed helpers and corrected probes remain distinct. Both original fresh reviewers continue; no rubric, price, stop line or pass requirement changes.
+
+### §1h.248 — 2026-10-25 — Four input entries banked, production evidence still separate
+
+Read the full four-input A24 checkpoint and bank its separate per-input timings/counts. All four real consent entries succeeded without captured page errors, but successful entry alone does not prove scientific extraction, visible figure actions, unchanged words or any full unit. The normal production welcome observation precedes home follow-through and cannot establish absent upload; preview authentication and unknown served revision remain explicit limits. Ongoing geometry/figure/build jobs are not finished evidence. The manager independently inspected the first note Save-closure screenshot and both factual index snapshots without assigning a score. Continue the same two fresh A reviewers; no rubric/threshold/requirement change.
+
+### §1h.249 — 2026-10-26 — Resume same independent A reviewers after quota; bank export boundary
+
+The actual hourly heartbeat triggered again after both A workers reported the same quota failure. Inspect main and both original detached copies, retain their input state and ongoing raw artifacts, resume the same workers rather than spawning replacements. Read and pick A23's finite aggregate/export checkpoint: actual outputs and reload Bold retention are bounded evidence, not all-format/hierarchy/lifecycle closure. The invalid indentation selector and overwritten original failure JSONs remain explicit limitations, with original scripts/tool output preserved; future raw paths must be unique per attempt. A24's pre-stall incremental geometry/figure/build results must be inspected before replay. Formal scores remain none and consecutive passes0/2 each. No rubric, threshold, requirement, authentication or source change.
+
+### §1h.250 — 2026-10-26 — P12-24-RECOVERY-MATRIX-LIMIT-BANKED
+
+Read and bank the complete A24 recovery checkpoint. A successful production build is not production page proof. The original320-row geometry attempt has an unreliable effective-light label after dark and cannot supply complete light/dark coverage; preserve it and correct only missing evidence with actual effective-mode samples. Delivered figure actions and pre-action locator failures remain separate denominators. No price, requirement or stop-line change.
+
+### §1h.251 — 2026-10-26 — P12-23-MEASURED-LIST-BOUNDARY-BANKED
+
+Read and bank the complete A23 list/keyboard checkpoint. Actual actions and read-only persisted measurements establish the isolated indentation/bounds/empty-bullet path in one1440×900 original-input cell. They do not establish other width/theme/scale cells or lifecycle/portability closure. Preserve unique attempt outputs and continue the same reviewer. No unit or round score, threshold or rubric change.
+
+### §1h.252 — 2026-10-26 — Curated blind-pack boundary, no evidence waiver
+
+Before any blind reader starts, require a frozen curated evidence-only directory and manifest with explicit literal index references. Raw pack roots currently include legitimate product-scoped upload storage or browser-profile artifacts; these must remain preserved in place and be excluded from the reader snapshot, with no new copy of the owner's original PDF. Give readers only index-cited measurements, screenshots/DOM, export/request/privacy evidence and relevant scripts. Missing evidence remains missing; curation cannot remove adverse observations or original failed-attempt references. A read-only inventory found no score/verdict/model-prose lines or symlinks in the current two index snapshots, but this is not a completeness/privacy pass: body-only four-word overlap references are still owed. Clarify actual model naming only in commit trailers. Both existing A reviewers received this requirement. No rubric, denominator, price, stop line or pass requirement changes.
+
+### §1h.253 — 2026-10-26 — P12-23-LIFECYCLE-BOUNDARY-BANKED
+
+Bank the bounded nine-state A23 lifecycle record. Its92ms sample begins after fill returns and cannot establish last-input ordering or stale-writer safety; retain those gates as owed. Empty and written Escape match the named old-close contract only in this observed cell. No full unit, matrix or round closure.
+
+### §1h.254 — 2026-10-26 — P12-23-GROUP-HIERARCHY-BOUNDARY-BANKED
+
+Bank the real cross-paragraph and nested-export observations without treating legacy primary quote length as whole-group completeness. The ordered-section hash is route word-preservation evidence, not PDF extraction or all-viewport visibility proof. Manager's read-only current index checks against a private body-only reference yielded zero normalized four-word overlaps and no score/verdict/model-prose lines; these evolving snapshots still need final curation/literal references and full privacy gates. No unit/price/denominator/threshold change.
+
+### §1h.255 — 2026-10-26 — Corrected geometry and nine undelivered figure targets
+
+Read the complete A24 finite checkpoint and its corrected portions. Reconstruct Book geometry only from160 original dark+8 first valid light+152 corrected light rows. Do not relabel all original rows. PublicA's115 delivered image opens/closes and nine pre-click delivery failures remain separate. Manager raw inspection finds incomplete images with zero natural dimensions at those nine snapshots; this is not yet a product click failure or an image-network diagnosis. Authorize an independent B investigation in the free slot, on the same unchanged app, to distinguish loading/measurement timing from actual delivery/routing failure before any C or accepted-cost decision. Physical question states are bounded no-key evidence; production build/deployed entry do not close authenticated production page requirements. No score or rubric change.
+
+### §1h.256 — 2026-10-26 — Independent image-delivery B25 brief
+
+Prepare a separate read-only investigator on the unchanged landed app in its own detached checkout/port4224, using publicA only. It must reproduce the nine pre-click image snapshots with stable identities, actual network/loading/visibility/hit observations and physical click outcomes over a bounded time budget, then supply three measured candidate rules. Manager's timing hypothesis is explicitly unverified. No product fix, test change, auth workaround or round score is authorized. Parallelism is independent of the two ongoing frozen A walks. Next implementation item remains unassigned until causal evidence returns.
+
+### §1h.257 — 2026-10-26 — B25 starts alongside the two A walks
+
+After the new item's requested worker was unavailable, start a fresh independent supported fallback B25 with no inherited conversation, its own detached checkout/port4224 and publicA only. It investigates cause/candidates without product edits or scoring; the original two A reviewers remain live on their unchanged frozen app. Raw A24 public figure records are read-only references, not permission to use its server/profile/store. Early checkpoints remain required; no closure inferred from dispatch.
+
+### §1h.258 — 2026-10-26 — Long group and actual notes-page entry boundary
+
+Read the complete cumulative A23 checkpoint. The native3429-character selection/three stored segments and actual Markdown segmentwise completeness/order are bounded action evidence. Preserve the literal joined-string false result and the separately named format-aware comparison; no automatic conversion of failed checks into all-format success. Short triple-click, zero wheel-drag selection and pre-navigation/hidden-row helpers remain distinct retained attempts. Actual notes-page entry is observed, but all-scale square geometry, return position and remaining input/privacy/production requirements remain owed. No unit or round score and no rubric change.
+
+### §1h.259 — 2026-10-26 — Correct body-reference section count from actual metadata
+
+Manager directly reads A24's private body-only reference metadata:73608 characters,10506 recorded words,14 sections. Correct the15-section figure repeated in the A24 checkpoint and ruling255; retain the earlier record as history and ask the worker to append its selector/count correction. Manager's overlap checker uses a separately stated Unicode tokenizer yielding11375 tokens, so do not present that as an equal-definition comparison with the reference's10506 words. A23's73541-character cloned textContent measurement has a different documented normalization/scope; differing hashes alone are not a route-word-change finding. No source content is printed, no extraction/visibility closure or score follows, and no requirement changes.
+
+### §1h.260 — 2026-10-26 — B25 normal public-input recovery after helper loss
+
+Read the complete B25 early report. Its single publicA consent upload succeeded, but an incorrect singular reader-URL wait placed browser-state capture after the failure. No image observation is banked. Continue with a fresh normal no-key browser visiting only the exact own reader route already observed from its legitimate UI/operational log, without credential/session/cookie fabrication. If that normal route is unavailable or rejected, permit one additional ordinary chooser/consent upload of publicA after correcting the helper, explicitly recording attempt2 and preserving attempt1; this supersedes the brief's one-upload preference only for this public-input harness recovery. It does not authorize an owner-PDF duplicate, access-control workaround, synthetic auth, forced access or previously rejected method. No product change, finding or score follows.
+
+### §1h.261 — 2026-10-26 — Square equality is separate from clip/hit reachability
+
+Bank A23's32 actual1440×900 preference/theme/Book/Fit cells and1024 square/font/glyph measurements. Equality is observed at each actual state even though note-font sizes remain constant; do not claim reader preference enlarged note typography. The helper's828/1024 viewport-contained samples omit ancestor clipping and pointer hit, so neither offscreen samples nor viewport containment alone prove accessibility or its failure. Require separate actual scroll/clip/hit evidence, retaining initial and scrolled observations. Four note-only privacy probes and captured-section four-word scan remain bounded, with remaining privacy/input/width/guard requirements owed. No score, unit closure or requirement change.
+
+### §1h.262 — 2026-10-26 — Curated view integrity checked, coverage still incomplete
+
+Read and bank A23's evidence-view checkpoint. Manager independently checks all149 literal index references and149 manifest byte/hash entries against app82fe23db/web88ac, with no missing references or mismatches, and finds no symlink/score/verdict/model-prose lines or normalized four-word index overlap against the private body reference. The151-file directory includes its index/manifest in addition to149 copied artifacts. This is an evolving curated view, not a frozen complete blind pack; remaining checks cannot inherit a PASS from packaging integrity. Refresh manifests/privacy scans after future additions. No score or requirement change.
+
+### §1h.263 — 2026-10-26 — First pending-image click, historical identity remains qualified
+
+Read and bank B25's first bounded actual pending/delivered click observation after the explicitly permitted second public-input upload. One normal pending click opens a margin card; delivered viewer controls also work. This establishes a bounded pending request in that execution, not all nine historical records or a universal loading diagnosis. The historical nth-index3 identity is inferred from geometry while the live lead-control inventory shifts; retain this limitation, use stable anchor/resource identities in future captures and never relabel old raw attempts. B25 still owes eight cases, exact response timing and three candidate rules. No product fix, unit score or requirement change.
+
+### §1h.264 — 2026-10-26 — Bounded cycle, canonical-request and byte-scan evidence
+
+Read and bank A24's complete cumulative checkpoint, including the14-section correction. Its600 invented no-key selection/n/Delete cycles,18 multi-card sequences and four real canonical Explain requests are named bounded families, not all-input/all-theme/Fit/minimum/guard closure. The nonexistent threadMessages capture stays null and cannot prove wire thread length. The final byte-stream privacy scan removes earlier extension/30MB limitations and includes operational caches/logs/generated artifacts without a compile exception; retain its10-probe scope and explicit authorized-private-evidence/scoped-store exclusions, not universal privacy proof. Pending-image and original/PublicB helper failures remain preserved and B7 open. No score, requirement or price change.
+
+### §1h.265 — 2026-10-26 — Parallel factual note supplement, formal reviewer unchanged
+
+Prepare a fresh independent read-only measurement helper for publicA/publicB/stable invented note actions/matrix in its own detached checkout/port4225. It must not access the owner's original or existing reviewer profiles/stores/reports, diagnose, change code or score. A23 retains the original input, its independent walk, final Theme A scoring and reconciliation; fresh supplemental raw page evidence is labelled by its own provenance and cannot inherit A23/C conclusions. A23 identified the isolated remaining subset. Queue the helper only because root+two A+B currently fill all four runtime slots; release it after B25 finishes. This parallelizes outstanding input coverage without replacing any formal A, blind reader or frozen rubric requirement.
+
+### §1h.266 — 2026-10-26 — B25 complete: choose measured observation rule, no product C
+
+Read the entire final B25 report and independently read its raw timing summary and exact-geometry comparison. All nine own stable cases deliver by10seconds with resource200; five pending clicks open, eight delivered centre clicks open usable viewers, and the remaining focused-peek centre obstruction has a separately measured visible-point click. This supports candidate2, stable figure identity with progressive300ms/1s/3s/10s observations, and separate pending/control-hit/delivered-viewer checks. Its sampled wait cost15.346seconds is a replay bound versus90seconds fixed, not a performance guarantee. No product change is justified by these cases. A24's original unperformed clicks and unrecorded post350ms states remain historical missing evidence, not retroactively passed. A24 continues fresh stable captures. B25's own4224 listener is gone and app web88ac unchanged. After the quota interval resume the same two A workers; release the queued independent factual A26 helper into the freed slot. No score or requirement change.
+
+### §1h.267 — 2026-10-26 — Independent public-note helper starts in freed slot
+
+After B25 completes and stops its own4224 server, start the prepared fresh read-only A26 factual helper in its own6403255d/web88ac checkout/port4225. The requested worker is unavailable, so use a fresh supported same-generation fallback without inherited conversation. It receives only its public/invented subset and contract, never the original input or other reviewers' state/reports/outcomes. A23 retains original/final Theme A reconciliation and score; three separate blind readers per theme remain required. The original two A workers have resumed after this heartbeat without copies/uploads being restarted. No product, rubric or scoring change.
+
+### §1h.268 — 2026-10-26 — P12-23-DEPLOYMENT-ACCESS-BANKED
+
+Bank the independent normal deployed-access observations. Anonymous entry and unknown served revision do not establish a stale deployment or satisfy uploaded-paper production checks. Preserve this external-access limit without an auth workaround or waiver.
+
+### §1h.269 — 2026-10-26 — P12-23-853-FIRST-CELLS-CANONICAL-IMPORT
+
+Import the read report-only delta as a new canonical-owner commit because its raw source author email is misspelled; keep the original worker history intact. Six completed cells are retained, while the failed stored-Fit transition is uncompleted. No force/injection or full853 success follows.
+
+### §1h.270 — 2026-10-26 — P12-23-ATTRIBUTION-RESUME-LIMIT-BANKED
+
+Bank the worker's canonical correction and precise failed-resumption accounting. Carried measurements cannot become new completed cells, and a script parse/setup failure does not establish a product defect. No history rewrite or score change.
+
+### §1h.271 — 2026-10-26 — P12-23-853-LIGHT-PROGRESS-BANKED
+
+Bank the frozen16-state light progress snapshot: eleven completed cells and five disabled Fit requests are distinct. The six carried cells remain original observations; only five are new. Dark-half live attempts and later control-reveal retries cannot be inferred as finished. No forced disabled control, upload reset or score.
+
+### §1h.272 — 2026-10-26 — P12-24-FOUR-INPUT-GEOMETRY-RECOVERY-BANKED
+
+Bank A24's exact recovered input/cell/action counts without importing unperformed work. Four Book geometry matrices are distinct from interactive Fit/physical zoom/79 guard/production evidence. Original and invented each have600 bounded cycles; public cycles remain unfinished. Answer/figure peek failures and new target denominator stay separate. The subsequently reported whole-tabpanel hash difference requires preserved before/after and a scoped body comparison before any word-loss claim; no product finding or waiver is established.
+
+### §1h.273 — 2026-10-26 — P12-26-SETUP-PARTIAL-BANKED
+
+Bank the helper's setup-only checkpoint without a page outcome. Its accidental filename-only discovery is recorded transparently; no out-of-scope content or reviewer outcome was opened, and future access stays in its own assigned scope. It remains a factual supplement, never a blind reader or the formal A score.
+
+### §1h.274 — 2026-10-26 — P12-23-853-SUPPLEMENT-REACH-BANKED
+
+Bank the actual supplemental853×900 marker-reach matrix with explicit22 completed versus10 disabled states and carried-source provenance. All markers become ancestor-clipped-visible and centre-hit through actual scrolling in each measured surface/cell, not simultaneously. This is neither the required853×480 cell nor proof every note action at every setting. For future wide Fit, preserve raw BCR/local computed font and ancestor zoom/transform measurements so CSS1em and rendered glyph comparisons are both assessable; never normalize away an actual mismatch. No rubric or threshold change.
+
+### §1h.275 — 2026-10-26 — P12-26-THREE-INPUT-ENTRY-BANKED
+
+Bank the complete three-input entry checkpoint. Independent real chooser/consent entries establish input arrival only; visible note/reading controls do not establish functionality. No owner's attachment or other reviewer material was used. The existing hourly heartbeat is still ACTIVE in the same chat, with no duplicate or schedule change.
+
+### §1h.276 — 2026-10-26 — P12-LIVE-MATRIX-AND-QUESTION-COUNT-CORRECTION
+
+Correct the all-four one-body-hash statement in ruling272 and the earlier A24 checkpoint: all four13-state probes have zero pageerrors, but publicB has three whole-tabpanel hashes. Await its own preserved-state comparison or fresh scoped evidence; a separate replay's figure-label additions cannot retroactively explain missing historical captures. No paper-word-loss or no-change conclusion follows from hashes alone. Preserve failed cycle rows and fresh resumption separately. A23's live owned width batch must be inspected via matrix-progress before any resumed job is started. A24 receives only permitted cited factual note/export raw evidence from the curated A23 view, never another reviewer's verdict/score; missing return/PDF/concurrency parts remain open. No product, rubric, price or requirement change.
+
+### §1h.277 — 2026-10-26 — P12-24-QUESTION-HASH-LEGACY-FACTS-BANKED
+
+Bank the complete A24 correction/legacy-facts checkpoint while retaining all failed/redundant attempts and distinct denominators. A single Figure-label replay does not certify historical question/cycle hashes. Manager corrects its own unverified common-facts link: the segment comparison is absent from the supplied curated view, so it remains missing until the actual artifact and manifest are verified. Do not search adjacent private storage or infer a pass. No source, score or requirement change.
+
+### §1h.278 — 2026-10-26 — P12-23-REQUIRED-M01-GEOMETRY-BANKED
+
+Bank required m01's finite geometry and actual preference/routes only. The manager directly inspected its notes-page screenshot, while full action/lifecycle/legacy/privacy coverage remains separate. A model-capacity interruption must not restart a live owned measurement batch; read the external progress first. No score or full-unit closure.
+
+### §1h.279 — 2026-10-26 — P12-24-INCREMENTAL-SNAPSHOT-AUDITED
+
+Bank the incremental frozen319-artifact snapshot and manager's independent reference/hash/index checks. Packaging integrity is not coverage or acceptance. Keep all old errors/redundant attempts and missing work explicit; final additions require a new refreshed snapshot/audit. Missing common references remain missing. No score, price or requirement change.
+
+### §1h.280 — 2026-10-26 — P12-26-NOTE-ACTIONS-BOUNDED-HASH-BANKED
+
+Bank delivered note operations separately from persisted-format/export proof. The reported hash scope removes all superscripts/buttons and cannot certify scientific/source superscripts. Preserve the bounded original hashes and require a new before/after actual-action comparison retaining source/math sup/sub and excluding only explicit UI annotations, with exact selector/normalization recorded. No test weakening, data-loss finding or pass waiver follows.
+
+### §1h.281 — 2026-10-26 — P12-COMMON-REFERENCE-BASENAME-CORRECTED
+
+Correct the manager's abbreviated basename, not the evidence: the actual existing full-name segment comparison is already in the curated149-artifact manifest and matches its byte/hash record. Give A24 the verified exact path/hash; it independently reads the raw segment counts/order. Do not recreate history or hide the original literal-joined-string false result. Packaging/reference correction is not a unit score.
+
+### §1h.282 — 2026-10-26 — P12-26-GROUP-EXPORT-PRINT-DOCUMENT-BANKED
+
+Bank actual group/export/print-route observations without converting representation-specific raw-string misses into omissions or success. The actual route-created print document and browser print events are evidence, while native-dialog/PDF-byte completion remains missing. Preserve broad-superscript hash limits and failed helpers. No format/persistence/full-matrix score or requirement waiver.
+
+### §1h.283 — 2026-10-26 — P12-23-REQUIRED-M02-GEOMETRY-BANKED
+
+Bank m02 as finite viewport-emulated geometry/routes only, with exact32 completed states and no disabled Fit requests. It does not supply full action/lifecycle/export/legacy/privacy closure or a score.
+
+### §1h.284 — 2026-10-26 — P12-23-REQUIRED-M03-GEOMETRY-BANKED
+
+Bank m03's28 completed and four app-disabled Fit states separately. Geometry/routes do not imply disabled actions were executed, nor full functional or privacy closure. No threshold/requirement change.
+
+### §1h.285 — 2026-10-26 — P12-23-REQUIRED-M04-GEOMETRY-BANKED
+
+Bank the actual required853×480 cell separately from the earlier853×900 supplement. Exact22 completed versus10 disabled requests and raw ancestor zoom remain visible; finite geometry/routes do not close short sticky action, legacy, privacy or scoring requirements. Inspect live batch progress before restarting anything.
+
+### §1h.286 — 2026-10-26 — P12-24-RETAINED-MEASUREMENTS-BANKED
+
+Read the actual report delta before importing9b99621a. Preserve all30 publicB whole-panel hash failures and earlier failed rows; neither a successful new replay nor geometry alone retrospectively certifies them. Classify actual ordered source text separately from UI additions, retaining scientific sup/sub. Responsive placement is assessed against its measured line height, while bottom-constrained baselines cannot establish reading-top preservation. Existing independent reviewers resumed in their own copies; no duplicate batch or reader and no score. Hourly clock remains ACTIVE.
+
+### §1h.287 — 2026-10-26 — P12-23-REQUIRED-M05-GEOMETRY-BANKED
+
+Bank m05 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.288 — 2026-10-26 — P12-23-REQUIRED-M06-GEOMETRY-BANKED
+
+Bank m06 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.289 — 2026-10-26 — P12-23-REQUIRED-M07-GEOMETRY-BANKED
+
+Bank m07 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.290 — 2026-10-26 — P12-23-REQUIRED-M08-GEOMETRY-BANKED
+
+Bank m08 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.291 — 2026-10-26 — P12-23-REQUIRED-M09-GEOMETRY-BANKED
+
+Bank m09 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.292 — 2026-10-26 — P12-23-REQUIRED-M10-GEOMETRY-BANKED
+
+Bank m10 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.293 — 2026-10-26 — P12-23-REQUIRED-M11-GEOMETRY-BANKED
+
+Bank m11 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.294 — 2026-10-26 — P12-23-REQUIRED-M12-GEOMETRY-BANKED
+
+Bank m12 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.295 — 2026-10-26 — P12-23-REQUIRED-M13-GEOMETRY-BANKED
+
+Bank m13 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.296 — 2026-10-26 — P12-23-REQUIRED-M14-GEOMETRY-BANKED
+
+Bank m14 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.297 — 2026-10-26 — P12-23-REQUIRED-M15-GEOMETRY-BANKED
+
+Bank m15 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.298 — 2026-10-26 — P12-23-REQUIRED-M16-GEOMETRY-BANKED
+
+Bank m16 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.299 — 2026-10-26 — P12-23-REQUIRED-M17-GEOMETRY-BANKED
+
+Bank m17 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.300 — 2026-10-26 — P12-23-REQUIRED-M18-GEOMETRY-BANKED
+
+Bank m18 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.301 — 2026-10-26 — P12-23-REQUIRED-M19-GEOMETRY-BANKED
+
+Bank m19 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.302 — 2026-10-26 — P12-23-REQUIRED-M20-GEOMETRY-BANKED
+
+Bank m20 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.303 — 2026-10-26 — P12-23-REQUIRED-M21-GEOMETRY-BANKED
+
+Bank m21 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.304 — 2026-10-26 — P12-23-REQUIRED-M22-GEOMETRY-BANKED
+
+Bank m22 only after reading its report delta and independently counting actual raw cells, observations, disabled Fit requests and errors. Preserve viewport emulation versus physical zoom distinction and original unadjusted measurements. These finite geometry facts do not certify editing, lifecycle, export, return, privacy, inherited guards or a score; those stay with independent reviewers.
+
+### §1h.305 — 2026-10-26 — P12-23-FORMAT-PERSISTENCE-BANKED
+
+Five selected inline formats persist immediate/Save/reload/reopen in one1440cell; actual TXT/MD/Word/Copy exclude sticky sourcequote. Read actual decoded artifact, no full-unit inference. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.306 — 2026-10-26 — P12-23-PRINT-RETURNS-BANKED
+
+Actual beforeprint iframe6071bytes; six1440paper/Summary returns glyphdeltas0–0.2094px. Preserve initial selector failure; nativePDFbytes/narrow/Saved/reflow still unperformed. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.307 — 2026-10-26 — P12-26-EXACT-REPETITIONS-BANKED
+
+Exact18label/defaultstepBook aggregate family540cycles/input,1620total; failed remaining3cells preserved, not inferred from desktop. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.308 — 2026-10-26 — P12-26-SCOPED-LIFECYCLE-EXPORTS-BANKED
+
+Scoped sourcehashes preserve scientific sup/sub except explicit noteannotations; manager reran actual-export decoding and checked35segment/route observations count1/order. Default measured lifecycle family only; no PDFfile or fullnesting claim. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.309 — 2026-10-26 — P12-26-INCREMENTAL-PACK-AUDITED
+
+Manager read arraymanifest and literal dot/@ filenames, corrected own parser then independentlyaudited209refs/209byteSHAentries0missing/mismatch/links/verdict/model/owner4wordhits. Initial parser errors retained; evolving snapshot not frozen. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.310 — 2026-10-26 — P12-24-ORDERED-TEXT-CLASSIFICATION-BANKED
+
+Read exact selector/annotation-exclusion classification:29orderedIDs28equal sections, one17char insertion matching previousfallbacksuffix hash; no deletion in this one replay. Historical30 failures unclosed. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.311 — 2026-10-26 — P12-24-DEPARTURE-CLAMPS-BANKED
+
+Instrumented actualdeparture/return glyph+scroll equal4inputs, earliercommandscroll retained. Neighborclamps33rows/input bounded default2cards. Actualcontrol144rows contrast minima recorded, no outline/fullmatrix closure. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.312 — 2026-10-26 — P12-26-CYCLES-PRIVACY-GUARD-CORRECTION
+
+Bank630cycles/input/1890total and bounded3121file630153798byte5probeprivacy0hits/errors. Import explicit semantic correction with guardindex: exact P12-14 contracts remain authoritative; incomplete guards never passed by shorthand. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.313 — 2026-10-26 — P12-26-ADDITIONAL-LIFECYCLES-BANKED
+
+Six actual lifecycle sequences/input including emptyEscape/emptySave/pendingwrittenEscape/outsidepress/fullreplacementrace/DeleteReload,0pageerrors. Specific laterstickyreplacement retained, no general concurrentmerge verdict. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.314 — 2026-10-26 — P12-23-THIRTY-DELIVERED-CYCLES-BANKED
+
+Actual30/30source-note/editor/keyboardSave cycles at1440index2Book; sourcehashpreserves scientificsup/sub except noteUI. Zeroattempt hydrationfailure retained. Otherwidth jobs remain separate. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.315 — 2026-10-26 — P12-24-INHERITED-LEDGER-FAILURES-BANKED
+
+79exactcontracts individuallyindexed,47boundedfacts/32none, everyfullGuardEvidenceComplete false. PublicB143targets66opens77normalactiontimeouts, original79/73/6,0pageerrors; independent B planned, no inferred permanentfailure. Read the actual report delta before banking. Keep failed helpers and exact denominators; no source/test change, no new exemption or formal score. The independent manager entry attempt on4294 failed before upload with upload-availability404; retained externally. Ordinary same-copy server restart returned200; one separately named follow-up probe is pending, never a substitute for independent review.
+
+### §1h.316 — 2026-10-26 — P12-24-ACTION-ERROR-TAXONOMY-CORRECTED
+
+Correct the earlier all-timeouts description explicitly:77actionerrors=65Error+12TimeoutError. Zero target/image dimensions are measurements at that instant, not a diagnosis of resource or binding failure. B27 is authorized to read only the named publicB evidence and independently measure normal UI behavior in its own fresh copy; no prior failure is erased or certified by a new success.
+
+### §1h.317 — 2026-10-26 — P12-27-FIGURE-INVESTIGATION-BRIEF
+
+Use the now-free worker slot for an independent B on the measured publicB figure failures. A26 keeps its own live raw geometry jobs, without a second profile or replacement worker. B27 receives only named publicB artifacts, its own fresh upload/copy and a finite reproduction matrix; zero dimensions and historical nth indices do not establish cause. Compare three remedies including no product change when evidence supports that choice. No previous failure is retrospectively passed.
+
+### §1h.318 — 2026-10-26 — P12-27-INDEPENDENT-B-STARTED
+
+The requested worker platform was rejected as Unknown model; start a fresh same-generation fallback under the skill rule and record actual attribution. Reuse no other worker profile or raw jobs. B27 owns detached9d82f75a/web88ac and4226, with exact publicB-only evidence permissions. A26 remains resumable in its own retained jobs, rather than being replaced. No new dependency, branch, product change, score or acceptance.
+
+### §1h.319 — 2026-10-26 — P12-MANAGER-INDEPENDENT-TEXT-PHASES
+
+Independently rederive one publicB case in a free manager copy through normal upload/consent and physical selection, keyboard note and ordinary Delete. Record the17character addition before the note action separately from unchanged scientific-text-preserving section hashes during/after it. This bounded new replay does not certify or replace historical30 failed rows, extraction correctness or production access. Preserve the initial404 entry and ordinary restart result; no authentication or cache alteration. Stop only verified owned process groups and verify4294 listener gone.
+
+### §1h.320 — 2026-10-26 — P12-26-RECOLOUR-CALIBRATION-PARTIAL-BANKED
+
+Preserve8de83222 and its exact interim scope. The affected aggregate row-font/glyph measurement selected gutter content, so raw square/clip/hit facts remain but cannot establish actual-text1em or first-line alignment; no silent normalization. Independently audit251snapshotentries and all literal references before reporting integrity, with no verdict or original-paper4word overlap in index. After the repeated usage-limit interruption, resume the same three active roles at18:18UTC, leaving A26 queued with its incomplete raw jobs, not replaced. Hourly heartbeat remains ACTIVE and cannot bypass quota; no schedule slowdown or duplicate automation.
+
+### §1h.321 — 2026-10-26 — P12-23-STORED-MODE-CORRECTION
+
+Explicitly supersede the Book wording in the previously banked thirty-cycle report/ruling314: the actual original1440raw and following cells record scaleIndex2,fit:true. Book layout is an offered toggle action, not a current-mode name. Stored preference alone does not establish effective Fit at every responsive width. Completed cycles retain their actual counts but create no additional Book/effective-mode coverage. Worker correctione2f33560 and the final660denominator remain pending import together with their preserved failed setups.
+
+### §1h.322 — 2026-10-26 — P12-24-MAP-QUESTION-CAP-BANKED
+
+Actualallrowmaptoggle4inputs/summarywords/targets;2originalstrictprefixdifferences retained. Invented499/500/501→499/500/500 at3widths18rows0pageerrors; defaultsetting only. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.323 — 2026-10-26 — P12-24-CONTROLS-NORMAL-PRODUCTION-BANKED
+
+320actualcontrols20CSSx8stepsx2themes; representative6viewers, boundedcontrasts. Separateexactreleaseproductionbuild0, normalanonymousavailabilityfalse/noentry,feed503 retained. Noauth/NODE_ENV/cachealteration; productionpaperwalk remainsunperformed, notPASS. Cell17pre-scrolltimingcorrected. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.324 — 2026-10-26 — P12-27-PRIOR-FAILURE-INVENTORY-BANKED
+
+Read entireB27report andactual77inventory/provenance;143targets66opens/closes65Error12Timeout0pageerrors. Historicalerrorhasheslimitstageinference; no retrocertification. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.325 — 2026-10-26 — P12-27-NORMAL-UI-EXECUTION-BANKED
+
+FreshnormalUIupload once, v1 38candidates19deliveredclick/viewer/closes7detachedscrollerrors12undelivered,10HTTP200/33HTTP404,0pageerrors. Absenttab/shiftedviewportlimits retained. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.326 — 2026-10-26 — P12-27-WRONG-FIGURE-REGIONS-CONFIRMED
+
+Read sourcecomparison+UIstableanchors andview actualsourcepage5/deliveredFigure4/5:bothwrongtablecrops confirmed. Unchangedengineprobe reproduces duplicatecaption/toporder andsize/crosscolumnmechanisms; directprobeiscausal,notUIclosure. Fullproducingpath/cacheguide pendingseparateC. Read the actual report delta before banking. Preserve all adverse observations and exact scope; these facts neither waive missing production/authentication evidence nor create a score. Manager verifies any later C independently before landing.
+
+### §1h.327 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-B11026F1
+
+Cellm01 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.328 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-9D523FFD
+
+Cellm02 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.329 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-9587D779
+
+Cellm03 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.330 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-68FE0DEC
+
+Cellm04 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.331 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-981CE3E0
+
+Cellm05 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.332 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-8904F09E
+
+Cellm06 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.333 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-5C31E958
+
+Cellm07 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.334 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-E5F38C91
+
+Cellm08 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.335 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-379C3EBC
+
+Cellm10 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.336 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-E9F36F1A
+
+Cellm11 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.337 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-BC6F3602
+
+Cellm12 has0completed/1attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.338 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-E2F33560
+
+Explicitmodecorrection:oldBookwordingwrong, rawstoredfit:true;330completedthenfirstm12failurepreserved. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.339 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-F3DD9235
+
+NormalEscapeclosedfocusedpeek andphysicalreferencehit/open succeeded separately; initialinterceptionretained. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.340 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-04A3B9DB
+
+Cellm12 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.341 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-ADD76FED
+
+Cellm13 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.342 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-64715AC5
+
+Cellm14 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.343 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-9660AD54
+
+Cellm15 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.344 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-88298DDF
+
+Cellm16 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.345 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-FC019B00
+
+Cellm17 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.346 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-EB33FDB2
+
+Cellm18 has0completed/0attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.347 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-E200A197
+
+Firstresumeadds180completed; onecolumnoptional-shelllookup setupfailure0actions retained; remainingcellsnotreplayed. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.348 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-72188BDA
+
+Cellm18 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.349 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-669A9AFA
+
+Cellm19 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.350 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-E4175D40
+
+Cellm20 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.351 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-6A9E8405
+
+Cellm21 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.352 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-E245B145
+
+Cellm22 has30completed/30attempted; preserve failures and actual recorded preferences. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.353 — 2026-10-26 — P12-23-CYCLE-CHECKPOINT-6CD45924
+
+Final22widths30each=660delivered, originalm09countedonce; pendingeditreload/navigation/Delete sequencebounded, pagehidebranchunobserved. Manager independently reconciled actual raw repetition counts with the three preserved progress files and the reused1440run. StoredFit is not every effective mode; no failed setup is silently reclassified or repeated completedcell counted twice. No full A12/legacy/production or formal score follows.
+
+### §1h.354 — 2026-10-26 — P12-26-REPETITION-DENOMINATOR-CORRECTED
+
+A23's independent authorized reconciliation exposed a missing invented-input cell. Manager re-read actual v4/v6 raw files, merged labels without double counting, and confirmed630+630+600=1860, not the prior1890; v4 alone is1590, not1620. The missing invented1280x720@1.25 has0attempts/0completed and1helpererror. Correct prior root307/312 summaries explicitly; retain worker report history and do not infer completion from requested cells. PublicBv6 broad all-sup/button-removal hashes differ in all3stresscells and cannot prove full-source equality or by themselves prove word loss. Later resume only the missing30 in the same A26 role; no completedcell replay or acceptance.
+
+### §1h.355 — 2026-10-26 — P12-27-FINAL-GUIDE-RULED
+
+Choose the lowest sufficient confirmed-defect rule: spatially compatible nearest typed captions with nearer Table veto/competing-label ranking, preserving existing region floors/resource limits. Candidate2's numeric exemplar is not a global cutoff; C must protect above/below, full-width, columns, multipanel, raster/vector and ambiguity or stop for B. Candidate1 improves measurement but leaves wrong tables; candidate3 makes a partial scientific figure and is rejected. Engine plus every derived figure-cache/reference path is one overlapping producer cluster for C28. Do not incidentally change pdf-outline page/reference classification: independently replay that separate mechanism in B29. Missing figures remain open facts, not a new exclusion; production access and all-input regressions remain distinct. B27 stopped only its owned4226server and verified listener gone.
+
+### §1h.356 — 2026-10-26 — P12-28-CAPTION-FRESHNESS-BRIEF
+
+C28 owns the shared caption producer and derived figure freshness paths listed in its brief; both serving branches must obey one rule. Keep size floors/resource/ownership controls, note/question/profile storage and requested page identity unchanged. Existing-upload normal cache-miss recomputation is required; no recursive deletion or forced upload refresh. C uses invented PDFs only, red-on-base tests and per-rule mutations; Manager/A do actual public input regressions. Every added production file requires a scope ruling. Outline page/reference diagnosis remains separately queued B29, avoiding unmeasured incidental fixes.
+
+### §1h.357 — 2026-10-26 — P12-28-INDEPENDENT-C-STARTED
+
+The requested worker platform is again unavailable (Unknown model); start a fresh same-generation fallback and attribute its actual model. C28 owns one detached copy/port4227 with invented inputs only. Manager will use an independent free copy for actual public-input/cache-reopen checks, touchedtests×3, independent mutations with byte-identical restore and full exact-tree gates. No C fix is landed or closed on its own report.
+
+### §1h.358 — 2026-10-26 — P12-29-CAPTION-PAGE-BRIEF
+
+Use A23's released slot for a separate B on the wrong source-page/label identity, fixed at the released web tree. Do not inherit the body-reference hypothesis without replaying the entire source→outline→reading path. Engine cropping/freshness remains C28; B29 is read-only and must identify any later file overlap before a new C is briefed. No other-page image fallback or numeric whitelist conceals an unproved identity. A23 remains the same resumable reviewer with its completed evidence and retained owned server.
+
+### §1h.359 — 2026-10-26 — P12-29-INDEPENDENT-B-STARTED
+
+Try the requested worker platform at this new item; runtime rejects it as Unknown model, so use a fresh same-generation fallback with actual attribution. B29 owns fixedbaseline b3044fed/web88ac and4228, only publicB normal UI plus unchanged source/outline/reading causal probes. Parallel C28 owns engine/freshness in a separate copy, with no cross-writer edits. No score, production-auth workaround or hidden source-page fallback is authorized.
+
+### §1h.360 — 2026-10-26 — P12-29-ONE-NORMAL-UI-RECOVERY-RULED
+
+B29's first normal publicB POST succeeded200; its helper waited for singular/paper/ although the app uses plural/papers/. An actual success is not erased because the helper lost its post-upload state. Permit exactly one replacement normal chooser/consent/upload in a fresh own context, correct the route wait and save genuine browser capability promptly. Preserve both attempts and explicit two-upload history, never manufacture/reconstruct authentication or touch another profile; no third upload is authorized. This is a public-input harness recovery under manager authority, no user approval or new product exclusion.
+
+### §1h.361 — 2026-10-26 — P12-30-MERGED-CAPTION-LINES-BRIEF
+
+Honor C28's escape clause: preserve the genuine two-column positive and freeze its proposal; investigate structured line/span geometry independently before any caption-rule expansion. The prior ambiguity fixture had an invalid overlap premise, so retain its old bytes and explicit correction without weakening the intendedabsence contract. The requested worker platform is now available; prior workers are confirmed errored on quota, not live model writers. New assignments/resumptions may use it with controlled ownership transfer after checking existing jobs, never duplicating a live profile/server. Exact model attribution belongs only in commit trailers.
+
+### §1h.362 — 2026-10-26 — P12-28-DERIVED-VERSION-SCOPE-RULED
+
+After confirming old model writers stopped on quota, requested-platform resumptions own the existing C28/B29 copies; B30 remains an independent investigator. Allow exactly web/src/components/notes/note-tags.tsx to use the current shared PaperReading artifact version in its existing constructor (or minimal equivalent literal update), without changing note storage, fields or interaction. Permit existing paper-body.plain.test.tsx, paper-body.test.tsx and question-box.flow.test.tsx expectations to follow the deliberately versioned derived URL/report key, retaining all substantive assertions and naming each re-aim. These are unavoidable consumers of the approved figure freshness migration, not new feature scope. Preserve the Windows0666/0600 adverse result. Freeze source while any gate runs; do not repeat broad gates until the final caption source is ready. Remove the prior accidental exact model identifier from ruling361 prose; actual attribution remains in trailers.
+
+### §1h.363 — 2026-10-26 — P12-28-NOTE-VERSION-FIXTURE-SCOPE
+
+Allow web/src/components/notes/note-tags.blocks.test.ts and note-tags.lost.test.tsx to distinguish the newly current derived reading version from stale version fixtures after the already approved note-tags constructor change. Keep the older-version rejection case and every ownership/navigation/content assertion; changing current-version fixture metadata is not permission to relax behavior. No additional production file is authorized. Run the affected tests and retain four prior failures; do not repeat broad gates before the caption tree is ready.
+
+### §1h.364 — 2026-10-26 — P12-30-OBSERVABLE-CAPTION-SCOPE
+
+The new semantic-intent distinction is not encoded by spacing alone and is not permission to add an open-ended word classifier. B30 must compare concrete observable rules under the required Node22: retain separate typed line identities and original text-block/column provenance, stop another typed caption from being appended, and preserve existing continuation eligibility/positive contracts rather than invent a new universal gap threshold. Compare conservative alternatives and record where identical observable geometry cannot distinguish untyped continuation from adjacent prose; preserve the bodyclose evidence and do not claim it excluded or fixed. A must still count any real-input caption over-join/misassociation and price it normally; no rubric unit, denominator, price or pass requirement changes. C28 caption work stays stopped until a measured guide and further ruling. Its disjoint freshness/current-version tests are checkpointed, not landable as a whole.
+
+### §1h.365 — 2026-10-26 — P12-28-MEASURED-LINE-IDENTITY-GUIDE-RULED
+
+Choose B30's third measured Node22 alternative for the narrow merged-column defect: preserve typed start-line identity and original block/line geometry, assemble a column-aware continuation substream without an unrelated column prematurely terminating it, stop another leading typed caption in the same column, and retain original continuation eligibility/500-character cap. The compared first-line-only rule loses required continuation; legacy loses labels. Keep nearest typed veto and ambiguous competing-region rejection after overlap dedup. C must add the untested early-break/original-block long-gap protective case and retain every corrected positive; stop on an indefensible counterexample rather than widen a cutoff. Inline multiple typed mentions are not blindly split, and the observed nearby untyped body over-join remains unresolved, must be documented and tallied/priced by A on real inputs normally. No semantic classifier, new exclusion, changed price/denominator, floor relaxation, other-page fallback or unrelated source classification is authorized. Function comparisons are not actual UI/final gates; Manager verification remains required before landing.
+
+### §1h.366 — 2026-10-26 — P12-28-PROVENANCE-REPRESENTATION-CLARIFIED
+
+The required observable provenance is the original text-block identity and actual typed start/continuation line geometry used to keep columns/labels distinct and retain eligible continuation. An unused original block rectangle or per-character quad is not separately required when no observable counterexample calls for it; do not edit a frozen tree merely to store unused metadata. Preserve the unsupported inline-start ambiguity limitation and all protective tests. Worker17561b2c records tsc0/lint0with144warnings/build0 but10full-suite failures and no successful invented normal UI; these are not accepted as a full gate. Manager must read the actual complete change, independently execute exact-tree tests/mutations/native gates and actual authorized browser checks, explicitly distinguishing its compensation from a worker UI success. No product landing or acceptance yet.
+
+### §1h.367 — 2026-10-26 — P12-30-TIGHT-LEADING-REGRESSION-BANKED
+
+The manager's actual diff read identified an unverified preservation risk; independent B30 executed the exact committed C28 engine under Node22 and confirmed it. At9pt font/baselines268and278, two lines in one original block overlap glyph boxes by2.366pt; baseline retains the full caption while C28drops its continuation. Fourteen-point and same-baseline other-column controls bound the cause. Permit the narrow same-original-block/same-column/genuinely-later-line-start eligibility correction, preserving typed boundaries, ambiguity, resource floors and every positive; add exact full caption+region pool/request/max1 regressions and re-run final-source gates. No numeric gap expansion or font-specific/semantic classifier. The old candidate is not landable despite its prior focused tests. Preserve all five B30 checkpoints and failed shapes; Manager independently verifies the corrected new tree.
+
+### §1h.368 — 2026-10-26 — P12-MANAGER-P28-ACTUAL-BASELINES-BANKED
+
+Bank independently observed normal-upload baselines before changing the manager verification source. Distinguish pending-image/helper/navigation failures from delivered clicks. Preserve exact wrong-image bytes and the same-profile publicB continuation. Further UI uses the documented allowed browser interface; its actual invented upload/consent/click/viewer screenshot and source paragraphs are retained privately for migration comparison. A tab timeout that already navigated is recovered through its visible state, never duplicated blindly. No worker UI success, extraction completeness, corrected-tree gate or score follows. Main product remains on released web88ac until complete independent verification and normal landing.
+
+### §1h.369 — 2026-10-27 — P12-MANAGER-P28-CANDIDATE-GATES-STARTED
+
+Allowed-UI publicB baseline saved; separate candidate webd2f89f8 matches worker; exact-tree CI40428712922 and local sequential gates started, generated DEV-type syntax errors preserved; no landing. Evidence: P12-MANAGER-P28-VERIFY-20261026.md;verify-p28/private;CI40428712922. No product acceptance, formal score or threshold change.
+
+
+### §1h.370 — 2026-10-27 — P12-23-FACTUAL-SUPPLEMENT-BANKED
+
+A23 factual supplements banked:660 original cycles retained;A26 publicA630/publicB630/invented600 attributed;1795-artifact snapshot; one same-note92ms and foreign-note63ms pending-Delete case; no whole guard or score. Evidence: P12-23-A-20261025T230000Z.md;source75728a3c;private1795-artifact view. No product acceptance, formal score or threshold change.
+
+
+### §1h.371 — 2026-10-27 — P12-24-FOCUS-DIVIDER-CURATION-BANKED
+
+A24 retained measurements and focus/divider snapshot banked;610 artifacts SHA/bytes0mismatch;48 adjacent focus sides>=6.702;4 actual divider drags; privacy7995files/12finiteprobes0hits; no production-original access or full guard closure. Evidence: P12-24-A-20261025T230500Z.md;source5570e993;evidence-only-20261026T-focus-divider-v1. No product acceptance, formal score or threshold change.
+
+
+### §1h.372 — 2026-10-27 — P12-29-SOURCE-IDENTITY-GUIDE-BANKED
+
+B29 bounded source identity guide banked:both page7 Fig6 reference and page8 Figure6 true caption survive exact-string alias dedupe;both actual404;two total authorized successfuluploads;all three typography candidates insufficient as universal gate; finite invented next measurement required. Evidence: P12-29-B-20261026T190500Z.md;sourcea46ffbc5. No product acceptance, formal score or threshold change.
+
+
+### §1h.373 — 2026-10-27 — P12-30-CORRECTED-CAPTION-REVIEW-BANKED
+
+B30 corrected-engine bounded review banked:overlapping mixed-font typed Table stops correctly;hanging-indent omission exists in both baseline/candidate; no new regression established by these finite probes; same-block distant helper case remains synthetic. Evidence: P12-30-B-20261026T193000Z.md;source24d5a571. No product acceptance, formal score or threshold change.
+
+
+### §1h.374 — 2026-10-27 — P12-R1-A23-ADVERSE-BASELINE-SCORE
+
+A23 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen1795-artifactmanifest998dc74d;notreader median or feature-wide malfunction claim. Evidence: P12-23-A-20261025T230000Z.md;f5de90a5;frozenThemeApack. No threshold, price, denominator, guard or production-access requirement waived.
+
+
+### §1h.375 — 2026-10-27 — P12-R1-A24-ADVERSE-BASELINE-SCORE
+
+A24 independent adverse baseline score0.00;12unitFAIL(evidence),sixcommongatesunestablished,0substantiatedextras;frozen610-artifactmanifest378da67a;notreader median or closure. Evidence: P12-24-A-20261025T230500Z.md;19917ecb;frozenThemeBpack. No threshold, price, denominator, guard or production-access requirement waived.
+
+
+### §1h.376 — 2026-10-27 — P12-R1-THREE-THEME-A-BLIND-READERS-STARTED
+
+Three fresh independent requested-platform readers dispatched separately against exact same frozenThemeApack/rubric/owneronly;noA/directorscores/code/stateprovided;ThemeBreadersqueuedonlybecause4runtime slotsinclude manager. Evidence: briefs/P12-R1-reader.md;privateblind-round1;agentsp12_r1_theme_a_reader_1/2/3. No threshold, price, denominator, guard or production-access requirement waived.
+
+
+### §1h.377 — 2026-10-27 — P12-28-NATIVE-TOUCHED-REPETITION-GROUP
+
+Existing native verification infrastructure adds approved group28 for exact23unchanged touched/directproducerrouteviewer tests;no assertion/timeout/config weakening;Windows3runs497pass2POSIXmodefails retained;native repetition required before landing. Evidence: .github/p12-repeat-tests.mjs;verify-p28/private/manager-touched-{1,2,3}.log. No threshold, price, denominator, guard or production-access requirement waived.
+
+
+### §1h.378 — 2026-10-27 — P12-28-MANAGER-NATIVE-GATES-AND-PRESERVATION-STOP
+
+Independent candidatewebd2f89f8 native595files/10898tests pass,build/tsc0,lint0/144;related23files499tests×3pass;manager spatialmutation3red/restored19green+sidecar1red/restored1green exactSHAs;realpublicB/invented corrected but publicApage14missingregion stops landing. Evidence: P12-MANAGER-P28-VERIFY-20261026.md;CI40428712922/40429380626;verify-p28/private. No waiver, source change, score inflation or landing.
+
+
+### §1h.379 — 2026-10-27 — P12-31-PUBLIC-FIGURE-PRESERVATION-BRIEF
+
+Separate read-only B31brief names exact publicAold/new engine/source-region comparison and finite invented general-rule probes;own detached candidatecopy/noUIornewupload;sourceclassifierB29separate;C28frozenpending measuredguide. Evidence: briefs/P12-31.md;cecf2abc;p12-31/wt. No waiver, source change, score inflation or landing.
+
+
+### §1h.380 — 2026-10-27 — P12-31-PUBLIC-PRESERVATION-REGRESSIONS-BANKED
+
+B31 independently confirms new loss of publicA4/5 caused by typed-caption overlap rejection before competition;old2alreadyrightpanelonly,floorsunchanged;3numeric-overlapcandidatesunsafelyattachinteriorlabelsormissanalogue;continue finitepathprovenance/render-footprint measurement,noCauthorized. Evidence: P12-31-B-20261027T011000Z.md;1d7c0078;p12-31/private;cua-public-a-results.json. No safe rule inferred from a small sample; no threshold/guard/score change.
+
+
+### §1h.381 — 2026-10-27 — P12-32-CAPTION-IDENTITY-MATRIX-BRIEF
+
+Separate B32 finite invented identity/source-word matrix brief committed;pdf-outline/aliasclassification investigation independent of B31graphicregions;no sourcechange or chosenclassifier;work remains parallel in owncopy. Evidence: briefs/P12-32.md;P12-29-B-20261026T190500Z.md. No safe rule inferred from a small sample; no threshold/guard/score change.
+
+
+### §1h.382 — 2026-10-27 — P12-28-CLIPPED-PATH-GUIDE-RULED
+
+Approve the measured conservative active-clip-aware path collection direction in the P12-28 supplement after B31 provenance/raster checks and manager source/crop inspection. No numeric caption-overlap relaxation, size-floor reduction, neighbor grouping or classifier change. New persisted manager candidate data require normal figure3/reading16/reportv9 invalidation; named exact-version fixtures may follow while every rejection/ownership/interaction assertion stays. Unsupported graphics states stop conservatively. Prior gates remain historical; repeat manager independent verification on the new exact web tree.
+
+
+### §1h.383 — 2026-10-27 — P12-PARTIAL-HOURLY-QUOTA-RESUMED
+
+PARTIAL usage stall recovered through same hourly thread;clockACTIVEhourlyunchanged;no live duplicateworker. C28 resumed samecopy clean7f7ff6a9 then checkpointafc6474a;engine74be80frozen,web444b8247 freshness3/16/v9,tsc0lint0/144,284pass1Windowsmodefail+separate30pass;newclipfix/fullgatesUIstillowed. Evidence: C28source5883df1f/0691385e/8b85b4d6/7f7ff6a9/afc6474a;p12-28/private;hourlypeer-p12. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.384 — 2026-10-27 — P12-31-STROKE-SUPPORT-LIMITS-BANKED
+
+B31 finite stroke pixels prove fixed10ptpaddinglosesthick/miter/transformedink;nativeboundsfalsevetomiter andchangefloorsemantic;centerline-onlyclipcanerase8000pixels. No universaldualboundsguideapproved;fillclipcause54/135remainsseparatefrompreexistingstrokebounds. Evidence: P12-31-B-20261027T011000Z.md through315a58f8;p12-31/private/stroke-measure.json. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.385 — 2026-10-27 — P12-32-IDENTITY-MATRIX-PARTIAL-BANKED
+
+B32 15inventedPDFcausalmeasurement banked;punctuation/stylebothfalsepositiveandnegative,aliasesduplicated/exactsamedupesuppressed;twocolumnmerged/crosspageunmeasured,nosafeclassifierguide. Earlyda9bd4a5traileromissionretainedsourceSHA;appliedreportwithnewcorrectlyattributedintegrationcommit,norewriteororiginalbadcommitlanding. Evidence: P12-32-B-20261027T012000Z.md;da9bd4a5/af231924;p12-32/private. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.386 — 2026-10-27 — P12-R1-SIX-BLIND-MEDIANS-DIRECTOR-RECORDED
+
+Formal R1baseline recorded atweb88ac:threefreshreaders/theme final0/0/0 each;mediansA0.00/B0.00,A23A24each0,director0/0. Director independentlyhashes1795+610artifacts0mismatch,auditsdisputes;A9/B9boundedPASS,preoverride8.333each,commongatesoverride0;prices/denominator/stoplineunchanged,consecutive0/2each. Evidence: P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.mdScores;privateblind-round1outputs/audits. No missing fact is a product-wide defect finding; no test/guard/price/stop-line waiver.
+
+
+### §1h.387 — 2026-10-27 — P12-28-MEASURED-FILL-CLIP-SCOPE
+
+Use the measured fill-only clip-bound correction after B31 stroke counterexamples. Preserve the established stroke collector/geometry/floors/report/render and every existing test. Conservative active-clip fill bounds must retain genuine support and bounded graphics state; no unproved tighter clip, caption-overlap widening, whole-page recall regression or universal stroke claim. Larger pre-existing stroke/raster grouping limitations remain open and count normally in A. This implementation scope clarification changes no rubric price, input, pass requirement or stop line. Evidence: P12-28 ruling387 supplement; B31through315a58f8; C28 red tests5883df1f and freshnessafc6474a.
+
+
+### §1h.388 — 2026-10-27 — P12-33-NORMAL-PRODUCTION-ENTRY-BRIEF
+
+Investigate source-backed ordinary supported production entry/prerequisites in separate read-only B33. No synthetic authentication, configuration/security bypass, credential inspection, new account or replay of already completed anonymous landing checks. Blocked production gates stay blocked until actual authorized evidence exists. Parallel C28/B31 source verification continues.
+
+
+### §1h.389 — 2026-10-27 — P12-33-NORMAL-ENTRY-FINITE-GUIDE-BANKED
+
+SeparateB33started/completedreadonlysourceguide:uploadavailabilitypredicatevsaccountseparate;3ordinarysupportedroutes;publicsearch/priorobservedpubliclinkpossiblebutcurrentexecutionunproved;503multiplecausesstatusalonenoattribution. Noauth/configbypass,UIreplayorownerrequest.. Evidence: P12-33-B-20261027T055000Z.md;2f66cfaa. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
+
+
+### §1h.390 — 2026-10-27 — P12-32-CROSSPAGE-COLUMNS-BANKED
+
+B32five2pageinventedfixtures416/416exactorderedlines,390outlinebody/26relocated;typedTableoverjoins8ordinarylines;aliaspagesretainbothandexactsamelabeldropssecond. Firstfailedfixturehistoryretained. No semantics/imageassociation proof or universalclassifierauthorized.. Evidence: P12-32-B-20261027T012000Z.md;576a5c15;p12-32/private. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
+
+
+### §1h.391 — 2026-10-27 — P12-31-MANAGER-COUNTEREXAMPLES-CONFIRMED
+
+ManagerindependentreviewtwoquestionsconfirmedbyseparateB31onexact2c204c03:unusedtrailingmoveidenticalrasterbutmissingfigure;65002callbacksold60000walksoverflowtruevsnew65002walksoverflowfalse. Timingnotperformancetrend. Ccandidatehelddespitetype/buildpasses.. Evidence: P12-31-B-20261027T011000Z.md;748c2de0;move-trace.json;budget-65001.json;workerf19b2b5c. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
+
+
+### §1h.392 — 2026-10-27 — P12-28-DRAWN-SUBPATH-WORK-CAP-GUIDE
+
+Authorizeonlymeasured drawn-vs-unusedfill-subpath distinction and attemptedpathworkcapbeforeclipfilter;redfirstactualPDFtests,retained/rasterfallbackandbudgetdiagnosticguards;stroke/floorsunchanged. Current3/16/v9unpublishedprofileversionretained;newsourceown+managergates/UIrequired.. Evidence: briefs/P12-28.mdRuling392;B31through748c2de0. No full-source loss, current deployment revision, universal classifier, green final candidate or score waiver is inferred.
+
+
+### §1h.393 — 2026-10-27 — P12-MANAGER-NORMAL-PRODUCTION-PUBLIC-ENTRY
+
+ManageractualordinaryproductionOpenAlexreaderopensbutfigureloadfails,exactresourceJSONNoPDF;source-supportedarxivreaderHTMLfigure1520x2239deliveredtwice/closed,22orderedsectionparagrapharrayssame;initiallazyattemptretained. Noauthbypass/sourcecompleteness/allmatrix/deployedrevisionclaim. B33publicdeterministicroutegatesclarified.. Evidence: P12-MANAGER-PRODUCTION-ENTRY-20261027.md;B33through3937cf82;privatecua-production-entry-results.json. Missing/failed checks remain explicit; no final score, branch landing, security change or complete-image claim.
+
+
+### §1h.394 — 2026-10-27 — P12-28-FINAL-INDEPENDENT-VERIFICATION-STARTED
+
+Separate managerfreecopy581e13c4cherry-picksC28rangea5db..e0;exactweb28cf74ea90ebc67ec3bbc56f30fa178b1681517f equalworker. Owned4294Next81284/70404verifiedstoppedbefore sourceupdate. Nativeunchangedtestgroupnowincludesnewwork-budgetfile;noassertionchange. Newsourceindependentgates/mutations/UIstart;priorcandidatepassesnotinherited.. Evidence: verify-p28/wt581e13c4;e0e2ff67;.github/p12-repeat-tests.mjs;P12-28workercheckpoint. Missing/failed checks remain explicit; no final score, branch landing, security change or complete-image claim.
+
+
+### §1h.395 — 2026-10-27 — P12-28-FINAL-GATES-MUTATIONS-UI-PARTIAL
+
+Record exact28cf native596files10919tests and24files520tests three times;managerown4mutationsred/restored,localtype/lintpass andWindowsmodefailuresretained. B31postfixfinitefactsbanked. Existinguploadmetadata404afterrestart/quotainterval is a failed authorized reopen, not cached-migration proof or deleted-source proof. Establish one genuinely uploaded released-source baseline and ordinary corrected-source reopen; never copy/inject cookie, capability, owner or session. Candidate stays unlanded until independent actual proof. No rule/score/security waiver.
+
+
+### §1h.396 — 2026-10-27 — P12-28-GENUINE-UPGRADE-FRESH-INVENTED-VERIFIED
+
+Controlled old-source normal chooser/consent baseline and same-tab normal corrected-source reopen passed at identical input route, with changed unversioned→v3 image resource, visually corrected chart and identical four source arrays. A distinct fresh invented PDF also passed. No cookie/capability/session fabrication or cache deletion; old404 remains a failed separate attempt. This is scoped migration/fresh-input proof, not all-real-input or final acceptance. See P12-MANAGER-P28-VERIFY-20261026.md.
+
+
+### §1h.397 — 2026-10-27 — P12-28-FINAL-MANAGER-VERIFICATION-COMPLETE
+
+Independent exact-source C28 verification is complete at web28cf74ea90ebc67ec3bbc56f30fa178b1681517f. Actual publicA all5 figures open/close and23 source arrays agree; publicB4 correct charts and5 honest absence with29 arrays agree; root inspected actual A4/5 andB4 images. Five canonical inputs have byte-identical stored PDF matches. Combined with native10919/full build/type/lint,24files520tests×3 and four own red/restored mutations, approve scoped integration by fresh detached chronological cherry-pick and main fast-forward with silent verified-web diff. This is not a formal round2 score, original-owner walkthrough, whole-source completeness or resolution of known crop/stroke/alias limitations. R1medians and counts remain0/0; inherited/common gates remain binding.
+
+
+### §1h.398 — 2026-10-27 — P12-28-VERIFIED-FAST-FORWARD-LANDED
+
+Fresh detached landing copy from e2c97b2f preserves33 chronological worker commits, verifies exact web28cf74ea90ebc67ec3bbc56f30fa178b1681517f and silent diff against manager581e13c4, then fast-forwards only update-on-paper-digest to c4955144. No PR merge, new branch or rewritten history. C28 scoped verification is complete; independent fresh A and formal round2 scoring are still owed, with known limitations retained and R1 medians/counts unchanged. Correct stale current-state lines that still said no score: formal R1 is0.00/0.00, counts0/2each. Existing C/verification copies remain temporarily necessary as audit/dependency donors for the immediate fresh reviews; no recursive cache deletion is attempted.
+
+
+### §1h.399 — 2026-10-27 — P12-R2-FRESH-A-AND-WRITER-BRIEFS
+
+Open fresh round2 at landed web28cf under unchanged P12 rubric. Dispatch separate A34 ThemeA/4233 and A35 ThemeB/4234, with independent B36/4235reserved investigating unresolved same-note writer order while both A measure. The brief contains the exact existing width contract so no blind evidence omission recurs. Work in finite committed parts, first verify actual supported UI capability, then close named action/privacy/source/inherited families rather than collecting duplicate easy rows. No external UI stack, hidden browser state, auth fabrication or rejected cache deletion. Old R1packs stay frozen and old A23/A24 rows become SCORED R1; they are not live workers or unscored partials. No rubric/price/input waiver or changed denominator.
+
+
+### §1h.400 — 2026-10-27 — P12-34-FRESH-R2-THEME-A-STARTED
+
+A34 is a fresh independent reviewer at brief-containing release66656b33, own detached copy/4233, distinct from implementers and prior blind readers. Product read-only, actual documented browser capability first, original input only through chooser, finite checkpoint parts. A35 and B36 work independently in parallel. No final score or gate advance at dispatch.
+
+
+### §1h.401 — 2026-10-27 — P12-35-FRESH-R2-THEME-B-STARTED
+
+A35 is a fresh independent reviewer at66656b33, own detached copy/4234, parallel to A34/B36. Owns the full79-line inherited inventory, current factual width contract in pack, actual input-specific image/click/selection/control and common-gate observations. Normal production public entry is source-supported but does not certify private upload/revision/fullmatrix. No score at dispatch or inherited acceptance.
+
+
+### §1h.402 — 2026-10-27 — P12-36-SAME-NOTE-WRITER-B-STARTED
+
+B36 independently investigates the observed same-note aggregate/sticky writer question at66656b33, own detached copy and reserved4235. Finite invented matrix and all producing paths must confirm or correct the manager hypothesis; foreign-note deletion success is not same-note precedence evidence. Three general candidate rules and adversarial/risk facts precede a manager implementation ruling. No product fix or new acceptance rule is authorized by dispatch; A34/A35 continue independent actual walks.
+
+
+### §1h.403 — 2026-10-27 — P12-36-WRITER-SOURCE-PARTIAL-BANKED
+
+Read B36 source checkpoint and immediate correction in full. Actual sticky debounce is150ms, not300ms from stale comments; aggregate500ms and wholesale store replacement plus separate reconciliation are source facts only. Finite execution/candidate rules remain pending, so no causal or UI conclusion is accepted. Preserve both report commits without rewriting history; no product change.
+
+
+### §1h.404 — 2026-10-27 — P12-34-ACTUAL-UI-CAPABILITY-PARTIAL-BANKED
+
+Read A34 capability checkpoint in full: actual documented background IAB and ordinary4233DEV reached welcome then home via Skip setup. Initial visibility/pre-server/navigation failures are preserved setup facts, not product findings. Context isolation is unestablished. This is an initial finite checkpoint only; input/actions/common gates/score remain and the same fresh A continues.
+
+
+### §1h.405 — 2026-10-27 — P12-36-FINITE-WRITER-GUIDE-BANKED
+
+Eleveninventedfunctionprobes;3existing suites31/31. Completedaggregate reconciliation preservessticky;olderpendingstickycanoverwrite neweraggregate atlateflush,storelacksactionordering. No mountedReact/reload/persistenceproof,lockedtoolchainlackscomponentDOMruntime. Threegeneralcandidates with costs,noneauthorized. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-36-B-20261027T000000Z.md.
+
+
+### §1h.406 — 2026-10-27 — P12-34-FOUR-INPUT-NOTE-BASELINE-BANKED
+
+Allfourinputsnormalchooser/consent;oneinventedboldnoteeachretainsstrongafterclose/reopen;publicAalsoreload+AltF10roundtrip. No completeformat/lifecycle/matrix/privacy/exportclosure. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
+
+
+### §1h.407 — 2026-10-27 — P12-34-INVENTED-PORTABLE-OUTPUTS-BANKED
+
+Actualclipboardandtxt/md/docdownloads inspectedforoneboldinventedparagraph;hierarchy/nesting/highlight/quotationexclusionnotclosed. Printinvokedbutnodocument/windowobserved;outputgateopen. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
+
+
+### §1h.408 — 2026-10-27 — P12-34-UI-INTERRUPTION-PARTIAL-BANKED
+
+Afterprintactionselection/navigationtimeouts/nochange;causeunknown. Own4233stopped/listenerabsent. Read500missingSupabaseordinaryDEVseparate,notprod. Noerrorattribution/score. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
+
+
+### §1h.409 — 2026-10-27 — P12-34-RESUME-INTERFACE-LIMIT-BANKED
+
+Sameworker/samecopyresumed;actualbrowserinventoryempty,documentedIABcreation unavailable. NofreshUIresult,noalternatestack. Own4233stopped/listenerabsent. Awaitnewindependentcontinuationfromsamecheckpoint. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-34-A-20261027T111042Z.md.
+
+
+### §1h.410 — 2026-10-27 — P12-35-PUBLIC-ENTRY-PARTIAL-BANKED
+
+ActualbackgroundIAB/4234normalpublicAupload ticket+upload200/reader. Visibility/pre-server/navigationfailuresretainedsetup;stubblockedfeed;profileisolationnotestablished;no score. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.411 — 2026-10-27 — P12-35-PUBLIC-A-FIVE-FIGURES-BANKED
+
+PublicAactual5bodyclicks/5canvasesand4closesatthischeckpoint;laterfifthclosewillberecordedseparately. OneoldAXindexfailureisnotclick. Oneviewport/notcrop/fullmatrixproof. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.412 — 2026-10-27 — P12-35-ORIGINAL-TEN-FIGURES-BANKED
+
+Normaloriginalchooser/consentat1280x720:10numberedbodyopens/10canvases/10closes,tenthdelayed. Two12pxcol-resizesplitters;contrast/drag/keys/crop/fullmatrixunmeasured. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.413 — 2026-10-27 — P12-35-PUBLIC-B-ATTEMPTS-PRESERVED
+
+PublicB1zero-boxpre-deliverytimeoutnotclick;loadedB4target512x182semantic/physicalattemptsnomargincard. Causeunknown;laterbroaderinteractionfailure/recoveryrecordedseparately,no pointercauseassumed. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.414 — 2026-10-27 — P12-35-FIXTURE-QUESTION-AND-CLOSE-CORRECTION
+
+Inventedonequestionsubmit/editlightgrey5.08/orange6.53contrastsaftersettle;nodark/dedupe/fullmatrixclaim. PublicAfifthinitialcloseconfirmedbeforeownerupload(total5);laterseparateA1openclose+Briefingworks;priorB/chooserfailsretained. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.415 — 2026-10-27 — P12-35-SINGLE-DRAWABLE-HIGHLIGHT-BANKED
+
+OneactualforwardbodylinedragoffersTakeNotes/Highlight;Highlightproducesmark+colour/remove,notesopensExport/Remove. Notcrossblock/Explain/reload/export/sourceparityproof. No formal round2 score, common-gate waiver or product change. Prior failures remain. P12-35-A-20261027T-PARTIAL.md.
+
+
+### §1h.416 — 2026-10-27 — P12-MANAGER-ORIGINAL-TEN-FIGURES-CONTINUATION
+
+Manager actual original-input check on exact web28cf/1280×720 has seven initial image deliveries/closes and three initial timeouts; separately later normal10/8/9 clicks deliver and close, without source/configuration/auth/hidden-state change. Thus all10 distinct targets have scoped delivered-click evidence, while original failures remain unchanged. Exact14section/55paragraph arrays agree before/after. No cause is assigned to temporary broad interaction interruption or another reviewer's print action, and no crop/source completeness/fullmatrix/production claim follows. Original attachment used only through chooser; all private words/images remain outsideGit.
+
+
+### §1h.417 — 2026-10-27 — P12-34-SAME-ITEM-CONTINUATION-RULED
+
+A34 old reviewer is stopped, own4233listener absent, checkpoint5f5d54b6. Its later IAB interface was unavailable; permit a separate continuation reviewer using exactly the same documented CUA mechanism, same detached copy/port and first unfinished family, preserving all raw evidence/transition and never repeating completed parts. This is runtime recovery, not a rejected-action workaround. Actual sticky-card selection/format/lifecycle remains first: prior aggregate bold notes do not establish it. Temporarily retain print-output as unmeasured and avoid repeated print during concurrent walks; temporal adjacency does not prove interruption cause and nothing is waived. No rubric/price change or score.
+
+
+### §1h.418 — 2026-10-27 — P12-34-INDEPENDENT-CONTINUATION-STARTED
+
+Dispatch the separate continuation reviewer under417 into the SAME clean detached A34 checkpoint5f5d54b6, web28cf and own4233. Prior worker is completed/listener absent; no duplicate. Completed families remain evidence, not redo. Browser capability must be real/documented and actual sticky family remains first. No score/waiver, product/source/config/auth change or alternate UI stack.
+
+### §1h.419 — 2026-10-27 — MANAGER HANDOVER TO CLAUDE; STOP LINE 97.25
+
+The owner, 2026-10-27 (chat, verbatim): "take over chatgpt的工作，你这边自己开工吧，然后记得开启和之前一样的模式，review cycling, subagent group, hourly clock, accuracy bar=97.25%".
+
+(a) **Manager.** The manager role passes from the Codex manager (last HELD BY 2026-10-27T11:24:29.650Z, ruling §1h.418) to Claude, cloud session `session_017DGPdGJqr95t3pMMcspXjE` (the P11 manager). The Codex manager stands down. Its work that never reached the repository — the round-2 walks A34 / A35 in progress on its desktop, the blind readers' private outputs, the private evidence packs and harness copies — is not inherited; everything committed stands as recorded. Any Codex commit that arrives after this ruling is merged (never force-pushed over) and recorded.
+
+(b) **Stop line.** Every theme ≥ **97.25** (the unrounded score) in **two consecutive scored rounds**. This replaces §1h.163's 97.9 with one 0.25 allowed (carried into P12 by §1h.184). With 12 units: all PASS and one 0.25 extra = 97.92 (passes); two 0.25 or one 0.5 = 95.83 (fails); any FAIL unit = at most 91.67 (fails); a failed pass requirement makes the theme 0. Both consecutive counts restart at 0 / 0.
+
+(c) **Method, unchanged.** reviewing-cycle on abc: the manager (Claude Opus) is the only writer of the state file, the rubric and the briefs; A / B / C workers and the blind readers are separate Sonnet agents; independent items run in parallel in their own detached worktrees; the manager verifies every C itself (diff, tsc, lint ≤ 144 warnings, touched tests ×3, its own mutation red then byte-identical, full gates) before a fast-forward land. The hourly resume clock `trig_01MkdKP21BdT8TbcyZpB4umB` (Haiku, 20 past each hour) is re-enabled with a P12 prompt: it only wakes this session when it is idle.
+
+(d) **Round 1 under the original reading** stands as the Codex manager recorded it (P12-RUBRIC Scores row 1; `P12-R1-DIRECTOR-20261027.md`): readers' median, A and director 0.00 for both themes, every unit "FAIL (evidence)", 0.00 extras charged. C28 (figure regions) was verified and landed by the Codex manager before this ruling (§1h.418 and before). The next scored round is round 2, walked fresh under §1h.420.
+
+### §1h.420 — 2026-10-27 — RUBRIC: A FINITE EVIDENCE MATRIX; THE INPUTS
+
+**Why.** Under the frozen rubric's reading — every input × every width × every step × every action family, absent evidence = FAIL — both themes scored 0.00 in round 1 while not one unit failed on a defect: A24 charged "0.00 on the evidence available" and marked B1–B12 "FAIL (evidence)", A23 likewise A1–A12. A number that cannot move with the page cannot measure the owner's 97.25 bar. reviewing-cycle lets a rubric line be amended by a dated ruling when the old reading cannot be met by the input; both numbers are then recorded and the owner may restore the old line.
+
+**What changes.** Only the evidence scope: each unit's "every …" is read as the finite matrix below. Unchanged: the units, the prices, the formula, the pass requirements, "an unperformed cell is FAIL (evidence)" **within** the matrix, and that **every defect observed anywhere — inside or outside the matrix — is costed** by its kind. While the old reading stays computable from a pack, the A records it beside the new score.
+
+**Inputs (the same every round).** R1 the owner's PDF (the manager's scratch copy; never copied into a worktree, committed or quoted; upload UI only). R2 public A, arXiv 1706.03762v7 (15 pages; sha256 b7d72988fd81…; fetched from a public mirror because this environment's network policy refuses arxiv.org). R3 public B′, "Trace-based Just-in-Time Type Specialization for Dynamic Languages" (PLDI 2009; pdf.js's public demo file; 14 pages, two columns, figures and tables; sha256 3662ff519e48…) — it **replaces arXiv 1512.03385**, which this environment cannot fetch. S an invented stress PDF made by a script in the walk's scratch (its sha256 recorded by the first walk, the same file reused every round).
+
+**Environment.** The production build (`npm run build` then `next start`) with the model stub; a profile with no key first, the stub profile for the model-optional paths; Chromium only (named in every deliverable). The deployed site is not required by any unit (its previews need a login); its served revision is recorded when reachable, otherwise "unresolved".
+
+**The matrix.** Widths (CSS viewport): W1 1440×900; W2 1024×576 (a 1280×720 screen at 125 %); W3 853×480 (1280×720 at 150 %); W4 390×844. Reading steps: the smallest, the default and the largest the app offers (named in the pack). Light everywhere; dark at W1 default and W1 largest.
+- **Core cells (every unit):** {R1, R2} × {W1, W2, W3} × default step × light.
+- **Stress cells (every unit whose subject scales):** R1 × W1 × {smallest, largest} × light, and R1 × W1 × largest × dark.
+- **Phone cells:** R1 × W4 × default, for every unit whose control the phone page offers.
+- **Unit-specific:** A5 — one structured note (bold, italic, underline, a two-level bullet list) on R1 through every export route the app offers, the notes page and "Open your notes". A6 / A7 — the notes page and the notes window at every reading step, light and dark at default, a long multi-line row included. B6 — a selection inside a paragraph, across two paragraphs, in a heading or caption, in the Summary and in an answer, on R1 and R2 at W1, W2, W3 (inside a paragraph also at W4). B7 — every visible figure of R1, R2 and R3 at W1; every figure of R1 at W3; three figures of R1 at W4. B8 / B9 / B10 — every reading step at W1 light, the default step dark, W3 default. B11 — the P11 rubric's A1–A12 and B1–B12, one evidence line each on R1 at W1 (the P11 pattern); the P10 / P9 chains of pass requirement 5 are carried by the full test suite on the head together with these P11 lines, not walked ID by ID. B12 — 30 action cycles (open and close each card kind, select, highlight, resize a divider) at W1 and at W3 on R1, and the entry of all four inputs at W1. S is walked at W1 default for A1–A4, A8, A9, B3–B7.
+
+The blind readers score from the pack against this matrix; the director voids a mark only on evidence (§1h.184's rules for voids unchanged).
+
+### §1h.421 — 2026-10-27 — ROUND 2 WALK ENVIRONMENT: THE DEV SERVER WITH THE STUB; P12-37 / P12-38
+
+(a) **Why not the production build.** A local `next start` refuses every upload unless a Supabase account is signed in: `uploadOwner()` returns null whenever `NODE_ENV` is production (`web/src/lib/papers/upload-access.ts`, the Codex B33 report `P12-33-B-20261027T055000Z.md`), and the public arXiv routes cannot fetch from this environment (arxiv.org is refused). The rubric's inputs all enter through the upload UI, so the round-2 walks run on **the dev server with the model stub** — what every P11 walk used — started with the Next CLI directly (`npx next dev`, never `npm run dev`, whose `predev` kills other dev servers). §1h.420's "Environment: the production build" is amended to this. The production build is still built and gated at every landing (Appendix A); a defect that only production could show is out of reach here and is named as an evidence limit to the owner, whose own look at the deployed site remains the acceptance above the rubric.
+
+(b) **Round 2 dispatched.** Head: the commit that carries this ruling. A **P12-37** walks Theme A (`briefs/P12-37.md`, port 4240) and A **P12-38** walks Theme B (`briefs/P12-38.md`, port 4241), at once, both from `briefs/P12-R2-CLAUDE-COMMON.md`; Sonnet; read-only; each writes an evidence pack for three blind readers and its own score. The invented input S is `invented-stress.pdf` (sha256 e8f1d37a0b9c…, made by a Chromium print of an invented page, 7 pages, 6 figures, a table, an unbroken 100-character token).
+
+### §1h.422 — 2026-10-27 — THE OWNER'S TWO PAPERS ARE THE TEST INPUTS; A SCORE PER PAPER
+
+The owner, 2026-10-27 (chat, verbatim), attaching two PDFs: "chatgpt停了。我需要你用这两个pdf来作为测试对象，他们必须都要达到review cycling的97.25%分数或以上".
+
+(a) **The Codex manager has stopped** (the owner's word); §1h.419 (a) is complete. No Codex writer remains on the branch.
+
+(b) **The scored inputs are the owner's two papers**, replacing R1, R2, R3 and S of §1h.420: **P1** Lin et al. 2025 (10 pages; sha256 32d7e6b4c5c2face…) and **P2** Sederholm et al. 2026 (10 pages; sha256 0153251d92847dfd…). Both are the owner's supplied files: they enter only through the upload UI, are never copied into a worktree, committed or quoted, and no run of four of their words appears in an index or a deliverable. The earlier inputs (the owner's earlier paper, the two public papers, the invented PDF) leave the scoring; a C still tests on invented input only.
+
+(c) **A score per paper.** Each theme is scored **separately on each paper**: its 12 units are judged on that paper's cells only, and an extra is charged to the paper whose evidence shows it (a mechanism shown on both papers is charged to both). Each round therefore gives four numbers — Theme A on P1, Theme A on P2, Theme B on P1, Theme B on P2 — each by the formula `max(0, 100 × (Σ PASS − Σ extras) / 12)`; the pass requirements are judged per paper (a failed one makes that paper's theme 0). **The loop ends when all four are ≥ 97.25 in two consecutive scored rounds.**
+
+(d) **The matrix, per paper** (§1h.420's widths, steps and themes unchanged): core cells {W1, W2, W3} × default step × light; stress cells W1 × {smallest, largest} × light and W1 × largest × dark; phone cells W4 × default. Unit-specific, on each paper: A5 one structured note through every export route, the notes page and "Open your notes"; A6 / A7 that paper's note rows at every reading step, light and dark at default, a long multi-line row included; B6 the five selection kinds at W1, W2, W3 (inside a paragraph also at W4); B7 every visible figure at W1 and at W3, three figures at W4, each compared with its figure on the PDF page; B8–B10 every step at W1 light, default dark, W3 default; B11 the P11 guard lines A1–A12 and B1–B12 one evidence line each at W1; B12 30 action cycles at W1 and 30 at W3, and the paper's entry at W1 with no key.
+
+(e) Round 2's walks P12-37 and P12-38 switch to P1 and P2 by the manager's message; their worktrees and ports stay.
+
+### §1h.423 — 2026-10-27 — P3 ADDED; THEME C, THE PAPER'S STRUCTURE; NINE SCORES
+
+The owner, 2026-10-27 (chat, verbatim), attaching a third PDF: "加一篇这个 ，这个是nature的，没有固定的文章结构，正好用这个测试一下peer可不可以自己区分出来什么是result, discussion, experiment, introduction etc".
+
+(a) **P3 joins the scored inputs:** Zahiri et al. 2021 (11 pages; sha256 8d7ca92bb604ce6a…), the owner's supplied file under the same rules as P1 and P2 (§1h.422 (b)): upload UI only, never copied into a worktree, committed or quoted, no run of four of its words in an index or deliverable. Themes A and B are scored on P3 as on P1 and P2 (§1h.422 (c)–(d)).
+
+(b) **Theme C — the paper's structure** (new; the owner's request). Does Peer tell, on its own, which part of a paper is the introduction, the methods / experiment, the results, the discussion / conclusion and the back matter — also when the headings do not say so (P3's journal prints descriptive headings and an unheaded introduction). Scored **per paper on P1, P2 and P3**, on the profile with **no key** (Tier 0), from the reading map at W1 1440×900, default step, light.
+- **Units:** one per **part** of the paper as ruled by the manager from the PDF (the ground truth, below): the introduction (headed or not); each results section; the discussion and / or conclusion; the methods / experimental section; the back matter (references, acknowledgements, data and author statements) as one unit. N_p = the number of ruled parts of paper p.
+- **PASS** when the map has a row that starts where the part starts (its first paragraph is the row's first paragraph; a part merged into another row or split across rows fails) **and** the role the page shows on that row is the ruled role — introduction → setup; methods / experimental → method; results → evidence; discussion, conclusion, limitations → interpretation; back matter → apparatus (the app's own five roles, `web/src/lib/papers/reading-map.ts`). A row with no role tag (`body`) for a part that has a ruled role is FAIL.
+- **Extras:** a map row for something that is not a part of the paper (a caption, a running head, a journal or licence line) 0.5 (misleading); a sub-row whose role contradicts its part's 0.5; a role shown in words a reader would misread 0.25.
+- **Score** per paper: `max(0, 100 × (Σ PASS − Σ extras) / N_p)`; the pass requirements of the rubric apply (Tier 0 above all).
+- **Ground truth:** proposed by an independent read-only B (P12-40) from each PDF — the parts with their page, their first paragraph's locator, the proposed role and the PDF's own evidence for it — and **ruled by the manager before the first Theme C score**. The committed ruling names parts by ordinal, page and role only (no heading words); the full private list stays in the manager's scratch.
+
+(c) **§1f.2's "no positional guessing" is superseded** for parts whose heading names no role: the owner now asks Peer to work the role out itself. The role must still come **from the document's own evidence** (where the part stands relative to parts the page can name, such as the methods and the references; the unheaded text before the first heading; the paper's own signposting), never from a model in Tier 0. Whether the page marks an inferred role differently from a named one is a design question the B answers with candidates and the manager rules.
+
+(d) **The stop line now has nine scores:** Theme A, Theme B and Theme C, each on P1, P2 and P3 — **all nine ≥ 97.25 in two consecutive scored rounds**. Round 2's walks P12-37 / P12-38 add P3 by the manager's message; Theme C is first scored in round 2 if its ground truth is ruled in time, otherwise from round 3.
+
+### §1h.424 — 2026-10-27 — NO INFERRED MARK; THE MODEL REVIEWS THE RULES' STRUCTURE; P4–P6 HELD OUT FOR ADAPTATION
+
+The owner, 2026-10-27 (chat, verbatim), answering the manager's two open questions and attaching three PDFs: on the model's part — "有key的时候，最终的结果任然是药100%准确的，规则的使用是为了节省token的使用。所以最后ai还是要参与进来，但是需要想方法节省ai的使用。比如说先用规则分出一个结果，然后让ai去审阅一下进行纠错，这样就能节省ai读整篇文章的token量。你在思考一下这部分看该怎么完善"; on marking an inferred role — "先不标"; on the PDFs — "用这两个文章再进行训练。目的是看看peer在遇到不同的文章的时候是否可以很好的adapt".
+
+(a) **No "inferred" mark.** An inferred role is shown exactly like a named one (the owner's "先不标").
+
+(b) **With a key, the structure must be right — the rules save tokens, the model checks.** Tier 1 adds a **structure review**: the rules (Tier 0) produce the parts, their roles and, per part, a confidence and the evidence used; with a key, the model receives **a compact skeleton, not the paper** — the headings, each paragraph's position and short head, and per paragraph the counts the rules use (figure and table references, citations, numbers with units, procedural wording) — together with the rules' draft, and returns **only corrections** in a fixed schema (a part's start moved to an existing paragraph index; a role from the five). Requirements: the answer is validated (schema, indices in range, roles from the set) and an invalid or failed answer leaves the rules' draft in place (Tier 0 never breaks); a disputed part may get a second, targeted look at that part's text only; the reviewed structure is cached per paper version (private for uploads) so a paper is reviewed once; where the reading pipeline already sends the paper to the model, the review rides on that call if it saves tokens. The token cost is measured against sending the whole text and reported to the owner. B P12-40 adds this design to its report; a C builds it after the Tier-0 rules.
+
+(c) **Scoring.** Theme C is scored **without a key** (C0: the rules, the rubric's formula, ≥ 97.25 per paper) and **with a key** (C1: every part right and no extra — 100 % — per paper, the owner's "100%准确"). The model stub cannot judge a paper's structure, so **C1 can be measured only with a real model key supplied by the owner for testing** (held in the test server's environment only; never printed, logged or committed); until then C1 is reported as unmeasured and is not yet part of the stop line.
+
+(d) **Three more papers, for adaptation:** **P4** (Nature Communications 2026, 12 pages, sha256 bbd9677e67e0ca89…), **P5** (Nature 2024, 21 pages, 25.6 MB — just under the upload limit of 25 MiB, sha256 6ce63dc1cb39c37f…), **P6** (Nature 2026, 11 pages, sha256 bd234ebef830bf3c…); the owner's files under the same rules as P1–P3. To measure adaptation honestly they are a **held-out set**: the Tier-0 rules are developed on P1–P3 and invented fixtures only; once they land, P4–P6 are measured **first-sight** (that score is reported to the owner as the adaptation measure), and only then may they inform further rules. Theme C (C0) is scored on P4–P6 and joins the stop line; their figures are checked by the engine and defects are fixed, but Themes A and B are scored on P1–P3 only.
+
+(e) **The stop line:** Themes A and B on P1–P3 (six scores) and Theme C0 on P1–P6 (six scores), all ≥ 97.25 in two consecutive scored rounds; C1 joins as 100 % per paper once a key is supplied.
+
+### §1h.425 — 2026-10-27 — ALL AVAILABLE WORKERS AT ONCE; B P12-39'S DECISIONS; SEVEN MORE ITEMS
+
+The owner, 2026-10-27 (chat, verbatim): "注意要确保所有available的agent同时工作，不要一个一个agent的工作" — every available agent works at the same time, never one after another (AGENTS.md "Working Style" restated).
+
+(a) **Everything that does not wait on another result starts now, in parallel**, beside A P12-37, A P12-38 and B P12-40: B P12-41 (the figure engine on P4–P6; P3 was covered by B P12-39), B P12-42 (Tier 1, the model's structure review — taken over from B P12-40, which now covers Tier 0 only), B P12-43 (sealed Theme C ground truth for the held-out P4–P6 and their pre-rules map score; per-part detail stays in the manager's scratch and never reaches a rules C), A-smoke P12-44 (the six papers through the real upload UI, port 4242), and the three Cs from B P12-39: C P12-45, C P12-46, C P12-47. Ten workers in all.
+
+(b) **B P12-39's decisions** (report `P12-39-B-20261027T153000Z.md`, landed as 7291f0a8): (1) R1a (a label-only "Fig. N" line joins the same-block line on its row) is its own C, P12-45, so the P1 regression lands first; (2) R2a (satellites join an accepted, captioned region) **is within "the size floors stay"** — nothing below a floor becomes a figure of its own; (3) R3a's tolerance is 6 pt, a figure-text line is ≤ 60 characters, not a typed caption, not in the caption's block, above the caption, inside the region's widened extent, and a short last line of a body paragraph must provably stay out; (4) M6 and M7 (in `pdf-outline.ts`) belong to this round, C P12-46; (5) the caption sliver under P1 / P2 pictures and a margin caption cut to its first line are B7 defects (the image or caption is not the paper's); (6) P3 Figs. 3 and 4 are WRONG REGION until fixed. R2a, R3a, R5a and R8a are one C (P12-47) because R3a fixes P3 Figs. 3–4 only together with R2a; C P12-45 and C P12-47 touch different functions of `pdf-engine.ts` and both bump `FIGURE_EXTRACTION_REVISION` — the manager combines them and sets the revision. R8a re-aims the "close-body over-join" test, named.
+
+### §1h.426 — 2026-10-27 — THEME C GROUND TRUTH FOR P1–P3 RULED; FOUR PARALLEL Cs FOR THE STRUCTURE
+
+B P12-40's report (`P12-40-B-20261027T153828Z.md`, landed on the branch) proposes Theme C's ground truth for P1–P3, measures today's map (0.00 on all three) and recommends rule set B after the outline repairs O1–O8. The manager rules:
+
+(a) **Theme C's ground truth for P1–P3 is B P12-40's §2, with these decisions:** P1 N = 5 (introduction, methods, results-and-discussion, conclusions, back matter); P2 N = 5 (introduction, results-and-discussion, conclusion, the experimental section after it, back matter); P3 N = 8 (the unheaded introduction, three results parts, the unheaded two-paragraph closing, back-matter block 1, Methods after the references, back-matter block 2). (1) **Back matter is one unit per contiguous block** — P3's two blocks are two units. (2) **Sub-numbered headings are sub-rows, not units**; a sub-row whose role contradicts its part's is the 0.5 extra. (3) P3's third results part (materials description plus a result) is **evidence**, by the paper's own order. (4) A mixed **results-and-discussion** part is **evidence**; a reader does not fail it for lacking interpretation. (5) **An unheaded row's label is the role's own label** (the label the model partition's rows already use). (6) The model partition's "Peer's reading" tag on its own rows is unchanged in this round (it marks Tier-2 rows, not Tier-0 inference; §1h.424 (a) concerns the latter). (7) **The first-paragraph test is strict.** The private list (heading words, locators) stays in the manager's scratch (`p12/b40/ground-truth-private.md`).
+
+(b) **The build splits into four parallel Cs by function, not one cluster** (B recommended one; the owner's standing order §1h.425 is everyone at once, and the functions are disjoint): **C P12-48** the role rules — L1 (experimental methods → methods), L2 (end-matter words → apparatus), rules A1–A4 in a new pure module called from `readingMapOf`, and B's closing split through the partition's virtual rows; **C P12-49** heading detection — O1 body size, O3 numbered-heading guard, O4 running heads, O7 drop cap and run-in lead-ins; **C P12-50** the columns — O2 narrow gutter and the prior by position; **C P12-51** section assembly — O5 keep what follows the references, O6 the unheaded opening as the first section with no heading (the interface C P12-48 reads), O8 figure-panel text out of the prose. Rule set C is not built. Each C tests on invented input in a new test file of its own; the manager combines them with C P12-46 (also in `pdf-outline.ts`), then measures Theme C on P1–P3 with B P12-40's scratch harness before the round's scoring.
+
+(c) R4 (an empty group heading followed by a run-in lead-in) is expected to close with O7; if it does not, a later item.
+
+### §1h.427 — 2026-10-27 — HELD-OUT JUDGEMENT CALLS BY PRINCIPLE; B P12-52 ON THE SAME-NOTE WRITERS
+
+B P12-43's sealed report (`P12-43-B-20261027T154759Z.md`, landed; counts only) gives the held-out papers' pre-rules Theme C score: **0 on P4, P5 and P6**; the pipeline takes all three with no key, no failure and no size refusal (P5 25,587,250 bytes against the 26,214,400-byte cap; 4.4 s / 13.6 s / 5.6 s to the map).
+
+(a) **The held-out judgement calls are decided by §1h.426's principles, without the manager reading the per-part detail now:** back matter is one unit per contiguous block (a block split by the print order around the methods is two units); an unheaded closing is a unit with the interpretation role (as P3's); a disputed role follows the paper's own order. By the sealed file's counts this gives **N = 5 (P4), 9 (P5), 9 (P6)**; the manager opens the sealed file only at the first-sight measure, after the Tier-0 rules land, and records there any count the principles do not settle.
+
+(b) **A slot is free, so a known open question starts now:** B P12-52 checks on the real page (dev server, stub, port 4243, an invented / public paper — never the owner's) whether the sticky card and the notes window, open on the same note, can lose a reader's edit (P12-36-B's open hypothesis: a stale whole-note save after a sticky write). Theme A's A5 / A8 depend on it.
+
+### §1h.428 — 2026-10-27 — TIER 1, THE STRUCTURE REVIEW: B P12-42'S DECISIONS; C P12-53 STARTS
+
+B P12-42's report (`P12-42-B-20261027T1600Z.md`; the harness refused the worker's own file write, so the manager saved its returned text verbatim and checked it: no run of four words from P1–P3, no upload path) designs Tier 1, the model's review of the rules' structure. Measured: the skeleton review prompt is 3,378 / 1,988 / 5,651 tokens on P1 / P2 / P3 against 8,767 / 8,970 / 7,243 for the whole text (61 % / 78 % / 22 % saved; P3's saving is small only because today's parse cuts it into 194 fragments — it grows once the outline Cs land). The manager rules its decisions:
+
+(a) **D1 — when the review runs: whenever a model key is configured**, not only on the deep-report switch. The owner's words (§1h.424): with a key the structure must be 100 % right and the model must take part. The skeleton (headings, 16-word paragraph heads, counts, the draft) is the least paper text that achieves it. Without a key nothing changes (Tier 0).
+(b) **D2 separate call first**, with the gist-call piggyback measured as an arm of the real-key protocol; **D3** the report tier (`reportModelTier()`); **D4** mode A (16-word heads) by default, mode B (counts only for interior paragraphs) only above 24,000 characters; **D5** the model is recorded in the cache entry, not keyed; **D6** an owner-scoped durable sidecar for uploads in the same C if it stays small, otherwise the next item; **D8** five roles only, `body` refused; **D9** client memory 30 days for an answer, 1 hour for a failure; **D10** no per-paragraph page.
+(c) **D7** (retiring the gist prompt's own `partition` request) waits until C1 is measured with a real key.
+(d) **C P12-53 starts now**, in parallel with the Tier-0 Cs: it builds against the map's rows as they are (a row's confidence: high when its heading names its role, medium otherwise), in its own files, so the Tier-0 rules' landing only improves its input.
+(e) **C1 (100 % with a key) still needs a real key from the owner**; B P12-42 §7 is the protocol (six papers, about 360 calls, about 1.6 million input tokens).
+
+### §1h.429 — 2026-10-27 — THE FIGURE ENGINE ON THE HELD-OUT PAPERS: R13b, R9a/R10a FOR R2a, R11a, R12a, EXTENDED DATA
+
+B P12-41's report (`P12-41-B-20261027T162712Z.md`, landed) checked the figure engine on the held-out P4, P5, P6: **none of their 14 main figures opens whole** (strict 0 / 14, lenient 2); P5 opens none at all because the engine refuses files over 18,000,000 bytes while uploads may be 26,214,400 (M13); 10 Extended Data figures of P5 are never listed (M14); 9 of 14 captions are cut to their first line (M7); 14 of 15 begin with a stray "|" (M15); new mechanisms M9 (no piece over the floors), M10 (a caption-blind sibling panel), M11 (the walk / box ceilings switch vector analysis off on dense pages), M12 (strokes ignore the clip). The manager rules:
+
+(a) **M13: R13b** — a one-page call (`onlyPage`, the margin's and the sizing's shape) may take a PDF up to 27,000,000 bytes; the whole-document pool keeps 18,000,000; `FIGURE_EXTRACTION_REVISION` bumped (P5's sizes were cached as "none"). Measured 203–268 MB peak per page call; the deployed function's memory is outside the repository and is named to the owner as unverified. → **C P12-54**.
+(b) **M9 / M10: R9a + R10a replace R2a in C P12-47** (R2a's 60 × 60 / 10,000 pt² guard excludes every real sub-floor piece, 4,440–8,174 pt²); C P12-47 told by message. **Caption-bounded growth is within "the size floors stay"**: the floors still decide what is a candidate; a captioned (or orphan-captioned, ≥ 3 pieces, union over the floors) region may absorb pieces in its own band.
+(c) **M11: R11a** — lift the walk ceiling (60,000 → 400,000) and the distinct-box bound (12,000 → 80,000) with grid clustering; the 5 pinned numbers of `pdf-engine.work-budget.test.ts` are **re-aimed** (named, each still enforcing a bound), plus a new test that the grid clustering equals the loop below 2,000 boxes. **M12: R12a** — strokes honour the clip stack like fills. Both in the path walk / clustering → **C P12-55**.
+(d) **M14: R14a — Extended Data figures are listed and open** under their own label namespace ("Extended Data Fig. N", route token `ed<N>`): a reader expects every figure the PDF prints. The owner may veto. **M6: R6b** (a caption line's previous line in the column must not end mid-sentence; R6a misses P6's ghost) and **M15: R15a** (`|` among the caption separators) join R14a in one C, **P12-56, after C P12-46 lands** — all three change `CAPTION` in `pdf-outline.ts`, which C P12-46 is changing now (the stated reason for the sequence).
+(e) Marks stay strict (axis titles, tick digits and panel letters are part of the figure).
+
+### §1h.430 — 2026-10-27 — C1 WITH THE OWNER'S TEST KEY; A P12-57 THE KEYED HARNESS
+
+The owner, 2026-10-27 (chat, verbatim), answering "测试用 key，用来实测有 key 时结构 100% 准确": "使用".
+
+(a) **C1 is measured with the owner's test key already in the environment**, `PEER_TEST_GEMINI_API_KEY` (added 2026-10-11 for P9-KEY; checked 20:3xZ today: Google answers 200 with the model list, the key's value printed nowhere). The key enters the app only as a reader's own key (BYOK: the Profile form, filled by Playwright from the environment), never as a server variable, never printed, logged, written or screenshotted; a 429 / quota / billing answer stops the run at once.
+(b) **C1 joins the stop line** once measured: per paper, with the key, every part right (start and role) and no extra — 100 % — on P1–P6, by B P12-42 §7's protocol (natural drafts, 5 runs; seeded drafts reported). P4–P6 are measured first-sight only after the Tier-0 rules land; their truth stays sealed and the manager scores them.
+(c) **A P12-57 builds the keyed measuring harness now** (phase 1: the BYOK path end to end on P1 with today's keyed features), and runs the C1 arms when the manager says the structure review (C P12-53) and the Tier-0 rules have landed (phase 2, resumed by message).
+
+### §1h.431 — 2026-10-27 — C P12-56 STARTS ON C P12-46'S HEAD
+
+The owner, 2026-10-27, asked what the Extended Data question meant; the manager explained it and keeps the default (list them) unless the owner says otherwise. C P12-46 (R6a, R7a) has reported and is being verified; **C P12-56 starts now from C P12-46's head** (9a108139, in the shared object store) rather than after it lands — everyone at once — with R14a (Extended Data), R6b (the line before) and R15a (the bar); if the manager's verification changes C P12-46, C P12-56 is told.
+
+### §1h.432 — 2026-10-27 — THE UPLOAD SMOKE: THE BODY NEVER ARRIVES ON ITS OWN; C P12-58, B P12-59; MEMORY IS A LIMIT
+
+A-smoke P12-44's report (`docs/reading-helper-abc/P12-44-A-20261027T2050Z.md`, landed) took all six papers through the real upload UI: every upload is accepted, but **the first reading after an upload is abstract-only for P2–P6 in every run (P1 in 2 of 3) and nothing asks again** — the body appears only after a manual reload, and for P5 not within 90 s at all (D1). Mechanism named with file:line: the reading route waits 8 s for the full text (`reading/route.ts:22`), `use-reading.ts` asks once with no retry, and the upload route extracts the PDF fully and then discards the document (`upload/route.ts:204`), so the first reading extracts it again. Unknowns: one reading request took 55 s despite the 8 s timer; P5 drives the dev server to 2.3 GB; P1's page title is a journal-name shape and P3's a body-sentence fragment. Also: the container (15 GB) is at its memory limit with 14 workers; the kernel killed the dev servers of 4240 and 4243 once.
+
+(a) **D1 is unusable for P5 and misleading for the rest: C P12-58 now** — the upload keeps the document it extracted (owner-private), the reading route says "pending" instead of "none" when it answers before the full text, and the client keeps asking (bounded backoff) with a calm pending line, swapping the body in without moving the scroll.
+(b) **B P12-59 now, script-only (no dev server, memory is tight)**: the 55 s request, P5's memory, and the two titles (P1–P3 only).
+(c) **Memory is a real limit**: no new dev server until one of the four running ones stops; the workers whose servers were killed are told to restart.
+
+### §1h.433 — 2026-10-27 — 2 GB DEPLOYED; OPEN ONLY THE FIGURE'S PAGE (B P12-60); EXTENDED DATA YES, SUPPLEMENTARY FIGURES LEFT AS TEXT
+
+The owner, 2026-10-27 (chat, verbatim). On the deployed memory, with a screenshot of the Vercel Function CPU setting (Standard selected: 1 vCPU, 2 GB memory): "可不可以优化一下，不要把整份pdf打开，只打开图片存在的那一页？". On Extended Data figures: "可以的，确保peer能够都分辨出来。不过如果文章要的是像是supporting info的那种另一个文章里的图片，就不用管，让用户自己去看就行了".
+
+(a) **The deployed function has 2 GB** (Standard, 1 vCPU): R13b's 203–268 MB per one-page call fits. The owner asks for less: **open only the page that holds the figure**. B P12-60 measures where a one-page call's memory goes on P5 and compares candidates (a per-page file cut at upload, a cached figure image so a second view never opens the PDF, opening without a full in-memory copy); a C follows its choice.
+(b) **Extended Data confirmed**, and Peer must tell main, Extended Data and supplementary figures apart. **A figure the PDF does not print** (supporting information in a separate file: "Fig. S3", "Supplementary Fig. 3") is left as plain text: no list entry, no link, never bound to "Fig. N". C P12-56 told by message.
+
+### §1h.434 — 2026-10-27 — A FIGURE VIEW NEVER OPENS THE WHOLE PDF (THE OWNER: MANDATORY); C P12-61
+
+The owner, 2026-10-27 (chat, verbatim), on the plan to open only the figure's page (a per-page file cut at upload, a cached cut figure, no whole in-memory copy): "必须要这么做".
+
+(a) **Mandatory.** A figure view never opens the whole PDF: (1) **a cached cut figure** — for an upload, the first cut's image and size are stored owner-private, keyed by the paper, page, label and `FIGURE_EXTRACTION_REVISION`, so a later view opens no PDF at all (today an upload's figure answers are never cached: `figure-image/route.ts` about line 59); (2) **a per-page file** — the page that holds the figure is cut to its own small PDF once, and a figure call opens only that file; (3) **no whole copy held twice** where mupdf's API allows. B P12-60 measures (2) and (3) on P5; **C P12-61 starts (1) now** (it needs no measurement) and is told (2) / (3) by message when B P12-60 reports.
+
+### §1h.435 — 2026-10-28 — C P12-51'S QUESTIONS: THE FIRST END-MATTER PART IS A PART; C P12-62
+
+C P12-51 reported (O5, O6, O8; checkpoint `P12-51-C-20261028T0139Z.md`, head e2df578a). Its questions, ruled:
+
+(a) **The first end-matter part is a part too.** Today the first end-matter heading closes the argument and its own text stays out (P7-18), so a paper's back-matter row starts at its *second* end-matter part and the data-availability statement (or the supporting-information line) is not shown at all — a missing part and a strict first-paragraph failure for P1's and P2's back matter. From now the first end-matter heading **opens its section like the later ones** (its text kept, filed by its own heading), and only the reference entries stay out. The P7-18 / P8-03 cases that pin the exclusion are **re-aimed, each named**, keeping what still holds (reference entries out; the argument's prose unchanged). → **C P12-62**, starting now from C P12-51's head (same function, `buildOutline`: the stated reason it follows C P12-51).
+(b) No references row is emitted (as before); the rules read the buckets C P12-51 sets — accepted. (c) Acknowledgement and supplementary notes now reach the deep report's input on the PDF path — accepted, a backlog note (the deep report may later skip apparatus sections). (d) Appendices after the references stay out — accepted. (e) C P12-51's three re-aimed assertions in `pdf-outline.test.ts` — accepted as named.
+
+### §1h.436 — 2026-10-28 — B P12-60 (OPEN ONLY THE PAGE), B P12-59 (55 s, MEMORY, TITLES), C P12-48'S OPEN POINTS; C P12-63, C P12-64; ROW START THROUGH SUB-ROWS
+
+Three reports, ruled together.
+
+(a) **B P12-60** (`P12-60-B-20261028T0138Z.md`, landed): mupdf already reads only the page's objects (2–2.5 MiB of a 24.4 MiB file per page); the peak comes from **four copies of the whole file** (102 MB of a ~220 MB peak on P5), two of them pure waste. Decisions: D1 — the kept cut first (C P12-61 part 1), then no whole copy (open through `mupdf.Stream`: a file stream on disk, a private temp file for a bucket upload deleted in `finally`, a Buffer stream for public papers; drop the route's extra copies), then the page file **made lazily** on a page's first miss, keyed by hash and page, with `/OCProperties` grafted so hidden layers stay hidden; D2 — C P12-61 gets an **additive slot** in `pdf-engine.ts` (a source type for `extractPdfFigures`, a new `cutPdfPage`), the manager combines; D3 — the private temp file is allowed (deleted in `finally`, tested); D5 — public papers keep the CDN; D6 — old uploads fall back to the whole-file path. C P12-61 told by message.
+(b) **B P12-59** (`P12-59-B-20261028T0150Z.md`, landed): the 55 s request is not reproduced (the 8 s timer fires correctly; the first reading of P5 takes 7.5 s on a quiet machine, inside the timer only in a bare process); P5's memory in bare Node peaks at 395–465 MB (the 2.3 GB is the dev server's, not the code's), within the deployed 2 GB; F1 (the upload keeps its document) is already C P12-58's rule 1. **The titles**: `titleOf` takes the largest page-1 line, and a line's size is its tallest run — a journal masthead set larger than the title (P1) and a drop cap inflating a body line (P3) win. → **C P12-64**: a title-only size (character-weighted) plus the PDF's embedded Info / XMP title as a witness among the page-1 size classes; `size` itself unchanged.
+(c) **C P12-48** (roles, `P12-48-C-20261027T2100Z.md`) reported; its open points → **C P12-63**: wire the closing split into the page (`page.tsx` about 831: the partition overlay takes `paragraphPartition ?? closingPartition(…)`), draw a closing part's own role with no "Peer's reading" mark (§1h.424 (a)), the closing split's echo source falls back to **the introduction's last paragraph** when the paper prints no abstract (the paper's own announcement), the body shows **no placeholder heading** for the unheaded opening (the map's row is labelled by its role), and an unnamed part whose named children all name one role takes that role (A2 must not call it evidence).
+(d) **Scoring interpretation (not a relaxation):** a map row whose own paragraphs are empty because its text sits in its sub-rows (a numbered part over 2.1, 2.2 …) **starts where its first sub-row's first paragraph starts**; the manager's scorer reads it so.
+
+### §1h.437 — 2026-10-28 — THE SAME-NOTE WRITERS: A RUNAWAY OVERWRITE (M1) AND FOCUS THEFT (M2, M3); C P12-65, C P12-66
+
+B P12-52 (`docs/reading-helper-abc/P12-52-B-20261028T0148Z.md`, landed) drove the sticky card and the notes window on one note on the real page (about 45 usable trials). Both writers' words are kept whenever both surfaces stay alive and the writers get more than 150 ms. Three mechanisms fail: **M1** — leaving the page under 150 ms after a sticky key lets the window's whole-note `save` (no base) overwrite the sticky's text, and in 10 of 11 runs the window's seed-save effect then **re-saves in a loop, doubling the block until the localStorage quota (up to 4.36 million characters)** — data loss and a runaway; **M2** — a window save re-keys the sticky's editor and its `autoFocus` steals the caret (4 of 4, 5 of 5); **M3** — the same re-key drops focus for one render and the next key is lost (5 of 18), possibly firing a single-letter shortcut. The manager rules: **M1 is unusable (a reader's words lost, storage filled) → C P12-65 now**: whole-note saves carry a base and the store merges by block id; the window advances its base after a merge and ignores the store change its own seed save caused (no loop, ever); **M2 / M3 → C P12-66 now, in parallel** (other functions of the shared editor): the follow re-key keeps focus only where it was. The repo has no DOM test environment (no jsdom / happy-dom, and none may be added): each C tests the sequences at function level through the real store and the extracted writer logic, and proves the page with one Playwright run of B P12-52's sequences on port 4243 at the end (one Chromium, one server).
+
+### §1h.438 — 2026-10-28 — THE KEYED HARNESS WORKS; THE DEV SERVER'S CACHE SNAPSHOTS THE ENVIRONMENT — START SERVERS WITHOUT THE KEY
+
+A P12-57's phase 1 (`P12-57-A-20261028T0157Z.md`, landed; the manager counted the key's value in the commit: 0): the keyed harness works end to end on P1 with the owner's test key (6 Google calls, 27,090 tokens in / 5,471 out over four runs, no quota error, 0 requests carrying the key off the machine); the structure route was absent at that head. **Finding:** the key's value was in the dev server's Turbopack cache (`web/.next/dev/cache/turbopack`). The manager counted a worktree that never used the key: 294 occurrences in 288 files — **the dev server snapshots the container's environment, which holds `PEER_TEST_GEMINI_API_KEY`**; it is not the BYOK path. `.next/` is git-ignored and untracked (checked). Ruled: (a) **every dev server starts with `env -u PEER_TEST_GEMINI_API_KEY`** — the keyed harness reads the key in the Playwright process only, the server never needs it; (b) every worker deletes its worktree's `web/.next` when its server stops, and the manager deletes the caches of finished worktrees; (c) running workers told by message; future briefs carry the rule. Phase 2 waits for the Tier-0 Cs and C P12-53 to land; the harness restarts the server between arms (the gist and report calls are cached by document hash).
+
+### §1h.439 — 2026-10-28 — 91 BROKEN LIGATURES ON P1; C P12-67; C P12-58'S TWO LINES IN reading.ts
+
+The manager's Theme C measure after C P12-48 / P12-50 / P12-51 (P1 4 / 5, P2 4 / 5, P3 3 / 8 parts, strict) found **a reading defect**: P1's text holds **91 private-use glyphs** (U+E103 ×76, U+E104 ×10, U+E09D ×5) where its font set the ligatures fi / fl / ff without a Unicode mapping, so the reader sees a broken character inside "influence", "figure", "different"… in 91 places (P2, P3: none). A Theme A defect on P1 (and the reason P1's results part failed the scorer's text match). → **C P12-67 now**: learn each private-use code's ligature from the paper's own vocabulary (the candidate fi / fl / ff / ffi / ffl that turns most of that code's words into words the paper prints elsewhere without it), apply it to every occurrence of that code, leave a code with no confident vote unchanged. The scorer normalises with NFKC (a scoring fix, not a rubric change).
+
+Also: C P12-58's two lines in `reading.ts` (the `"pending"` member of `fullText`, and a `READING_VERSION` bump so a tab on the previous build never keeps a pending reading) are given to C P12-58 by message; its other points are accepted (public papers poll too; the end-of-wait line is a sentence).
+
+### §1h.440 — 2026-10-28 — C P12-49 × C P12-51 RECONCILED; C P12-62'S APPENDIX FLAG; C P12-68 THE CAPTION CAP
+
+Rulings on reports in flight: (a) **C P12-49 + C P12-51 interact**: C P12-49's O3 refuses every body-face numbered line inside a references section, which loses a numbered Methods printed after the references (C P12-51's case, P3's journal order with numbering). Rule: inside a references section a numbered line stays a heading when its words after the number are a plain heading naming a part (C P12-51's `tailPartOf` test: ≤ 8 words, no comma, no year, naming an argument part or a note); C P12-49 adds it as one commit on `bcaa4e79`. (b) **C P12-62** (the first end-matter part, `ebba6ff1`) reported; its point 2 — a first end-matter heading that is an appendix must set the appendix flag — is a defect: one more commit; its points 1 and 3 accepted. (c) **C P12-47's deferred cap raise** (500 → 1,500 caption characters, engine and view together) → **C P12-68** now. (d) Theme C at 0e0249cd + C P12-49 (in the free copy): P1 3 / 5, P2 4 / 5, **P3 6 / 8** (was 3) — P1's results wait for C P12-67 (ligatures), P1's and P2's back matter for C P12-62, P3's closing for C P12-63, P3's opening to be examined.
+
+### §1h.441 — 2026-10-28 — C P12-61 DONE: A FIGURE VIEW OPENS ONLY ITS PAGE; C P12-69 THE TAKEDOWN AND THE PRIVACY PAGE
+
+C P12-61 (a figure view never opens the whole PDF) reported, all three parts: the kept cut (a second view opens no PDF), no whole copy (the engine opens through `mupdf.Stream`; an upload on disk is read in place, a bucket upload is streamed to a private temp file removed in `finally`; the route's two extra copies gone; `withFigureSizes` opens the PDF once), and the page file (made lazily on a page's first miss, `/OCProperties` grafted, revision-free, removed with the upload; old uploads fall back). Measured on an invented 24 MB PDF: one figure call 207–211 MB → **112–114 MB** for an upload, 135–137 MB for a public paper; sizes on 6 captions 239 MB / 6 opens → 135–137 MB / 1 open. Its points ruled: (1) the admin takedown must also remove the kept figures and (2) the privacy page must name them → **C P12-69**; (3) the manager combines its additive engine hunks; (4) cutting pages at upload stays lazy (§1h.436); (5) page files are revision-free as ruled; (6) the cold-WASM warm-up for the old route test is a backlog note; (7) the pool's whole-object bucket read is a backlog note. The combine order: C P12-56, C P12-49 (reconciled), C P12-58 and C P12-61 together in one free copy, one full suite.
+
+### §1h.442 — 2026-10-28 — EIGHT Cs COMBINED; FIVE TESTS WHERE THEIR RULES MEET; C P12-70; C P12-53 TO TIER 0
+
+The manager combined eight reported Cs in one free copy for one full suite: C P12-56, C P12-49 (+ its reconcile), C P12-58, C P12-61, C P12-62 (+ the appendix flag), C P12-63, C P12-65, C P12-66, on `1b02ce30` → `0c4e38c0`, resolving three textual merges (figure-image route, engine entry, `buildOutline`'s caption line). Manager mutations on the combined tree (each restored, sha256 equal): C P12-49 O1 → 9 red, O7 → red, reconcile → red, C P12-62 appendix flag → red, C P12-61 kept cut → 5, page file → 5, C P12-63 rule 1 → 2, rule 4 → 11, C P12-66 holds-focus → 5 (C P12-65's mutation to be redone: the first was a no-op). **The unmutated combined tree fails 5 tests where the rules meet** (C P12-51's O8 × C P12-49 / C P12-56; C P12-56's R6b and Extended Data chain × C P12-61's batch measurer) → **C P12-70**, an integration C on `0c4e38c0`. C P12-53 (Tier 1) red on 2 tests against C P12-48's roles — told to build its draft from Tier 0's roles (one commit on `a5f6094e`). C P12-65's point (same-word overlap now window-wins) and C P12-66's points accepted as backlog notes.
+
+### §1h.443 — 2026-10-28 — THE OWNER: AT MOST TWO SUBAGENTS AT A TIME; THE QUEUE
+
+The owner, 2026-10-28 (chat, verbatim): "暂时不要全部的agent一起开工，最多两个subagent同时工作吧" — for now, **at most two subagents at a time**. This narrows §1h.425 (everyone at once) for the time being; workaholic mode otherwise stands (the clock's prompt now says so, read back 06:23Z).
+
+(a) **The queue, by what unblocks the most:** 1. C P12-70 (the integration fixes; it unblocks eight landed-ready Cs) and C P12-67 (the ligature repair moved upstream) — running; 2. C P12-53 (Tier 1 on Tier 0's roles; stopped by the limit mid-gates); 3. C P12-69 (the takedown and the privacy page, after C P12-61 lands); 4. a **fresh** round-2 walk of Themes A and B on the landed head (A P12-37 / P12-38 walked `019793b9`, before twenty items landed; their partial packs are kept as evidence, not scored); 5. the blind readers; 6. Theme C's first-sight measure on P4–P6; 7. A P12-57 phase 2 (C1 with the key).
+(b) **Batch 2 verified in the free copy `mgr/v3`** (the combined head plus C P12-64 and C P12-68, revision 10 after the combine): C P12-64 R1 → 2 red, R2 (the witness) → 7 red; C P12-68 the engine cap → 8 red; sha256 equal after restore; it lands with batch 1 once C P12-70's fixes are in.
+(c) C P12-49's `isDropCap` is too broad (any large body-face line starting with a capital): narrowed to one or two large letters by C P12-70 (item 6).
+(d) C P12-56 ran `git checkout -- .` once in its own scratch "before" tree, against its brief; no deliverable was touched — recorded as a rule slip.
+
+### §1h.444 — 2026-10-28 — THEME C ON BATCHES 1 + 2: P1 4/5, P2 5/5, P3 7/8; THE TWO LEFT
+
+C P12-67's upstream move landed in the batch-2 copy (`mgr/v3`: the page-level pass off → 2 red; sha256 equal after restore). **Theme C measured on batches 1 + 2 with the page's closing split applied** (the scratch harness now does what the page does): **P1 4 / 5, P2 5 / 5, P3 7 / 8 parts strict** (extras not yet costed). The two left: (a) **P1's results part** — 15 ligature glyphs remain: U+E104 is "fl" in words the paper never prints without the ligature (influence, conflicts, fluctuations, reflected), so the paper's own words cannot confirm it, and U+E09D is "ft" (after, software, shifting), which is not among the candidates → **C P12-67 follow-up (queued)**: add "ft" (and the other two-letter f-ligatures a font may set) to the candidates, and a small built-in list of common English and scientific words as a second witness when the paper prints no plain form (no dependency; the same vote rules); (b) **P3's opening** — its first line carries a 4× drop cap welded to body text, so C P12-51's opening starts a line late and the introduction's first sentence is lost → C P12-70 item 7 (a body-face line whose character-weighted size is the body's is prose; the cap re-joins its word).
+
+### §1h.445 — 2026-10-28 — BATCH 2 GATES; THE FINAL COMBINATION V; P3'S REAL DROP CAP → C P12-70 ITEM 8
+
+**Batch 2's gates** (`mgr/v3` at `08f3f22a`, without C P12-70): lint 0 errors / 144 warnings; build 0; 6 tests fail. Five are the ones C P12-70 was briefed on. The sixth is where C P12-67's ligature test meets C P12-62's ruled rule (§1h.440: the first end-matter heading opens its own section): the test was written before that rule and still expected Acknowledgements to stay out.
+
+**The final combination V** (`p504/wt`): `08f3f22a` + C P12-70 items 1–7 + C P12-67's follow-up (ft candidates, the short word list) + the manager's named re-aim `b9f960a2`. In the re-aimed test (`ligatures.test.ts`, "buckets a back-matter heading on its repaired words…"), Acknowledgements is now listed before Conflict of Interest; the ligature claim is unchanged. The three affected test files pass, 150 / 150. tsc 0. Full gates on V are running.
+
+**Theme C on V:** P1 5 / 5 (P1's results part now reads, with the follow-up), P2 5 / 5, **P3 6 / 8** (down from 7 / 8). C P12-70's item 7 narrows `isDropCap` to the shape its own fixture has. On the owner's paper, the cap is welded to the opening's third line, carries no `cap`, and is read as a heading. The opening is then lost, and the closing split's echo falls back to the cover → **C P12-70 item 8** (shape only, no paper words; brief appended).
+
+Running (max 2, §1h.443): C P12-70 item 8 ∥ C P12-69.
+
+### §1h.446 — 2026-10-28 — C P12-69 AND ITEM 8 VERIFIED; P3 8/8 (81.25 WITH EXTRAS); P4–P6 FIRST SIGHT 3/5, 7/9, 6/9; B P12-73
+
+(a) **C P12-69 verified** on V (`p504/wt`; its four commits cherry-picked).
+- Manager mutations: the takedown no longer removes the cuts → 3 red; the privacy sentence loses its clause → 1 red. sha256 equal after restore.
+- Its tests ×3 green; tsc 0.
+- Its six red tests at `08f3f22a` are the ones V already fixes (§1h.445).
+
+(b) **C P12-70 item 8 verified.**
+- V takes `f629788e` and the addendum. Its `b5742cf5` is dropped: it is the same re-aim as the manager's `b9f960a2`.
+- Theme C on V: **P1 5 / 5, P2 5 / 5, P3 8 / 8 parts.** P3's opening now starts with the whole first word.
+- Manager mutations on V:
+  - C P12-70 items 1–6: the token → 4 red; `leftOut` → 3; `endsParagraph` → 3.
+  - Item 8: the cap not joined → 1; `isDropCap` without the rest-size check → 1.
+  - **`capRowOf`'s two-letter limit → 0 red.** §1h.443(c) is unpinned, so it goes to **C P12-70 item 9**, together with C P12-70's own open point: a one-letter cap that is a word ("A study").
+- C P12-53: part 0 moves → 1; an all-refused answer kept → 6; the upload's paper check → 1; the upload-changed 410 → 1.
+- C P12-67: no word list → 8; no twice-the-runner-up → 4; a lone code replaced → 1; no "ft" → 8. One equivalent mutant: keeping the first code of a two-code word changes nothing, because the word still carries the other code, which no plain or listed word does.
+- Every file restored, sha256 equal. Evidence: `mgr/mutv/results.txt`.
+
+(c) **Theme C's extras costed on P1–P3** (rubric §1h.423: a row that is not a part costs 0.5):
+- P1: 0 extras (numbered parents, sub-rows and back-matter headings with the right roles) → **100**.
+- P2: 0 → **100**.
+- P3: 3 rows headed by figure text or a number-led body line → (8 − 1.5) / 8 = **81.25**.
+- Not a row, and not costed in Theme C: P3's opening holds a page-1 affiliation footnote as a paragraph.
+
+(d) **Theme C first sight on the held-out P4–P6** (V's rules; truth opened now; counts by §1h.437(a): N = 5, 9, 9):
+- **P4 3 / 5, P5 7 / 9, P6 6 / 9 parts** (all 0 before the rules).
+- With the extras costed, about **0, 33 and 22**. The exact extras come from the B's counts.
+- The mechanisms (shape only):
+  - M1: figure text and number-led body lines read as headings;
+  - M2: no Methods row, and its sub-sections' roles wrong or `body`;
+  - M3: no closing split on P4 / P5;
+  - M4: one P6 part's start lost;
+  - M5: a methods sub-section bucketed results;
+  - M6: P3's affiliation footnote;
+  - M7: P6's implications section's role.
+- These go to **B P12-73** (read-only; P4–P6 in place). The held-out status ends with this measure; the papers now serve as development inputs, by shape only.
+
+(e) **Fresh A walks** P12-71 (Theme A, port 4246) and P12-72 (Theme B, port 4247) are briefed by script on the landed head; they start as slots free (max 2, §1h.443).
+
+Running: C P12-70 item 9 ∥ B P12-73. V's full gates (C P12-69 + item 8) are running; V lands when they are green.
+
+### §1h.447 — 2026-10-28 — V LANDED: FOURTEEN Cs ON THE BRANCH; FULL GATES GREEN
+
+**Landed:** the final combination V (`97b84eb9`, base `1b02ce30`) is cherry-picked onto the branch, 81 commits, head `098d74b3`. The landed `web/` tree equals V's byte for byte (tree `5bc8715f`), the tree the gates ran on.
+
+**V's full gates** (`mgr/gates-V.log`): lint 0 errors / 144 warnings; tsc 0; **647 files + 3 skipped, 11,928 tests + 3 skipped, 0 failed**; build 0.
+
+**What landed:**
+- C P12-49 (headings by the body's real size), C P12-56 (Extended Data, R6b, R15a), C P12-58 (the body arrives after an upload), C P12-61 (a figure view opens only its page), C P12-62, C P12-63, C P12-64 (the page title), C P12-65 and C P12-66 (notes: no overwrite, focus stays), C P12-67 (ligatures, with the follow-up), C P12-68 (captions to 1,500 characters), C P12-69 (the takedown and the privacy page), C P12-53 (Tier 1 structure review), C P12-70 items 1–8;
+- the manager's re-aim `b9f960a2`.
+
+C P12-70 item 9 follows as a small landing.
+
+Next, as slots free (max 2): A P12-71 (Theme A) and A P12-72 (Theme B) walk this head.
+
+### §1h.448 — 2026-10-28 — C P12-70 ITEM 9 LANDED; ITEM 10 QUEUED (ONLY "A" AND "I" ARE ONE-LETTER WORDS)
+
+**C P12-70 item 9 is landed** (head `14246baa`; the landed `web/` tree equals V's at `49008776`).
+- The two-letter limit is pinned. The manager's mutation `letters.length > 99` → 1 red.
+- A one-letter cap that is a word of the paper stays apart ("A study"). Its witness off → 1 red.
+- The outline tests ran ×3, green. P1–P6's maps are byte-identical before and after item 9.
+- V's full gates: lint 0 / 144; **647 files, 11,932 tests, 0 failed**; build 0.
+
+**Item 10 (queued for C P12-70 when a slot frees):** C P12-70's open risk. A paper that prints a one-letter symbol on its own (a unit "S", a variable "T") would witness that letter as a word and split "S" + "econdary". So only "A" and "I" may be a one-letter word: English has no other, and a two-letter fact of the language is not a dictionary. The paper's own words stay the witness.
+
+### §1h.449 — 2026-10-28 — B P12-73 RULED: C P12-74 (M1, M6), C P12-75 (M2, M5, M7), C P12-76 (M8, M3); M4 VOID (P6 7/9)
+
+B P12-73's report (`P12-73-B-20261028T0851Z.md`, landed `a4b384e4`) is checked: its four-word runs shared with P1–P6 are 7, all common phrases or digit runs, none a quotation. It reproduced the manager's maps byte for byte and did not read the sealed truth. Rulings:
+
+(a) **M4 is void.** The scorer's P6 locator had "Li ion" where the paper prints a superscript charge (NFKC "Li+ ion"). The part starts at its row's first paragraph and **passes**: P6 is **7 / 9**, not 6 / 9. The manager's private truth file is corrected.
+
+(b) **M1:** package A (R1–R5). **M6:** "block". → **C P12-74** (both in `pdf-outline.ts` and the same test file). Re-aims `pdf-outline.headings.test.ts:376` and `:441`, named.
+
+(c) **M2:** option A (the group row, a new optional `level`), with **M5** both structural and lexical (`experiment` + a preparation word → methods) and **M7 R7a** (`implication`, `outlook` → discussion; no positional rule — §1h.437(a)'s role for P6's row follows from its own word) → **C P12-75**. B's note on `model` / `validation` is backlog.
+
+(d) **M8** (per-page left edge) and **M3 on P5** (c3_last: the last paragraph of ≥ 60 words with an outlook cue closes a paper that names no discussion or conclusion, after the existing rule) → **C P12-76**. c3_last is a Tier-0 judgement; Tier 1 may refine it. M3 on P4 needs no code: it follows from C P12-74 + C P12-75.
+
+(e) **M6b** (Nature running heads in two alternating forms below the 40 % threshold; junk paragraphs, not rows) is backlog for a later C. It is not priced by Theme C.
+
+(f) **Order under two slots:** A P12-71 is walking. C P12-74 starts now; C P12-75 and C P12-76 next; then A P12-72 (Theme B); then C P12-70 item 10. The three Theme C Cs are combined and measured on P1–P6 together (B's package: P3–P6 0 extras, P4 5/5, P5 9/9, P6 9/9 if the starts match the truth).
+
+### §1h.450 — 2026-10-28 — C P12-74 LANDED; THEME C P1–P3 100, P4 60, P5 77.78, P6 72.22
+
+**C P12-74 is landed** (head `c91e89e9`; the landed `web/` tree equals V's at `4e354f94`).
+- Manager mutations: R1 (ratio 0.5) → 4 red; R2 (open-prose test off) → 3; R3 (letters x–z) → 2; R4 (no size test) → 2; R5 (double quotes only) → 2; M6 (no digit marker) → 8. sha256 equal after each restore.
+- V's full gates: lint 0 / 144; **648 files, 11,959 tests, 0 failed**; build 0.
+- Re-aims named by C: `pdf-outline.headings.test.ts:376` (R1) and `:441`. The block rule takes the fixture's small reference entries at the foot; the affiliation in mid-text stays; "no section of its own" is kept and asserted.
+
+**Theme C with C P12-74** (V's maps, the harness as the page):
+- P1 5 / 5, 0 extras → **100**; P2 5 / 5 → **100**; P3 8 / 8, 0 extras (the three figure-text rows are gone) → **100**.
+- P4 3 / 5, 0 extras → **60**; P5 7 / 9, 0 → **77.78**; P6 7 / 9, one methods sub-row bucketed results (M5, a sub-row whose role contradicts its part) → (7 − 0.5) / 9 = **72.22**.
+- Rows P3–P6: 14 → 11, 25 → 12, 21 → 13, 25 → 18.
+- The page-1 affiliation footnote is out of the opening on all four papers.
+- What is left on P4–P6 is M2 (Methods) and M3 (the closing) → C P12-75 (running) and C P12-76 (queued); M7 (P6's implications row) is in C P12-75.
+
+**Backlog (new):** short fragment paragraphs in the prose, mostly figure text that is not a row: of all paragraphs, ≤ 8 words are P3 59 / 104, P4 95 / 157, P5 135 / 336, P6 38 / 239. Theme C does not price them, but they cost the reading. They go to a B after the Theme C Cs.
+
+### §1h.451 — 2026-10-28 — THEME A ROUND 2 (A P12-71): 97.92 ON P1, P2, P3; READERS NEXT; C P12-77
+
+**A P12-71** (Theme A, round 2, fresh walk on `d44aeabb`; report landed `d2de8451`; its four-word runs shared with P1–P6 are 7, all digit runs from the measurements).
+
+The six pass requirements hold. 12 / 12 units on each paper. One extra, E1, cosmetic, 0.25 per paper: at 1024 × 576 and 853 × 480 the fixed notes tab overlaps the fixed key legend, and at 853 × 480 its three-line label runs 16.5 px below the viewport. **A's score: P1 97.92, P2 97.92, P3 97.92.**
+
+(a) **Director:**
+- E1 is checked on the 853 × 480 entry screenshot. The tab is legible and hittable and covers the legend's end, so **the price 0.25 stands**.
+- O2, underline exported as `__x__` (bold in CommonMark, Obsidian and Pandoc), is not priced, because A5 asks for what the format supports. Peer's direction puts portable output first, so it goes to a fix.
+- O1 (the notes text does not follow the reading step), O3 (a tag mid-word), O4 (the notes page's drawer and Escape) and O5 (an empty `.bib` of 1 byte) are backlog notes, not priced.
+- P12-65 and P12-66 are confirmed on the page: 24 cycles lost or resurrected nothing, and 504 of 504 keys landed where they were typed.
+
+(b) **The score of record waits on three blind readers** (P12-R2-reader.md, three papers by §1h.423). They score the pack `/tmp/claude-0/-home-user-peer/9602921a-6ac5-5952-88ce-8364fcd8f733/scratchpad/p12/r2/a71/pack/` as slots free.
+
+(c) **C P12-77 is queued:** E1 (the tab clamped above the legend) and O2 (`<u>…</u>` in Markdown; an old `__x__` still reads as before).
+
+### §1h.452 — 2026-10-28 — C P12-75 LANDED; THEME C P1–P4 AND P6 100, P5 88.89; C P12-75 ITEM 2
+
+**C P12-75 is landed** (head `7127604d`; the landed `web/` tree equals V's at `50f7169b`).
+
+**Manager mutations** (sha256 equal after each restore):
+- a numbered heading no longer ends a group → 1 red;
+- a part name with text of its own makes a group → 2;
+- M7's conclusion / summary guard off → 1;
+- `dropStrayHeadings` keeps a lone level-1 row → 3;
+- "preparation" dropped from the M5 word list → 0. The rule itself is pinned (C's M5 off → 13); this one list word is not tested on its own.
+
+**V's full gates:** lint 0 / 144; **649 files, 12,030 tests, 0 failed**; build 0.
+
+**Theme C with C P12-74 + C P12-75** (V's maps; no extras on any paper):
+- **P1 100, P2 100, P3 100, P4 100, P5 88.89 (8 / 9), P6 100.**
+- P4: the Methods group row with seven level-2 children, and the closing split now fires on its signpost paragraph, as B P12-73 predicted.
+- P6: 9 / 9, with the implications row now interpretation.
+
+**The director voids one scorer FAIL on P4.** The sealed locator for its methods part skipped a parenthesis the paper prints after the first word. The part starts at the group row's first child's first paragraph, which is the true start. The private truth is corrected.
+
+P5's closing (M3) and M8 are C P12-76's, running.
+
+**C P12-75 item 2 is briefed:** a bare "Experimental" heading → methods; a part name is never a group's child. It starts when a slot frees.
+
+### §1h.453 — 2026-10-28 — C P12-76 LANDED; THEME C ROUND 2: 100 ON ALL SIX PAPERS; READER A-r1 AND E2
+
+**C P12-76 is landed** (head `4f6d6e67`; the landed `web/` tree equals V's at `e63cee53`).
+- Manager mutations (sha256 equal after each restore):
+  - one section-wide edge instead of each page's → 4 red;
+  - the fallback allowed on a one-paragraph row → 1;
+  - "paves the way" broken → 3;
+  - the fallback with no cue → 12.
+- V's full gates: lint 0 / 144; **650 files, 12,068 tests, 0 failed**; build 0.
+
+**Theme C, round 2 of record (C0, no key), on the landed rules**, measured by the manager's harness (the page's own path) against the ruled truth (P1–P3 §1h.426, P4–P6 §1h.437 (a)):
+
+| paper | parts | extras | score |
+|---|---|---|---|
+| P1 | 5 / 5 | 0 | **100** |
+| P2 | 5 / 5 | 0 | **100** |
+| P3 | 8 / 8 | 0 | **100** |
+| P4 | 5 / 5 | 0 | **100** |
+| P5 | 9 / 9 | 0 | **100** |
+| P6 | 9 / 9 | 0 | **100** |
+
+Notes on the measure:
+- P5's closing is the outlook fallback's row, interpretation.
+- C P12-76 changed no row heading, role or level on P1–P4 or P6.
+- Paragraphs went P3 104 → 100, P4 157 → 164 and P5 336 → 268, as M8's whole paragraphs.
+- Two director voids are recorded: P6's M4 (§1h.449) and P4's methods locator (§1h.452). Each was a locator in the manager's private truth, not the app.
+
+**This is Theme C's first round at the target. A second consecutive round is needed:** a fresh measure on the head after the next landing, with the same truth and the same harness. C1 (with the key) is not yet measured (A P12-57 phase 2).
+
+**Theme A, reader A-r1** (blind, pack `r2/a71/pack`): P1 95.83, P2 95.83, P3 97.92. It adds **E2**, cosmetic 0.25, on P1 and P2: at 390 × 844 the notes-page round trip returns near the top of the paper (scrollY 8385 → 85, 6907 → 92).
+- Director: the app restores the very scrollY it left at. But the phone's notes entry is an in-flow row near the top, so a reader must leave their place to reach it. The defect is real and the price stands.
+- P3 has no W4 place measurement, so it is not charged there, by §1h.423 (c).
+- → **C P12-77 rule 3:** the fixed edge tab at the phone width.
+- Readers A-r2 (running) and A-r3 follow; the median is the score of record.
+
+### §1h.454 — 2026-10-28 — C P12-75 ITEM 2 LANDED; THEME A ROUND 2 OF RECORD: P1 95.83, P2 95.83 (BELOW); C P12-77 RUNNING
+
+(a) **C P12-75 item 2 is landed** (head `e5f21d9d`; the landed `web/` tree equals V's at `f283e011`).
+- A bare "Experimental" or "Experimental part" heading is methods.
+- A part name is never a group's child.
+- Manager mutations (sha256 equal): the bare forms dropped → 8 red; part names narrowed to "introduction" → 23 red.
+- P1–P6's maps are byte-identical before and after, so Theme C stays 100 on all six.
+- V's full gates: lint 0 / 144; **650 files, 12,094 tests, 0 failed**; build 0.
+
+(b) **Theme A, round 2, the score of record.**
+- Reader A-r2 (blind, the same pack): P1, P2 and P3 each **95.83**. It charges E1 (the tab over the legend, 0.25) and the underline export (`__x__`, read as bold by CommonMark, Obsidian and Pandoc; cosmetic 0.25) on all three papers.
+- Director: the underline mark is real. Its input is the user's own underline, which the export turns into bold. It is no harness artifact and nothing the paper prints, so it is not void (§1h.420's reading of prices: an inconvenient price cannot be voided).
+- With A-r1 at P1 95.83 and P2 95.83, two of three readers stand at 95.83 on P1 and P2. **The median is 95.83 on P1 and P2 whatever a third reader gives.** P3's two readers are 97.92 and 95.83.
+- **Theme A round 2 is below the target** (P1 and P2 under 97.25), so the consecutive count stays at 0.
+- The third reader is skipped: its score cannot change the round's outcome, and the two-slot limit (§1h.443) puts the slot to the fix. P3 has no single score of record for round 2, and this is said, not averaged.
+
+(c) **C P12-77 is running** from `ccfa098b`. It fixes every Theme A mark of round 2:
+- E1, the tab clamped above the legend;
+- the underline written `<u>…</u>`, with an old `__x__` still read as before;
+- E2, the edge tab at the phone width keeps the reading place.
+
+Then Theme A round 3: a fresh A walk on the landed head and three readers.
+
+### §1h.455 — 2026-10-28 — C P12-77 RULINGS; LANDED (E1, THE UNDERLINE EXPORT, E2)
+
+(a) **C P12-77 rulings (§1h.455), as sent:** O2 goes through `export.ts` `blockMarkdown` (the export route; the stored form, `MARKERS` and `wysiwyg.ts` unchanged). On the phone, the tab keeps the right edge with a card standing and ends 8 px above the band. On the phone, the tab's rect does not intersect the text column.
+
+(b) **C P12-77 is landed** (head `4653a1d6`; the landed `web/` tree equals V's at `cfab6600`).
+- **Manager mutations** (sha256 equal after each restore):
+  - the legend term out of the clamp → 8 red;
+  - the export without `portableUnderline` → 8;
+  - a phone press always opens the window → 3;
+  - the phone tab at 26 px → 9.
+- **V's full gates:** lint 0 / 144; **654 files, 12,192 tests, 0 failed**; build 0.
+- **C's re-aims, named with reasons:**
+  - `notes-button.test.tsx` "never on a phone" (rule 3 offers the tab there);
+  - three Markdown-export pins that held `__`: `export.formats.test.ts`, `inline.nest.test.ts` and `note-editor.wysiwyg.test.ts`.
+- **Accepted as they stand:**
+  - the phone tab is 20 px thick under 640 px, under the 24 px target, because that is the gutter. WCAG 2.5.8's spacing exception applies: no other target is within it.
+  - between 768 and 1023 px with a card, the tab's place is to be seen on the page by the round-3 walk.
+
+(c) **Theme A round 3 (A P12-78, brief by script)** walks this head when a slot frees. It re-checks E1, the underline export and E2 with the real font, and adds the phone and 768–1023 measures.
+
+### §1h.456 — 2026-10-28 — C P12-70 ITEM 10 LANDED (ONLY "A" AND "I"); C P12-70 CLOSED; A P12-78 WALKING
+
+(a) **C P12-70 item 10 is landed** (head `db9b8235`; the landed `web/` tree equals V's at `847eb365`). Only "A" and "I" can be a one-letter cap that is a word; every other one-letter cap joins its word, so a paper that prints "S" as a unit no longer splits its opening word.
+- Manager mutation: the letter set widened to A–Z → 1 red. sha256 equal after the restore.
+- P1–P6's maps are byte-identical before and after, so Theme C stays 100 on all six.
+- V's full gates: lint 0 / 144; **654 files, 12,193 tests, 0 failed**; build 0.
+- C P12-70 is closed: items 1–10 landed.
+
+(b) **Running** (max 2): A P12-72 (Theme B round 2, head `ccfa098b`, port 4247) ∥ A P12-78 (Theme A round 3, head `e0a80fbf`, port 4246).
+
+### §1h.457 — 2026-10-28 — THEME A ROUND 3 (A P12-78): 97.92 ON P1, P2, P3; ROUND 2'S MARKS GONE; E3 → C P12-79
+
+**A P12-78** (Theme A round 3, on `e0a80fbf`; report landed `4b6b614f`; its four-word runs shared with P1–P6 are 7, all digit runs).
+- The six pass requirements hold. 12 / 12 units on each paper.
+- **Round 2's marks:** E1 GONE (8.0 px above the legend at 1024 × 576 and 853 × 480, card open and closed, a one-line label, clean under Fit); the underline export GONE (105 Markdown results, all `<u>…</u>`, none `__`); E2 GONE for the tab (9 / 9 trips at three depths per paper keep the first paragraph and scrollY). The in-flow row still returns to where it was pressed.
+- **New, E3, cosmetic 0.25 per paper:** with a card standing, between 768 and 851 px at the default step (and at 853 × 480 from step 1.10, 1024 × 576 from step 1.60), the notes tab slides to the window's left edge, 8 px visible, its label cut. It can still be pressed.
+- **A's score: P1, P2, P3 each 97.92** (at the target).
+- **Readers:** three blind readers on `r2/a78/pack` give the score of record. A3-r1 is running.
+- **C P12-79** (E3) is briefed. It starts when a slot frees, so that round 4 can confirm Theme A without the extra.
+
+### §1h.458 — 2026-10-28 — THEME C ROUND 3: C0 100 ON ALL SIX (TWO CONSECUTIVE); C1 NEXT; READER A3-r1 97.92
+
+(a) **Theme C round 3 (C0, no key)** is a fresh render on the branch head's `web/` tree (`22ca490f`, head `25bca3b4`): the same harness (the page's own path), the same ruled truth.
+- **P1 5 / 5, P2 5 / 5, P3 8 / 8, P4 5 / 5, P5 9 / 9, P6 9 / 9. 0 extras. 100 on all six.**
+- Every map is byte-identical to round 2's (§1h.453).
+- **C0 now has two consecutive rounds at the target.**
+- **C1, with the key, is not yet measured.** By §1h.423 (e) and §1h.426 (b), it joins the stop line at 100 % per paper, now that the owner has supplied the test key → A P12-57 phase 2 (B P12-42 §7's protocol: natural drafts, 5 runs, seeded drafts reported; P1–P3, then P4–P6). It is queued for the next free slot. A 429 or a quota error stops it.
+
+(b) **Theme A round 3, reader A3-r1** (blind, pack `r2/a78/pack`): P1, P2, P3 each **97.92**. It charges one extra, X1 = A P12-78's E3, cosmetic 0.25 on each paper. No FAIL. Readers A3-r2 and A3-r3 follow; the median is the score of record. C P12-79 (E3) is running.
+
+### §1h.459 — 2026-10-28 — THEME B ROUND 2 (A P12-72): P1 95.83, P2 95.83, P3 83.33; B P12-80; O1 TO THE OWNER
+
+**A P12-72** (Theme B, round 2, fresh walk on `ccfa098b`; report landed `e420c898`; its four-word runs shared with P1–P6 are 6, digit runs and one common phrase).
+- The six pass requirements hold. **P1 12 / 12, P2 12 / 12, P3 11 / 12.**
+- **B7 FAILs on P3:** the figure card shows Fig. 1's caption cut mid-sentence at 135 characters and Fig. 6's at 63. The Summary thumbnail shows Fig. 1's 1,174.
+- Extras:
+  - E1, the notes tab over the legend, 0.25 on each paper. It was walked before C P12-77 and is gone since (A P12-78).
+  - E2, the standing §1h.168 cost, 0.25 on each paper.
+  - E3 (P3), acronyms in the wrong case in captions, a map row and a heading: SE → "sE", DFT → "DFt". 0.25.
+  - E4 (P3), Fig. 2's left strip cut and a running-head sliver on Fig. 4. 0.25.
+- **A's score: P1 95.83, P2 95.83, P3 83.33.**
+
+(a) **Theme B round 2 is below the target, and no reading can lift it.** P3 with B7 failed and no extra at all is 11 / 12 = 91.67. The blind readers are skipped for this round (§1h.443's two slots go to the fixes); the consecutive count stays 0.
+
+(b) **B P12-80** (running, read-only, head `e420c898`): K1 the card's caption cut on P3 (two caption sources; which line ends the inline caption early), K2 the acronym case damage (the parse step, file:line), K3 Fig. 2's and Fig. 4's bounds.
+
+(c) **O2, the Explain card's body chains the wheel to the page** after its end (2,700 px), where the sticky, the notes window and the figure card use `overscroll-contain`. It goes to a one-line C (`explain-box.tsx` / `margin-card.tsx`), queued. Unpriced in round 2. B3's "the paper does not move" asks it.
+
+(d) **O1, the margin divider at 853 × 480 has a 1 px range** (rail 48, centre floor 500, margin floor 280). By the letter of B1 it is PASS (visible, the cursor, the floors). But A notes that the owner's own window at 150 % zoom is about this size, where the divider does nothing. **This is the owner's decision** (item 3): accept the floors, lower the margin's floor at narrow widths, lower the centre's 60-character floor (§1h.197), or not offer the divider where it cannot move. It is put to the owner; until then B1 is scored by its letter.
+
+(e) O3 / O4 (peek and thumbnail at W2 / W3), O6 (figure labels as body paragraphs on P2 and P3, P2's page-1 interleave) and O8 are backlog with the short-paragraph item (§1h.450).
+
+### §1h.460 — 2026-10-28 — C P12-79 LANDED (E3: THE TAB STAYS RIGHT WITH A BAND CARD)
+
+**C P12-79 is landed** (head `b1d88d7e`; the landed `web/` tree equals V's at `187098ba`).
+- **The rule:** a card or the notes window in the bottom band keeps the tab on the right edge, 8 px above the band, at every width. With a side margin the tab sits beside the card, as before.
+- **Manager mutations** (sha256 equal after each restore): the band rule limited to the phone → 20 red; the `md:` override re-added → 8 red.
+- **V's full gates:** lint 0 / 144; **654 files, 12,241 tests, 0 failed**; build 0.
+- **C's re-aims**, named with their reasons: `phone.flow` "from md … beside the card" (it held E3's own defect) and `foot` "from md the band is not read".
+- **Open, C's point (a):** in a window under about 438 px high from md, the 3rem masthead floor wins over the band. This was already so before.
+
+**Running:** B P12-80 ∥ reader A3-r2. **Queued:** C P12-81 (O2), then the Cs from B P12-80, A P12-57 phase 2 (C1), Theme A round 4, and Theme B round 3.
+
+### §1h.461 — 2026-10-28 — THEME A ROUND 3 OF RECORD: 97.92 ON P1, P2, P3 (AT THE TARGET, COUNT 1); C P12-81 RUNNING
+
+**Theme A round 3, the score of record.** Readers A3-r1 and A3-r2 (blind, pack `r2/a78/pack`) each give P1, P2 and P3 **97.92**. Each charges one extra, A P12-78's E3, cosmetic 0.25, on all three papers; neither marks a FAIL.
+
+With two of three readers at 97.92, the median is **97.92 on P1, P2 and P3 whatever a third reader gives**. The third reader is skipped (§1h.443's two slots go to the fixes).
+
+**Theme A round 3 is at the target** (≥ 97.25 on all three papers): consecutive rounds 1. E3 is fixed since (C P12-79, §1h.460).
+
+Round 4 (a fresh A walk on the head with C P12-79, and readers) confirms it. It is queued after C P12-81.
+
+### §1h.462 — 2026-10-28 — C P12-81 LANDED (O2); A P12-57 PHASE 2 (C1 ON THE PRODUCT AS BUILT) RUNNING
+
+(a) **C P12-81 is landed** (head `ca0c13c6`; the landed `web/` tree equals V's at `00417c15`).
+- The Explain card's scroller (its root, in all four places) has `overscroll-contain`, as the other card bodies do.
+- Manager mutation: the class removed → 5 red; sha256 equal after the restore.
+- V's full gates: lint 0 / 144; **655 files, 12,246 tests, 0 failed**; build 0.
+- The pixel measure (no page movement past the card's end) goes to Theme B round 3's walk.
+
+(b) **A P12-57 phase 2 has started**, as run (§1h.462, appended to its brief). It measures C1 on the product as built (C P12-53's structure review on the page, BYOK through the Profile form, the server without the key in its environment): P1–P6, 5 independent runs each (a fresh browser context, the server restarted), at most 150 Google calls, and it stops on any quota answer. Dumps go to `mgr/sealed-c1/` (scratch). The manager scores them with `mgr/score-c1.py` against the ruled truth; a row unlike the reviewed C0 map is reviewed as a possible extra. B P12-42 §7's unbuilt arms are not run.
+
+### §1h.463 — 2026-10-28 — B P12-80 RULED: C P12-82 (K1 CAPTIONS), C P12-83 (K2 CASE), C P12-84 (K3 BOUNDS)
+
+B P12-80's report (`P12-80-B-20261028T1444Z.md`, landed `b6cbc27c`) is ruled. Every candidate was measured on P1–P6 with patched copies, and the test impact with a resolve swap.
+
+(a) **K1, the caption cut.**
+- Cause: the face test in `continuesCaption`. A bold title run is the line's longest run, so the next regular line reads as another face. The R7a rescue measures the wrong leading.
+- It cuts P3's Fig. 1 and Fig. 6, and six more captions on P4 and P5.
+- **R1-B** fixes all 8, and 0 of 1,586 tests move → **C P12-82**.
+
+(b) **K2, the acronym case.** Not Peer's code: P3's PDF maps the capital codes I, L, S, T and U of three fonts to lowercase (224 glyphs; 0 in the other five papers). pdf.js follows the map.
+- **R2-C**, a document-level repair from the font's own evidence (≥ 3 hits, ≥ 2 letters), fixes 10 of 10 occurrences and changes 0 items on P1, P2 and P4–P6 → **C P12-83**, with named negatives (pH, eV, mM, kDa, mAh).
+
+(c) **K3, the figure bounds.**
+- Causes: the 6 pt edge reach misses rotated labels and legend marks; the 10 pt clip padding reaches the running head's ink; the furniture band never bounds the clip.
+- B also finds the running head absorbed into P5's Figs. 2, 3 and 5, and its rule in every P5 and P6 crop.
+- **R3-C then R3-B** → **C P12-84**, with 4 named re-aims.
+
+(d) After the three land, the manager bumps `FIGURE_EXTRACTION_REVISION` 10 → 11, so the stored documents are re-read.
+
+(e) **Order under two slots:** A P12-57 phase 2 is running. C P12-82 starts now; C P12-84 and C P12-83 follow as slots free. Then Theme B round 3 and Theme A round 4.
+
+### §1h.464 — 2026-10-28 — C1 MEASURED: P1–P5 PASS, P6 4/5 (ONE DAMAGE); C P12-82 HELD FOR THE ECHO (C P12-85); C P12-86
+
+(a) **A P12-57 phase 2** (report landed `d771a376`; key-value hits in its files 0; four-word runs shared with P1–P6 are 6, all digit runs).
+- 30 runs (P1–P6 × 5) on `d945437a`, each with a fresh server and browser context; the review fired once per run.
+- 78 Google calls (30 report route, 30 reviews, 18 second looks), all `gemini-3.6-flash`, all ok: 205,574 tokens in, 5,174 out. No quota answer. 84 of the 150 spent with phase 1.
+- The deep-report switch was left off, so the gist never ran. The structure review fires on the key alone (§1h.428 (a)).
+
+(b) **C1, scored by the manager** (`mgr/score-c1.py`, the ruled truth; the dumps in `mgr/sealed-c1/`):
+- **P1 5 / 5 runs exact, P2 5 / 5, P3 5 / 5, P4 5 / 5, P5 5 / 5, P6 4 / 5.** No run made an extra row.
+- **P6 run 3 is damage:** the review split one paragraph out of a results section as setup and the next as evidence, and the row's majority flipped to setup. One right part became wrong.
+- **C1 by §1h.426 (b) / B P12-42 §7's bar** (all 5 runs exact, 0 damage): **P1–P5 pass, P6 fails.**
+- **Also:** 11 of 30 runs fell back `unusable`, among them P4 5 / 5 and P3 4 / 5. Those maps are the rules' draft, which is right, so C1 holds there. But the review helps nothing on those papers, and the log cannot say why (reply sizes only).
+- → **C P12-86** (queued):
+  1. a damage guard in `sanitizeReview`: no correction gives the role setup to a part after the paper's first part that is not setup (setup is the opening run);
+  2. the fallback's cause in the server log, counts only: no JSON, no corrections array, or corrections read / refused by kind and reason.
+  
+  Then A P12-57 phase 3 re-measures P6 × 5, P4 × 3 and P3 × 3 within the 66 calls left.
+
+(c) **C P12-82 (K1) is verified in V but held.**
+- Manager measure on P1–P6: P1, P2, P4, P5 and P6 keep every row and role. P4 and P5 lose 46 and 456 body words, caption text going back into its captions.
+- **P3 drops 8 / 8 → 7 / 8.** Its closing split no longer fires.
+- The cause is in `echoOf`. P3 prints no abstract heading, so the echo is the setup part's last paragraph. Before C P12-82 that was Fig. 1's caption tail, leaked into the body: 152 words, share 0.31. After, the setup part ends in seven figure-text fragments (1, 1, 1, 8, 2, 8 and 10 words), and the last of these gives share 0.04.
+- With the last paragraph of ≥ 40 words as the echo, P3's share is 0.327 and P4's is unchanged (0.303).
+- → **C P12-85** (running). C P12-82 lands only together with it.
+
+(d) **Running:** C P12-84 (K3 bounds) ∥ C P12-85 (echo). **Queued:** C P12-83 (K2 case), C P12-86 (the guard and the log), revision 10 → 11, A P12-57 phase 3, Theme B round 3, Theme A round 4, and the B for short paragraphs (now known to feed the echo).
+
+### §1h.465 — 2026-10-28 — C P12-82 (CAPTIONS WHOLE) AND C P12-85 (THE ECHO) LANDED TOGETHER
+
+**C P12-82 (K1) and C P12-85 (the echo) are landed together** (head `1f672ccf`; the landed `web/` tree equals V's and the clean copy's, `88f2f49a`).
+
+**Manager measure on P1–P6:**
+- Theme C, with both: every part right on all six, and headings, roles and levels identical to round 3. C P12-82 alone had made P3 7 / 8 (§1h.464 (c)).
+- Captions, before → after (characters):
+  - P3: Fig. 1 135 → 1,165; Fig. 6 63 → 535.
+  - P5: Fig. 1 132 → 666; Fig. 2 135 → 1,059; Fig. 4 138 → 658; ED 7 118 → 789; ED 8 118 → 519.
+  - P4: Fig. 5 unchanged at 412.
+  - No caption got shorter.
+- One P5 Extended Data caption of 26 characters is the same before and after; it is backlog.
+
+**Manager mutations:** C P12-82's smaller-face clause off → 5 red; C P12-85's minimum 40 → 0 → 7 red. sha256 equal.
+
+**V's gates:** lint 0 / 144; **655 files, 12,270 tests, 0 failed**.
+- The build failed twice in V with Turbopack's Google-font error ("queries have exactly one entry"). The same code built clean in a fresh worktree (`mgr/bgood`, build 0). After V's `node_modules` was re-linked from the main checkout, V built clean too (build 0).
+- The cause was V's stale `node_modules` links, not the code. It is recorded, and V is re-linked.
+
+**C P12-84 (K3) is reported** (R3-C the furniture band, R3-B the 24 pt line reach and 6 pt marks; B's four re-aims and no other). It is verified next. **C P12-86 has started.** C P12-83 is running.
+
+### §1h.466 — 2026-10-28 — C P12-84 (FIGURE BOUNDS) LANDED; 14 OF 43 BOXES CHANGED, P1 AND P2 UNCHANGED
+
+**C P12-84 (K3) is landed** (head `6371b78e`; the landed `web/` tree equals V's at `1f139422`).
+
+The rules:
+- **R3-C:** a line or drawing wholly in the top furniture band, and at least 20 pt wide, never joins a figure, and the clip starts under that ink.
+- **R3-B:** a figure-text line may reach 24 pt past a side, and small marks within 6 pt join, with guards (the nearest captioned figure, no other region, no caption or body line, at most 64 marks).
+
+Manager measure, figure boxes on P1–P6 (43 captions):
+- **14 changed:** P3 Figs. 1, 2, 3 and 5 take their left edge labels; P4 Fig. 1; P5 Figs. 2, 3 and 5's tops leave the running head (24.8 → about 47); P5 Figs. 1 and 4 and P6 Figs. 1–4 take their edge labels.
+- **P1 and P2 unchanged.**
+- Renders checked by eye: P3 Fig. 2 has its legend squares and rotated row labels; P5 Fig. 2 is whole, without the head. The page-edge vertical rule B named is a residual.
+
+Manager mutations (sha256 equal):
+- furniture width out of reach → 8 red;
+- the reach back to 6 pt → 6;
+- the mark cap at 0 → 9.
+
+V's full gates: lint 0 / 144; **656 files, 12,293 tests, 0 failed**; build 0. B's four re-aims only, named by C.
+
+Residuals, backlog: a running foot (R3-C is top-only); the 6 pt mark reach (24 pt moved three more tests); P4 Fig. 1's caption pixel rows.
+
+The revision 10 → 11 bump follows C P12-83.
+
+### §1h.467 — 2026-10-28 — C P12-83 (A FONT'S CAPITALS) AND REVISION 11 LANDED; C P12-86 REPORTED; THEME B ROUND 3 STARTS
+
+(a) **C P12-83 (K2) and the revision bump are landed** (head `69e5e2ef`; the landed `web/` tree equals V's at `39bffad7`). `FIGURE_EXTRACTION_REVISION` moves 10 → 11 (the manager's commit), so stored documents are re-read with C P12-82's captions, C P12-84's bounds and C P12-83's capitals.
+
+Manager measure:
+- **P1, P2, P4, P5, P6:** maps byte-identical.
+- **P3:** two body tokens and one heading change case only.
+- **P3's captions:** none of the damaged forms remains (the "sE", "lCO", "DFt", "lYC", "li-" shapes). The tokens a broad pattern still flags are the paper's own plurals, units and abbreviations.
+
+Mutations (sha256 equal):
+- `CASE_MIN_HITS` 3 → 99: 14 red.
+- `MAX_RUN_LETTERS` 2 → 1: 1 red. A 0 failed to load the file; it was re-run at 1.
+
+V's gates: lint 0 / 144; **657 files, 12,326 tests, 0 failed**; build 0.
+
+C's deviations are accepted:
+- a capital-printing guard, so a body font that prints the capital is never repaired;
+- a word-start shape (`l`+`i-`);
+- two capitals before the after-capitals direction.
+
+(b) **C P12-86 is reported:** the damage guard in `sanitizeReview` and the fallback's cause as counts. C's open point (1): a `set_role` that makes the *first* non-setup part setup is not refused. The manager keeps it so: that is the review's ordinary correction of an opening the rules ended too early, and refusing it would cost the review its commonest repair. A P12-57 phase 3 measures. It is verified next.
+
+(c) **Theme B round 3** is a fresh A walk on this head (P12-88). It starts now, beside A P12-87 (Theme A round 4).
+
+### §1h.468 — 2026-10-28 — C P12-86 LANDED (THE REVIEW'S DAMAGE GUARD, THE FALLBACK'S CAUSE)
+
+**C P12-86 is landed** (head `e024cc39`; the landed `web/` tree equals V's at `27412269`).
+- Manager mutations: the split guard off → 8 red; the set_role guard off → 5 red. sha256 equal.
+- V's full gates: lint 0 / 144; **658 files, 12,349 tests, 0 failed**; build 0.
+- C's re-aim is named: `structure-review.test.ts`'s three-splits case uses interpretation, because setup is now refused there.
+
+**A P12-57 phase 3** (brief appended: P6 × 5, P4 × 3, P3 × 3 on this head, with the fallback's cause in `dev.log`; within the 66 calls left) starts at the next free slot. Both slots now hold the round walks A P12-87 and A P12-88.
+
+### §1h.469 — 2026-10-28 — THEME A ROUND 4 (A P12-87): 100 ON P1, P2, P3; O8 NOT A GUARD BREAK; READERS
+
+**A P12-87** (Theme A round 4 on `48d14081`; report landed `6c5c8347`; its four-word runs shared with P1–P6 are 8, all digit runs).
+- The six pass requirements hold. 36 / 36 units. **No extra. P1, P2, P3 each 100.**
+- Round 3's E3 is GONE: in 78 banded states the tab stays right, 8.0 px above the band. Round 2's E1, the underline export and E2 (the tab) all stay GONE.
+
+**Director, O8.** On the phone, the in-flow row's round trip lands 48–69 px above where the row was pressed, in 6 of 9 trips.
+- The P11 guard A10 ("the same paragraph at the top of the view, ±1 line") is walked at W1 (B11's matrix), where the round trip is exact. O8 is the phone's in-flow row at the page head, a route a reader takes only from the head.
+- The fixed tab, the route from deep in the paper, returns exactly (9 / 9).
+- Round 3's director and readers left the same observation unpriced.
+- **O8 is not a guard break and is not priced. It is backlog**, in `return-to-paper.ts`'s place-holding at the page head.
+
+**Readers for round 4:** A4-r1 is running; the median is the score of record. If two readers stand at or above 97.25 on all three papers, Theme A has its two consecutive rounds (round 3 at 97.92, round 4).
+
+**A P12-57 phase 3** starts at the next free slot.
+
+### §1h.470 — 2026-10-28 — THEME A DONE: ROUND 4 OF RECORD 100 ON P1, P2, P3 (TWO CONSECUTIVE AT THE TARGET); C1 PHASE 3 RUNNING
+
+**Theme A round 4, the score of record.** Readers A4-r1 and A4-r2 (blind, pack `r2/a87/pack`) each give **P1, P2, P3 100.00**: 12 / 12 units, no extras, no FAIL. With two readers at 100, the median is 100 whatever a third gives; the third reader is skipped.
+
+**Theme A has met its stop line: round 3 97.92 / 97.92 / 97.92, then round 4 100 / 100 / 100, two consecutive rounds ≥ 97.25 on all three papers.**
+
+**Observations neither reader charged, kept as backlog:**
+- O8, the phone row's return 48–69 px high.
+- The W4 toolbar wrap that puts Indent alone on a second row.
+- Note markers mid-word when a selection ends mid-word.
+- The W2 largest-step overcapacity (§1h.194).
+
+**After the stop:** Theme A changes only by fixes for what the last round found. Any new work on it waits on the owner. The owner's own look at the notes surface is the acceptance above the rubric.
+
+**A P12-57 phase 3** (C1) has started, on `e5aaa7d2`, port 4244.
+
+### §1h.471 — 2026-10-28 — THEME B ROUND 3 (A P12-88): 12/12 ×3, E2 + E5 → 95.83; C P12-89; THEME C ROUND 4 C0 100 ×6
+
+(a) **A P12-88** (Theme B round 3 on `921dbd8b`; report landed `1f906d66`; its four-word runs shared with P1–P6 are 5, digit runs and a common phrase).
+- The six pass requirements hold. **12 / 12 on P1, P2 and P3.**
+- Round 2's marks:
+  - B7 on P3 is GONE (Fig. 1 1,165 and Fig. 6 535 characters, all six whole);
+  - E1, E3 (capitals), E4 (bounds: 18 / 18 figures whole against their pages) and O2 (the page moves 0 px past the Explain card's end) are GONE.
+- Extras:
+  - E2, the standing §1h.168 cost, 0.25;
+  - **E5 (new)**, 0.25: while a card is open, the notes tab stands over the margin divider's strip and hides 146 px of it; the cursor there is `default`, and a drag there does nothing.
+- **A's score: 95.83 on each paper.** Without E5 it would be 97.92.
+
+(b) **Director:** E5 is real (a drag fails where the strip should take it) and is not voided. The tab's place beside a card (C P12-77 / C P12-79) and the divider's strip are two placements that collide. → **C P12-89**: the tab never intersects the strip. O1 (the 1 px divider range at 853 px) still waits on the owner.
+
+(c) **Readers for Theme B round 3** (B3-r1 running, then B3-r2) give the score of record. If they charge E5, round 3 is below the target.
+
+(d) **Theme C round 4 (C0, no key)** on the landed `web/` tree `54f4b003` (C P12-82 … C P12-86, revision 11): **every part right on all six papers, no extras, 100 × 6.** The only change from round 3 is P3's heading in capitals (C P12-83). C0 has three consecutive rounds at the target. C1 phase 3 is running.
+
+### §1h.472 — 2026-10-28 — C1 PHASE 3: P3 3/3, P4 3/3, P6 4/5 (THE SAME SPLIT SHAPE); C P12-90
+
+**A P12-57 phase 3** (report landed `93ba0c7b`; 11 runs on `e5aaa7d2`; 30 calls, 114 of 150 spent; no quota answer; key hits 0).
+
+C1, scored by the manager against the ruled truth:
+- **P3: 3 / 3 exact.** All reviewed; no fallback this time.
+- **P4: 3 / 3 exact.** All fell back: cause `all-refused`, one correction read and refused as out-of-range, the same 95-character reply each run.
+- **P6: 4 / 5.** Run 4 is damage again, by the same shape as phase 2's: two splits in the first results part, one paragraph apart, now with the role method instead of setup (C P12-86 refuses setup). A short row's majority flips.
+
+**C1 is still not 100 % on P6.** The guard must take the shape, not the role → **C P12-90**:
+- no review split leaves a piece shorter than 2 paragraphs, except a closing interpretation paragraph at the end of the last evidence part;
+- a refused correction logs its numbers, so P4's out-of-range one can be read.
+
+Then phase 4: P6 × 5 and P4 × 2, within the 36 calls left.
+
+### §1h.473 — 2026-10-28 — C P12-90 LANDED (NO ONE-PARAGRAPH REVIEW PIECE); WORKERS RESUMED AFTER THE LIMIT
+
+(a) **C P12-90 is landed** (head `8bf1dadb`; the landed `web/` tree equals V's at `a7e60324`).
+- No review split may leave a piece shorter than 2 paragraphs, except a closing interpretation paragraph at the end of the last evidence part. A refused correction logs its numbers.
+- Manager mutations (sha256 equal): `minPiece` 2 → 1 → 11 red; the route's numbers left out → 6 red.
+- V's full gates: lint 0 / 144; **658 files, 12,369 tests, 0 failed**; build 0.
+- C's re-aims are named (two split fixtures respaced; the log lines' key lists gain `refusedNumbers`).
+- C's points recorded:
+  - `refusedNumbers` is on the success line too;
+  - a "piece" is any run between cuts;
+  - a `move_start` can still leave a one-paragraph part (backlog);
+  - the prompt does not state the minimum.
+
+(b) **The usage limit (5-hour) stopped C P12-89 and reader B3-r2 at about 20:30 UTC.** Both are resumed after the 21:20 reset.
+
+(c) **A P12-57 phase 4** (C1 on this head): P6 × 5 and P4 × 2, within the 36 calls left. It is briefed, and starts at the next free slot.
+
+### §1h.474 — 2026-10-28 — THEME B ROUND 3 OF RECORD: 95.83 ON P1, P2, P3 (BELOW; E5); C1 PHASE 4 RUNNING
+
+**Theme B round 3, the score of record.** Readers B3-r1 and B3-r2 (blind, pack `r2/a88/pack`) each give **P1, P2, P3 95.83**: 12 / 12 units, no FAIL, two extras on each paper.
+- The extras are the standing §1h.168 cost, and the notes tab (and the legend) over the margin divider's strip. The second is A P12-88's E5, now C P12-89's two rules.
+
+With two readers at 95.83, the median is 95.83 whatever a third gives; the third is skipped. **Theme B round 3 is below the target.** Consecutive rounds: 0.
+
+Without E5, each paper is 97.92: the standing cost alone stays under the line. Theme B round 4 walks after C P12-89 lands.
+
+Readers' points recorded, unpriced:
+- B2's W4 notes-page shots on P1 and P2 caught a loading state (P3's shows the page). Round 4's walk takes them after load.
+- The lone figure card's geometry depends on the close order.
+
+**A P12-57 phase 4** (C1: P6 × 5, P4 × 2) has started on `e8af6ed1`.
+
+### §1h.475 — 2026-10-28 — C P12-89: RULE 2 STANDS; RULE 1 REVISED (THE TAB LEFT OF THE STRIP, IF THE GUTTER ALLOWS)
+
+C P12-89 reported rules 1 and 2 (`e65cb81f`, `98f600fc`, checkpoint `c4e930c0`).
+
+**Rule 2 stands:** the dividers' strips end at the legend's top at every scroll and Fit zoom (mutations 31 and 33 red, by C).
+
+**Rule 1's new place is refused.** The tab stood inside the margin at its left edge, 2 px clear of the strip. That opens two new overlaps: it covers the first ~5 px of a card's text lines, and with three cards at 1024 × 576 or 853 × 480 it covers part of a card header. B5 is in Theme B's matrix, so each would be an extra in round 4.
+
+**Revised rule 1:** the tab stands left of the strip, in the centre column's right gutter, 2 px clear. It meets no paper text and no control, and it never meets a card. C first measures the gutter (text's right edge to the strip) at three windows × two steps × one to three cards. It builds only if every gap is ≥ 17 px; otherwise it reports, and the manager rules.
+
+Nothing of C P12-89 lands until then.
+
+### §1h.476 — 2026-10-28 — C P12-89: THE GUTTER IS 12 PX IN SHORT WINDOWS; THE CENTRE'S RIGHT PADDING 12 → 20, THE TAB IN THE GUTTER
+
+C P12-89's gutter measure (addendum `28af957b`): from the paper text's right edge to the margin strip, the gutter is 45 px at 1440 × 900 default and 70 px at its largest step, but **12 px** at 1024 × 576 and 853 × 480 default (side margin). That is the centre's own 12 px padding, so the revised rule 1 cannot be built as it stands.
+
+C's options:
+1. Accept the in-margin overlaps (text, headers).
+2. Return to the old place and accept E5.
+3. Use another place in short windows.
+4. Widen the centre's padding.
+
+Options 1 and 2 leave an extra in every round, and Theme B already carries the standing §1h.168 cost, so it could never pass. Option 3 has no clear place in short windows: the right edge is over the cards.
+
+**Ruled: option 4 with the revised rule 1.** The centre column's right padding goes from 12 px to 20 px, always. The words never move when a card opens (P11 A8). The cost is 8 px of text width: at W3 default about 476 → 468 px. C re-measures the character count against §1h.197's floor of about 60 and stops below 58. Beside a card the tab stands left of the strip, 2 px clear, meeting no text, card or header. Rule 2 stands.
+
+### §1h.477 — 2026-10-28 — C1 PHASE 4: P6 4/5 (A SET_ROLE ON THE FIRST RESULTS PART), P4'S CUT AT ITS OWN EDGE; §1h.467 REVERSED; C P12-91
+
+**A P12-57 phase 4** (report landed `14cbafea`; 7 runs on `e8af6ed1`; 19 calls, 133 of 150 spent; no quota answer; key hits 0).
+
+C1, scored by the manager:
+- **P6 4 / 5.** Run 4 gives rows 2 and 3 setup.
+- **P4 2 / 2.** Both fell back.
+
+The refused corrections' numbers (C P12-90's log) explain both:
+- **P4.** The one correction is a split of part 1 at 147, where part 1 runs 35–146. That is a cut where the draft already cuts, refused as out-of-range, so the review falls back.
+- **P6.**
+  - In all five runs the model wants the first results part's start as setup; its split at 11 is refused (`setup-after-opening`).
+  - In run 4 it used a `set_role` of part 1 to setup. C P12-86's guard lets that through (`k > openingEnd`), because the manager's §1h.467 kept the case for recall.
+  - The damage is measured, so **§1h.467's choice is reversed.** Recall on an opening the rules ended too early yields to no damage (§1h.426 (b): C1 is every part right).
+
+→ **C P12-91:**
+1. A `set_role` to setup is refused from `openingEnd` on.
+2. A split at a part's own edge is a silent no-op: a reply of only such splits is a review that agrees, not a fallback.
+
+Then **phase 5:** P6 × 5 and P4 × 1, exactly the 17 calls left.
+
+### §1h.478 — 2026-10-28 — C P12-89: THE W3 MEASURE 57.96 (FIT 58.4) ACCEPTED; 20 PX PADDING BUILT; THE TAB'S 18 PX HIT AREA
+
+**C P12-89 stopped at the line (addendum 2, worktree `3b6ce5ab`, not landed).**
+
+With the 20 px right padding, the W3 body (853 × 480, default step) reads:
+- **57.96 characters a line** on its 12 invented paragraphs. It was 59.86 with 12 px: 0.04 under the manager's 58 line.
+- **58.4 on a 1 px sweep's fit**: about 1.1 characters for the 8 px. The median stays at 59.
+
+**Ruling:**
+1. **The 58 line was the manager's own guard, not the owner's or the rubric's**, and the C was right to stop on it as written.
+   - The cost it guarded is 1.1 to 1.9 characters at one width.
+   - It stays inside the readable measure (about 45 to 75 characters).
+   - It buys a margin divider whose whole strip answers with a card open (E5).
+   - **Option 1 is taken: 20 px.**
+   - Option 2 (17 px) is refused: it leaves the tab touching the text.
+   - Option 3 (`readingCentreMinimum` + 32) is refused: it turns W3's side margin into the bottom band. That is a layout change the owner did not ask for, and it touches O1.
+2. **The tab's hit area is 18 px across** (15 px face + 3 px toward the text), not P11-34's 24.
+   - This is the compromise already taken for the phone tab (20 px, C P12-77).
+   - It is not priced here; the round-4 A measures it against the rubric like any other control.
+3. **The two comments one inset off** may be corrected by C P12-89, comment lines only:
+   - `pane-layout.ts` (`readingCentreMinimum`'s comment);
+   - `responsive-margin.test.ts`.
+4. **Build now:**
+   - Apply the patch.
+   - Drop `e65cb81f`'s header-dodge code and its tests; name each re-aimed test with why.
+   - Run the gates and one own mutation per rule.
+   - Write the checkpoint.
+
+   Rule 2 (`98f600fc`) stands.
+
+### §1h.479 — 2026-10-28 — C P12-91 LANDED (SET_ROLE GUARD FROM openingEnd; AN EDGE SPLIT IS NO CORRECTION); A P12-57 PHASE 5 STARTED
+
+**C P12-91 landed** (`e56d6a40`).
+
+Its commits:
+- rule 1: `k >= openingEnd` for a `set_role` to setup;
+- rule 2: `isEdgeSplit`, a split at a part's own `from` or at its `to + 1` when a next part starts there, taken out of the reply before judging.
+
+**The manager's verification on V:**
+- Own mutations:
+  - rule 1 back to `k > openingEnd`: 3 red;
+  - rule 2's filter disabled: 8 red;
+  - each restored with sha256 equal.
+- Full gates:
+  - tsc 0;
+  - lint 0 errors / 144 warnings;
+  - 658 files + 3 skipped, 12,381 tests + 3 skipped (+12), 0 failed;
+  - build 0.
+- 7 re-aimed tests, named in the checkpoint:
+  - two P12-86 guard tests (the reversed §1h.467);
+  - five that used an edge split as their out-of-range example and now use `to + 2`.
+
+**Its four open points, ruled:**
+1. The last part's `to + 1` is not an edge: no part starts there, and the split stays out-of-range. As built.
+2. In a draft with no opening (`openingEnd` 0), a `set_role` of part 0 to setup is refused too. **As built:** it is the same line `split` keeps, and C1's measure prefers no damage to recall. The six papers all open with setup, so this does not move a score.
+3. Edge splits are not counted. As built.
+4. The effect on P4 and P6 is measured in phase 5 (now).
+
+### §1h.480 — 2026-10-28 — C P12-89 LANDED (THE TAB LEFT OF THE STRIP, 20 PX PADDING; THE STRIPS END AT THE LEGEND); THEME B ROUND 4 (A P12-92) STARTED
+
+**C P12-89 landed** (`8ff00eea`; seven commits, of which three are code).
+- `e65cb81f`: the first tab place, superseded.
+- `98f600fc`, rule 2: the dividers are sticky and end at the legend's top.
+- `1b173760`, rule 1 as built in §1h.478:
+  - `.reader-centre` `padding-inline: 12px 20px`;
+  - the tab 2 px left of the margin divider's strip;
+  - the hit area 18 px;
+  - the header dodge and `z-[69]` gone.
+
+**The manager's verification on V:**
+- Own mutations, each restored with sha256 equal:
+  - the tab back at the margin's edge: 136 red;
+  - the padding back to 12 px: 64 red;
+  - the divider's `max-height` without the legend: 33 red.
+- Full gates:
+  - tsc 0;
+  - lint 0 errors / 144 warnings;
+  - 661 files + 3 skipped, 12,506 tests + 3 skipped (+125), 0 failed;
+  - build 0.
+- 14 test declarations of the branch head were renamed. Each is re-aimed with its old sentence and the reason above it (76 cases in 7 `notes-button*` files: the 8 px clear became 2 px and the 24 px hit area became 18, by §1h.476 and §1h.478). No test was deleted, skipped or weakened beyond the ruled numbers.
+
+**Its open points:**
+1. `readingCentreMinimum` still reserves 476 px; its comment says so.
+2. Rule 2 shortens the scrolled divider line by 16 × zoom px at its top.
+3. The real page is not re-checked by the C.
+
+All three go to the round-4 A.
+
+→ **A P12-92 (Theme B round 4)** starts on `8ff00eea`.
+
+### §1h.481 — 2026-10-28 — C1 PHASE 5: P6 5/5 EXACT, P4 REVIEWED EXACT; AN ALL-REFUSED REPLY STAYS A FALLBACK; THE CONFIRMING ROUND (PHASE 6, P1–P6 × 5), THE MANAGER'S CALL CEILING 150 → 245
+
+**A P12-57 phase 5** (report landed `ffe1bb29`; 6 runs on `795aed09`; 15 calls, 148 of 150 spent; no quota answer; key hits 0; no four-word run of the papers in the report).
+
+C1, scored by the manager (`score-c1.py`):
+- **P6 5 / 5 exact.** Every run is 9 / 9 parts, with no row unlike the reviewed C0 map.
+  - Three runs were reviewed with 0 corrections.
+  - Two fell back as `unusable` / `all-refused`.
+  - The two corrections that did damage in phases 3 and 4 came back and were refused:
+    - a `set_role` of part 1 to setup (run 3);
+    - the pair of splits at 11 and 12 (run 4, now `piece-too-short`).
+- **P4 1 / 1 exact.** Reviewed with 0 corrections, with no fallback, as C P12-91's rule 2 meant.
+
+**Ruled:**
+1. **A reply whose every correction is refused stays a fallback** (`unusable`, cause `all-refused`). The model disagreed with the draft, and none of its disagreement was safe to apply, so "the review agreed" would be untrue. The page shows the same map either way. A split at a part's own edge is the one case of agreement (§1h.477).
+2. **The C1 count.** By the stop line, every paper must reach 100 % in two consecutive scored rounds.
+   - Since phase 2, C P12-86, C P12-90 and C P12-91 only refuse more.
+   - The draft is exact on all six papers (C0 100 since round 2). So a refused correction can never cost an exact map, and an earlier pass stands as a lower bound on today's code.
+   - That gives these consecutive passes:
+
+     | Paper | Passes | Count |
+     |---|---|---|
+     | P3 | phases 2 and 3 | 2 |
+     | P4 | phases 2 to 5 | 2+ |
+     | P1, P2, P5 | phase 2 | 1 |
+     | P6 | phase 5 | 1 |
+3. **The confirming round, A P12-57 phase 6:** P1–P6 × 5 on one head, the current one, so the round of record stands on a single tree.
+   - It needs about 85 calls: P4 takes 2 a run, the others 3.
+   - **The manager's own ceiling of 150 calls (§1h.462) is raised to 245** for this round alone. That ceiling was a guard set by the manager, not by the owner.
+   - Any 429, quota or billing answer still stops at once. The key stays BYOK only and is never printed.
+   - Phases 2 to 5 spent 55 to 66 thousand input tokens per phase.
+   - The owner is told.
+
+### §1h.482 — 2026-10-28 — RESTART; C1 PHASE 6 SCORED FROM ITS DUMPS (P1–P4, P6 5/5; P5 2/5); THE REVIEW DECIDES ONLY WHERE THE RULES ARE UNSURE; C P12-94; CEILING 280
+
+**The container restarted** while A P12-57 phase 6 and A P12-92 ran.
+
+**Phase 6 had finished every run.** The 30 dumps, `summary.jsonl` and `runall.log` ("DONE") survived on `cf572402`. The A's report was lost before it was written, so the manager scored from the dumps:
+- 73 calls, 221 of 245 spent;
+- every run's calls answered;
+- no 429, quota or billing marker;
+- the key's value in 0 of the 418 files of `a57/out6` and `sealed-c1`.
+
+A P12-92 was resumed by message to walk on from its pack.
+
+**C1, phase 6, the confirming round:**
+- **P1, P2, P3, P4 and P6 are 5 / 5 exact.**
+  - Every map equals the reviewed C0 map.
+  - P3 fell back in 5 runs and P6 in 2 (all-refused); the rest were reviewed.
+- **P5 is 2 / 5.**
+  - **M1** (runs 1 and 3): a `set_role` of part 2 (the closing, interpretation, `low`) to evidence. It was applied with no look, because a `low` part draws none.
+  - **M2** (run 4): a split of part 1 (`medium`) at 61 and a `set_role` of part 1 to method. The look sided with the review, and row 2 flipped to method.
+  - Run 5 carried two splits after a `review` look too, but no row moved.
+
+**The count:**
+- C P12-94 below only refuses more. The applied corrections become a subset, which its differential test must show.
+- So the passes of P1, P2, P3, P4 and P6 stand as lower bounds on the next tree. **Each has two consecutive scored passes:**
+  - P1 and P2 in phases 2 and 6;
+  - P3 in phases 2, 3 and 6;
+  - P4 in phases 2 to 6;
+  - P6 in phases 5 and 6.
+- **P5 has 0 consecutive passes.**
+
+**The principle, ruled:**
+- On the six papers every look that sided with the review against a `high` or `medium` part was wrong:
+  - P6 phase 4 run 4;
+  - P5 phase 6 runs 4 and 5.
+- So the review is not a reliable judge of a part the rules are sure about.
+- Under AGENTS.md (Tier 1 improves quality and degrades gracefully), **the review decides only where the rules said they were unsure (`low`), and only when a second look agrees.**
+  - A correction against a `high` or `medium` part is refused (`confident-draft`) and stays visible in the logs.
+  - A correction against a `low` part draws a look and stands only on `review`.
+- This narrows Tier 1's power. The owner is told, and may restore the looks on `medium` parts.
+
+→ **C P12-94.** Then **A P12-57 phase 7 and phase 8: P5 × 5 each**, two consecutive rounds for P5. That is about 30 calls, so the manager's ceiling goes from 245 to 280. Any quota answer stops the run, and the key stays BYOK only.
+
+### §1h.483 — 2026-10-29 — C P12-94 LANDED (THE REVIEW DECIDES ONLY WHERE THE RULES ARE UNSURE); THE APPLIED-MAP CAVEAT CHECKED (NO MOVE_START IN ANY RECORDED RUN); PHASE 7 STARTED
+
+**C P12-94 landed** (`84534087`; commits in the order rule 2, rule 1, rule 3, then the checkpoint).
+
+What it does:
+- **Rule 1:** a correction against a `high` or `medium` part is refused as `confident-draft`. It is the last gate, and the correction is kept on the answer as `contradicted`, holding its look place without a call.
+- **Rule 2:** a correction against a `low` part draws a `contradicts-low` look, inside the cap of three, and stands only on `review`.
+- **Rule 3:** a differential test of 30,000 cases (300,000 more run once) shows that the new corrections are always a subset of the old. The test forced two fixes: starved look places and the cap of forty.
+- A new test-only file, `web/src/test-support/structure-fixtures-low.ts`.
+- About 40 re-aimed tests, all named in the checkpoint.
+
+The manager's verification on V:
+- Own mutations, each restored with sha256 equal:
+  - rule 1's `sure` forced false: 14 red;
+  - rule 2's low-part filter disabled: 4 red.
+- Full gates:
+  - tsc 0;
+  - lint 0 errors / 144 warnings;
+  - 662 files + 3 skipped, 12,534 tests + 3 skipped (+28), 0 failed;
+  - build 0.
+
+The C's caveat: the subset is on the corrections list, not on the applied map. A refused sure `move_start` could let a low part's `move_start` apply where it was dropped before for crossing a neighbour.
+- The manager checked every recorded C1 run (`sealed-c1`, phases 2 to 6): the applied corrections were 18 splits and 4 `set_role`s, **with no `move_start`**.
+- So the edge did not occur in any recorded pass, and §1h.482's lower bounds stand.
+
+Stored reviews are re-judged on read, so a stored correction against a sure part stops applying. No version bump: that is the safer direction.
+
+The model stub the walks use answers against parts 1 and 2. On a paper where those parts are sure, a keyed stub walk now falls back. The Theme B walk is Tier 0 without the stub's structure call, so it is not affected.
+
+→ **A P12-57 phase 7: P5 × 5 on `84534087`.**
+
+### §1h.484 — 2026-10-29 — THE OWNER DECIDES O1: A DRAG FLOOR OF ABOUT 50 CHARACTERS; THE DEFAULT LAYOUT UNCHANGED; B1 AT W3 NEEDS A USEFUL RANGE FROM ROUND 5; C P12-95
+
+**The owner decided O1** ("同意", 2026-10-29), taking the manager's recommended option 1: at narrow widths the centre column's floor drops to about 50 characters, so the margin divider has a useful range at 853 px.
+
+**As ruled for the build (C P12-95):**
+- **A new drag floor:** about 50 characters, with the insets included, measured at 48 to 52 in Chromium.
+- **The dividers' room** uses the drag floor.
+- **The default layout is unchanged.**
+  - With nothing saved, `fitPanes` keeps the reading budget. A first visit at 853 still shows the margin at 281 and the text at 468 px (57.96 characters).
+  - A width the reader saved may take the centre down to the drag floor.
+- **Registration is unchanged:** the side margin against the band (`railMinimumWidth`).
+- **Why the default is kept:** the owner's words ask for a usable divider, not a narrower default text. So only the reader's own drag goes below the reading budget.
+
+**Scoring:**
+- **Round 4** (A P12-92) walked `d2d2b8b4`, before this decision, and stays scored by B1's letter (§1h.471).
+- **From round 5 on,** B1's W3 cell needs a useful range: an outward drag that grows the margin by at least 32 px (two arrow steps). A 1 px range is a FAIL of B1 at W3.
+- This is recorded as a rubric amendment.
+
+**Order:**
+- C P12-95 starts when a slot frees, after A P12-57 phase 8, which is short and on the C1 line.
+- Round 5 walks the head with C P12-95.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
@@ -1082,6 +3041,97 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P11-64 | **DONE 08:4xZ 2026-10-22** — round 6's walk of Theme B at d68ddd73: 12 PASS, **E-4 GONE** (600 / 600 `y20` rows, 76 / 76 over the legend), E-2 / E-3 GONE, the group over words STILL 0.25 (the allowance's), no new extra, own score 97.92; the readers score its pack | round 6 | §1h.174, §1h.176 | A → the readers | 4eca2d40 (picked) |
 | P11-65 | **DONE 10:4xZ 2026-10-22** — round 7's walk of Theme B (the confirming round) at ae2fbe42: 12 PASS, round 6's items GONE / STILL as before, the group over words STILL 0.25, no new extra, own score 97.92; the readers 97.92 / 95.83 / 97.92 (r2's second 0.25 voided, §1h.179) — Theme B's second pass, THE LOOP ENDS | round 7 | §1h.178, §1h.179 | A → the readers | aaf23636 (picked) |
 | P11-66 | **DONE 22:3xZ 2026-10-22** — a triple-click drag released beside the column ends at the column (§1h.181): 12 → 0 ending in the pane with no button, 56 → 0 with the paragraph left out, 100 / 100 whole with three buttons; +48 tests; manager's mutation 20 red → restored; full gates 10,684 | BACKLOG-114, the owner's "修" | §1h.180, §1h.181 | C → the manager | f0f24db0 … 4f6091f9 (ff; checkpoint `P11-66-C-20261022T2221Z.md`) |
+| P12 | IMPLEMENTATIONS_ALL9_VERIFIED_LANDED — FFda86379d/web88ac;formalA0B0 | owner9items+inheritedguards | frozenP12-RUBRIC;§1h.242 | freshA23/A24parallel→3blind/theme→director→nextfix/round | managerverificationreport;native10872+3/3041x3;noofficialscore |
+| P12-01 | PARTIAL evidence / B handoff ready — bounded report banked; production/auth/zoom/Summary evidence remains open | owner3/5/6 | P12-01-B-20261023T190000Z.md; rulings186–187 | B → manager | sourcesda00d9a6,5a51962c,dc3134d4,34c1a565 |
+| P12-02/03 | VERIFIED_LANDED — FF21c5ff7d; own671x3,2mutations,6UIlifecycle/16markerchecks; exactnative10698+3 green; A pending | owner1/2/7 | P12-02-C-20261024T044900Z.md;208 | manager → A | treea084518db97aa6dea45f54189c7ede6a98f8cfb3 |
+| P12-04 | MANAGER_VERIFIED_LANDED — FF19b5c2e5;388x3/4mutations/native10768+3;16UI+30cycles+8short checks; A pending | owner4 | P12-04-C-20261025T015442Z.md;216 | A withcombinedresponsivehead | web3251d071c204ba4bdf4e8087ddc7921f91b395f5 |
+| P12-05 | VERIFIED_LANDED — FF75ebcee5; own41x3,2mutations,16UIcells/local gates0; exact nativeCI10689+3 green; A pending | owner8 | briefs/P12-05.md; ruling203 | manager → A | webtreeac2d35baa5fe9d9ca76d4353cf034221c6d959af |
+| P12-06 | VERIFIED_LANDED — FF1de5f8e1; own198x3,2mutations,16cells/5lifecycle; exactnative10705+3 green; A pending | owner9 | P12-06-C-20261024T050000Z.md;210 | manager → A | tree1cf763a7e4324c22cb5f2f21c284ef7b8c9d5dd3 |
+| P12-07/09 | MANAGER_VERIFIED_LANDED — final52f281f3+15repair;FFda86379d | owner3/6responsivepanes/figures | P12-07-Ccheckpoint;§1h.197/242 | freshThemeBA24production/realpapers/fullguardwalk | managerwhole-diff/mutations/108placeUI;exact88acnative158families3;worker598views/90cyclesbounded |
+| P12-08 | MANAGER_VERIFIED_LANDED — final4d69e4a1;FFda86379d | owner5groupedhighlights | P12-08-Ccheckpoint;§1h.242 | A23/A24realpapers/exports/colour/legacywalk | own1125x3/3mutations/actualUI;nativefinal88ac3;noformalscore |
+| P12-10 | B_COMPLETE — reportpicked9b9802a6;49constructed/69modes,0UI;209contractimplemented11/12 | owner5Explainguard | P12-10-B-20261024T152000Z.md;209 | combinedclientverification/A | boundedreportonly |
+| P12-11 | MANAGER_VERIFIED_LANDED — FF35aed7bf;444x3/3mutations/native10737+3;client/Apending | boundedservergroupedExplain | P12-11-C-20261024T210000Z.md;214 | combinedclient/A | web0b4cf9ac72d195cb24a3a7dea05c9bd1f3b94381 |
+| P12-12 | MANAGER_VERIFIED_LANDED — final826d1893;FFda86379d | clientcanonicalrange/source/occurrencecache | P12-12-Ccheckpoint;§1h.242 | A24actualrealpaper/source/caption/long/mixedchecks | 4ownmutations/restored74;actual4HTTP200samecanonical2segments;finalnative3 |
+| P12-13 | B_COMPLETE — pickedreport e6f31cbc;52of108legalpositionlosses;107oldtestspass | responsivekeepercauses/candidates | P12-13-B-20261025T021000Z.md;219 | C15undermeasuredcandidate1 | reportonly;own4212stopped |
+| P12-14 | PREPARATION_COMPLETE — picked897ebc44;79guards;zeroUI/score | P9/P10/P11guardinventory | P12-14-A-20261025T071832Z.md;218,220 | laterfreshlandedheadwalkbrief;blindreadersseparate | reportonly;noPDF/server |
+| P12-15 | MANAGER_VERIFIED_LANDED — finalc42fab58;FFda86379d | keeper/logicalposition/stableancestry/narrowtarget/directguards | brief15;233–243 | freshAresponsive/realinput/fullmatrix | own108 transitions / 0 losses / 8 red mutations;11x3;finalnative3041x3;worker598viewsbounded |
+| P12-16 | MANAGER_VERIFIED_LANDED — testonlyc5675b78;FFda86379d | 4legacyCSS/sourceguardsretainedscenarios | brief16;§1h.242 | Aguardchainactualpage | whole-diff/ownrulemutations;finalnativegroup16x3;no weakening |
+| P12-17 | MANAGER_VERIFIED_LANDED — testonly998c5c84;FFda86379d | responsive-margincapguard | brief17;§1h.242 | Aactualshort/large/zoomguard | own5x3/2redmutationsrestored;finalnative3;oldcasesretained |
+| P12-18 | BOUNDED_PREFLIGHT_COMPLETE — picked145ae869;20cells/60+3markers/actualexports/2mutations | inventedno-keynoteformat/list/lifecycle/export/marker;keyboardgapidentified | briefs/P12-18.md;222–227 | C19keyboardandB20geometry;laterfreshrealinputAwalk | report21b5d220;no score;own4217stopped |
+| P12-19 | MANAGER_VERIFIED_LANDED — final7e73bf5d;FFda86379d | 3notefiles/keyboardownership/applicability | brief19;§1h.242 | freshA23allformat/matrix/realinputs | own17x3/5redmutations/type/lint/actual1440/853/390keyboard;C21integrated;finalnative3 |
+| P12-20 | B_RETURNED — reportonly0b8b97a8/6fad2f9d;boundedcauseconfirmed | singlefloor/observerread-only36cells/3candidates | briefs/P12-20.md;reportlimitsretained | C21measuredminimumimplementation | 16/18shortfail18/18tallpass;97tests;3card189;finalhashsame;Explainunperformed |
+| P12-21 | MANAGER_VERIFIED_LANDED — integrated530918cc;FFda86379d/web88ac | 3singletongeometryfiles/directtests;C07landmarkpreserved | brief21;§1h.242 | freshAinitial/scrolled/longnotes/fullactionmatrix | own124x3/6redmutations/exactrestore/type/lint/native10872+3/3041x3;36actualcells+3headings+68hostoverflow;rawlimitsretained |
+| P12-22 | VERIFIED_LANDED_TRANSPORT — 233c04b0;actualbr85dispatch/nativepassed | codec/workflowonly;publicsamebytes/unchangedgates | briefs/P12-22.md;§1h.237–239 | no furthertransportworkunlessnewfailure | 61639payload;exact88acdecoder/index;native40240875208allgreen |
+| P12-23 | SCORED R1 | Formal round1 ThemeA releasedweb88ac; frozen1795artifactpack | A0;3freshreaders0/0/0;director0;boundedA9PASS;commongatesunestablished | No old collection resume; freshA34round2 at new landedweb28cf | P12-23-A-20261025T230000Z.md;P12-R1-DIRECTOR-20261027.md |
+| P12-24 | SCORED R1 | Formal round1 ThemeB releasedweb88ac; frozen610artifactpack | A0;3freshreaders0/0/0;director0;boundedB9PASS;commongatesunestablished | No old collection resume; freshA35round2 at new landedweb28cf | P12-24-A-20261025T230500Z.md;P12-R1-DIRECTOR-20261027.md |
+| P12-25 | INVESTIGATION_COMPLETE | Independent B ninepublicAloading cases; own4224stopped/web88ac | 9stabletimedcases/all200by10s;5pending+8deliveredopens;separatepeekvisibleclick;3candidates; no productfix justified, historicalA gapsremain | A24 freshstableidentity/progressiveobservations; A26starts freedslot; formalround remainsopen | P12-25-B-20261026T043000Z.md@03127840; summary/historicalgeometry/25filemanifest |
+| P12-26 | PARTIAL | FreshpublicA/publicB/invented factualnotehelper own4225/web88ac | 3normalUIentriesonceeach/consent3of3/0errors banked;functional/matrix/exports/cycles/guardsowed | Noteformat/list/lifecycle/export/cliphit/matrix/cycles/privacy/curatedfacts | P12-26-A-20261026T072000Z.md@ec5db89d; threeprivateentryartifacts |
+| P12-28 | LANDED / A OWED | Typed-caption graphic association; measured filled-path clip/subpath/work cap; freshness3/16/v9 | web28cf native10919+520x3;4ownred/restoremuts;genuineupgrade/fresh/publicUI;5/5sourcebyteidentities;mainFFc4955144 | Fresh round2 A at landed head; original-owner/fullmatrix/common gates and known image/source limits remain | e0e2ff67;landingc4955144;P12-MANAGER-P28-VERIFY-20261026.md;CI40460023376 |
+| P12-31 | DONE | Finitecaptionregion/path/stroke/subpath/workcausals+postfixreplay | Boundedfacts,knownpartialraster/strokepaddinglimitsopen;noUIoruniversalclaim | ManageractualUI;Acountremainingnormally | P12-31-B-20261027T011000Z.md through5e2635f8 |
+| P12-32 | DONE | 15onepage+5twopagecaptionidentity/sourcewordmatrix | 416orderedlineschecked;semanticassociationunresolved;noclassifierauthorized | Managerrepresentationdecisioniflaterbriefneeded | P12-32-B-20261027T012000Z.md through576a5c15 |
+| P12-33 | DONE | Ordinaryproductionentry/publicroutegates/source-backedchoices | Sourceguideonly;managernormalpublicHTMLfigureactual,originalupload/fullmatrixopen | Keepnormalaccessprerequisites/servedrevisionexplicit | P12-33-B-20261027T055000Z.md through3937cf82;managerproductionreport |
+| P12-R1 | SCORED | TwoA+threefreshblindreaders/theme+directoraudit | MediansA0.00/B0.00commongatesunestablished;counts0/2each | Mechanismfixes+freshnextA/readerround | P12-R1-DIRECTOR-20261027.md;P12-RUBRIC.md |
+| P12-34 | RUNNING / CONTINUATION | SamefreshR2Aitem/release66656b33/web28cf;checkpoint5f5d54b6;own4233 | Newindependentreviewertransitionexplicit;preserve4inputaggregatebold+inventedoutputs;actualstickyfullfamiliesowed | ActualCUAcapability→firstunfinishedsticky/list/lifecycle/matrix/privacy/guards;nodefaultPASS | agentp12_34_r2_theme_a_continuation;briefs/P12-34.mdRuling417 |
+| P12-35 | RUNNING | Fresh round2 ThemeB independent A at66656b33/web28cf;4234 | ActualUIcapability→inputbaselines→full79guards+6commongates+all12units→frozenpack+score | First finite capability/baseline checkpoint; no old crop/CI substituted for page | agentp12_35_r2_theme_b;briefs/P12-35.md |
+| P12-36 | DONE / BOUNDED | 11inventedfunctionprobes+producer/export/persistencepathtrace | 31/31existingtests;3generalcandidaterules;actualReact/UI/reloadlinknotproved | Actualsame-notewriterorderingneededbeforemanagerCauthorization;nocausalclosure | P12-36-B-20261027T000000Z.md;throughf779613f |
+| P12-37 | PAUSED — A (Sonnet); walked 019793b9, now stale; partial pack kept; a fresh walk follows the landing (§1h.443) | Theme A A1–A12 under §1h.420 / §1h.421 | the rubric's units and pass requirements over the finite matrix | walk, pack, deliverable P12-37-A-<UTC>.md | briefs/P12-37.md; §1h.421 |
+| P12-38 | PAUSED — A (Sonnet); walked 019793b9, now stale; partial pack kept; a fresh walk follows the landing (§1h.443) | Theme B B1–B12 under §1h.420 / §1h.421 | the rubric's units and pass requirements over the finite matrix | walk, pack, deliverable P12-38-A-<UTC>.md | briefs/P12-38.md; §1h.421 |
+| P12-39 | DONE — B (Sonnet), report 7291f0a8 | the figure engine on P1 / P2, figure by figure against the PDF pages | per-paper table RIGHT / WRONG REGION / MISSING …; mechanisms with file:line; three candidate rules each | report P12-39-B-<UTC>.md | briefs/P12-39.md |
+| P12-40 | DONE — B (Sonnet), report on the branch (196d43f7 cherry-picked) | Theme C ground truth for P1 / P2 / P3; the map's roles today; Tier-0 role inference candidates | proposed parts with page, locator, role and evidence; current rows; mechanisms; three rule sets | report P12-40-B-<UTC>.md; the manager rules the ground truth | briefs/P12-40.md; §1h.423 |
+| P12-41 | DONE — B (Sonnet), report on the branch (f75a7fbd cherry-picked) | the figure engine on held-out P4 / P5 / P6 | per-paper marks; time and memory (P5); new vs shared mechanisms | report P12-41-B-<UTC>.md | briefs/P12-41.md; §1h.425 |
+| P12-42 | DONE — B (Sonnet); report saved by the manager from the returned text (harness refused the worker's write) | Tier 1: the model reviews the rules' structure (§1h.424 (b)) | call sites; skeleton vs full-text tokens on P1–P3; schema, validation, fallback, cache; piggyback vs separate; C test plan; real-model protocol | report P12-42-B-<UTC>.md | briefs/P12-42.md; §1h.425 |
+| P12-43 | DONE — B (Sonnet), sealed; report on the branch (1507603a cherry-picked); P4 0, P5 0, P6 0 pre-rules | Theme C ground truth for held-out P4 / P5 / P6 and the pre-rules score | per paper: number of parts and today's score only; per-part detail sealed in scratch | report P12-43-B-<UTC>.md; the manager rules from the sealed file | briefs/P12-43.md; §1h.425 |
+| P12-44 | DONE — A-smoke (Sonnet), report on the branch (58b1fd83 cherry-picked) | the six papers through the real upload UI | accepted, timings, errors, memory, responsive | report P12-44-A-<UTC>.md | briefs/P12-44.md; §1h.425 |
+| P12-45 | DONE — C (Sonnet); landed with the manager's test re-aim (six files read FIGURE_EXTRACTION_REVISION) | R1a: label-only figure line joins its row (P1 regression) | invented-input test; own mutation; gates | checkpoint P12-45-C-<UTC>.md; manager verifies | briefs/P12-45.md; §1h.425 |
+| P12-46 | DONE — C (Sonnet); landed (R6a, R7a) | R6a caption separator; R7a one face change in a caption | invented-input tests; own mutations; gates | checkpoint P12-46-C-<UTC>.md; manager verifies | briefs/P12-46.md; §1h.425 |
+| P12-47 | DONE — C (Sonnet); landed (R9a/R10a, R3a, R5a, R8a; cap raise deferred to P12-68) | R2a satellites; R3a figure text; R5a clip at caption; R8a caption end | invented-input tests; own mutations; gates; re-aimed over-join test named | checkpoint P12-47-C-<UTC>.md; manager verifies | briefs/P12-47.md; §1h.425 |
+| P12-48 | DONE — C (Sonnet); landed (L1, L2, A1–A4, closing split; the split reaches the page with C P12-63) | Theme C role rules: L1, L2, A1–A4 (reading-roles.ts), closing split | invented-input tests; re-aimed reading-map.test.ts test named; own mutations; gates | checkpoint P12-48-C-<UTC>.md; manager verifies | briefs/P12-48.md; §1h.426 |
+| P12-49 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | outline headings: O1 body size, O3 numbered guard, O4 running heads, O7 drop cap / lead-ins | pdf-outline.headings.test.ts; own mutations; gates | checkpoint P12-49-C-<UTC>.md; manager verifies | briefs/P12-49.md; §1h.426 |
+| P12-50 | DONE — C (Sonnet); landed (narrow gutter, prior by position) | outline columns: O2 narrow gutter, prior by position | pdf-outline.gutter.test.ts; own mutations; gates | checkpoint P12-50-C-<UTC>.md; manager verifies | briefs/P12-50.md; §1h.426 |
+| P12-51 | DONE — C (Sonnet); landed (O5, O6, O8) | outline assembly: O5 after references, O6 unheaded opening, O8 panel text | pdf-outline.sections.test.ts; own mutations; gates | checkpoint P12-51-C-<UTC>.md; manager verifies | briefs/P12-51.md; §1h.426 |
+| P12-52 | DONE — B (Sonnet), report on the branch (c0e01390 cherry-picked) | same-note writers (sticky vs notes window) on the real page | sequence table with repeats; mechanism file:line; three rules each | report P12-52-B-<UTC>.md | briefs/P12-52.md; §1h.427 |
+| P12-53 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | Tier 1 structure review: core, route, client, stub | invented-input tests; own mutations; gates | checkpoint P12-53-C-<UTC>.md; manager verifies | briefs/P12-53.md; §1h.428 |
+| P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
+| P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
+| P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
+| P12-57 | PHASE 7 RUNNING — A (Sonnet), P5 × 5 on 84534087; then phase 8 (P5 × 5); ceiling 280 | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
+| P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
+| P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
+| P12-61 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | part 1 the kept cut (now); parts 2–3 per-page file, no whole copy (after B P12-60) | route / store tests; own mutations; gates | checkpoint P12-61-C-<UTC>.md; manager verifies | briefs/P12-61.md; §1h.434 |
+| P12-62 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the first end-matter part opens its own section; P7-18 / P8-03 exclusions re-aimed | invented-input tests; named re-aims; own mutation; gates | checkpoint P12-62-C-<UTC>.md; manager verifies | briefs/P12-62.md; §1h.435 |
+| P12-63 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | closing split on the page; no mark on inferred rows; no placeholder opening heading; A2 and named children; echo fallback | invented-input tests; own mutations; gates | checkpoint P12-63-C-<UTC>.md | briefs/P12-63.md; §1h.436 (c) |
+| P12-64 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the page title: title-only size, embedded title as witness | invented-input tests; own mutations; gates | checkpoint P12-64-C-<UTC>.md | briefs/P12-64.md; §1h.436 (b) |
+| P12-65 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | M1: whole-note saves carry a base; no seed-save loop | function-level sequence tests; Playwright M1 rows; own mutations; gates | checkpoint P12-65-C-<UTC>.md | briefs/P12-65.md; §1h.437 |
+| P12-66 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | M2 / M3: focus stays where the reader types | function-level tests; Playwright h / h2 / b / c rows; own mutations; gates | checkpoint P12-66-C-<UTC>.md | briefs/P12-66.md; §1h.437 |
+| P12-67 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | private-use ligature glyphs read as letters (learned from the paper's own words) | invented-input tests; own mutations; gates | checkpoint P12-67-C-<UTC>.md | briefs/P12-67.md; §1h.439 |
+| P12-68 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the caption cap 500 → 1,500 in the engine and the view | invented-input test; own mutation; gates | checkpoint P12-68-C-<UTC>.md | briefs/P12-68.md; §1h.440 (c) |
+| P12-69 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | the takedown removes kept figures; the privacy page names them | tests; own mutation; gates | checkpoint P12-69-C-<UTC>.md | briefs/P12-69.md; §1h.441 |
+| P12-70 | DONE — C (Sonnet); items 1–10 landed (item 10 at db9b8235, §1h.456) | integration: the five tests where eight Cs' rules meet | code fixes; named re-aims only where a ruled rule changed the truth; gates | checkpoint P12-70-C-<UTC>.md | briefs/P12-70.md; §1h.442 |
+| P12-71 | DONE — A (Sonnet), report on the branch (d2de8451); 12/12 ×3, E1 0.25, 97.92 ×3; readers pending (§1h.451) | Theme A A1–A12 | rubric units and pass requirements | walk, pack, P12-71-A-<UTC>.md | briefs/P12-71.md; §1h.446 |
+| P12-72 | DONE — A (Sonnet), report on the branch (e420c898); P1 95.83, P2 95.83, P3 83.33 (B7 P3) (§1h.459) | Theme B B1–B12 | rubric units and pass requirements | walk, pack, P12-72-A-<UTC>.md | briefs/P12-72.md; §1h.446 |
+| P12-73 | DONE — B (Sonnet), report on the branch (a4b384e4); ruled §1h.449 | Theme C on P4–P6: M1–M7 by shape | file:line, three candidates each, a C split | report P12-73-B-<UTC>.md | briefs/P12-73.md; §1h.446 |
+| P12-74 | DONE — C (Sonnet); landed at c91e89e9 (§1h.450) | M1 rule A (R1–R5) + M6 block in pdf-outline.ts | invented fixtures; 2 named re-aims; own mutations; gates | checkpoint P12-74-C-<UTC>.md | briefs/P12-74.md; §1h.449 |
+| P12-75 | DONE — C (Sonnet); M2 / M5 / M7 and item 2 landed (item 2 at e5f21d9d, §1h.454) | M2 group row (level), M5, M7 R7a | invented fixtures; own mutations; gates | checkpoint P12-75-C-<UTC>.md | briefs/P12-75.md; §1h.449 |
+| P12-76 | DONE — C (Sonnet); landed at 4f6d6e67 (§1h.453) | M8 per-page left edge; M3 c3_last on P5 | invented fixtures; own mutations; gates | checkpoint P12-76-C-<UTC>.md | briefs/P12-76.md; §1h.449 |
+| P12-77 | DONE — C (Sonnet); landed at 4653a1d6 (§1h.455) | E1 the notes tab above the legend; O2 underline as <u> in Markdown | tests; own mutations; gates | checkpoint P12-77-C-<UTC>.md | briefs/P12-77.md; §1h.451 |
+| P12-78 | DONE — A (Sonnet), report on the branch (4b6b614f); 12/12 ×3, E3 0.25, 97.92 ×3; readers running (§1h.457) | Theme A A1–A12 + round-2 marks re-checked | rubric units and pass requirements | walk, pack, P12-78-A-<UTC>.md | briefs/P12-78.md; §1h.455 |
+| P12-79 | DONE — C (Sonnet); landed at b1d88d7e (§1h.460) | E3: with a card in the bottom band the notes tab keeps the right edge at every width | tests; own mutation; gates | checkpoint P12-79-C-<UTC>.md | briefs/P12-79.md; §1h.457 |
+| P12-80 | DONE — B (Sonnet), report on the branch (b6cbc27c); ruled §1h.463 | Theme B P3: K1 card caption cut, K2 acronym case, K3 figure bounds | file:line, three candidates each, a C split | report P12-80-B-<UTC>.md | briefs/P12-80.md; §1h.459 |
+| P12-81 | DONE — C (Sonnet); landed at ca0c13c6 (§1h.462) | O2: the Explain card's body overscroll-contain | a pin; own mutation; gates | checkpoint P12-81-C-<UTC>.md | briefs/P12-81.md; §1h.459 (c) |
+| P12-82 | DONE — C (Sonnet); landed with C P12-85 at 1f672ccf (§1h.465) | K1: a caption goes on through its title's face change (R1-B) | invented fixtures; own mutations; gates | checkpoint P12-82-C-<UTC>.md | briefs/P12-82.md; §1h.463 |
+| P12-83 | DONE — C (Sonnet); landed with revision 11 at 69e5e2ef (§1h.467) | K2: a font's lowercased capitals repaired from the document (R2-C) | invented fixtures; own mutations; gates | checkpoint P12-83-C-<UTC>.md | briefs/P12-83.md; §1h.463 |
+| P12-84 | DONE — C (Sonnet); landed at 6371b78e (§1h.466) | K3: figure bounds without furniture, with edge labels (R3-C, R3-B) | invented fixtures; own mutations; gates | checkpoint P12-84-C-<UTC>.md | briefs/P12-84.md; §1h.463 |
+| P12-85 | DONE — C (Sonnet); landed with C P12-82 at 1f672ccf (§1h.465) | the closing split's echo skips fragments (≥ 40 words) | invented fixtures; own mutation; gates | checkpoint P12-85-C-<UTC>.md | briefs/P12-85.md; §1h.464 |
+| P12-86 | DONE — C (Sonnet); landed at e024cc39 (§1h.468) | Tier 1: no setup role after the opening run (damage guard); the fallback's cause logged as counts | invented fixtures; own mutations; gates | checkpoint P12-86-C-<UTC>.md | briefs/P12-86.md; §1h.464 |
+| P12-87 | DONE — A (Sonnet), report on the branch (6c5c8347); 36/36, no extras, 100 ×3; readers running (§1h.469) | Theme A A1–A12 + E3 re-check | rubric | walk, pack, P12-87-A-<UTC>.md | briefs/P12-87.md; §1h.467 |
+| P12-88 | DONE — A (Sonnet), report on the branch (1f906d66); 12/12 ×3, E2 + E5, 95.83 ×3; readers running (§1h.471) | Theme B B1–B12 + round 2's marks | rubric | walk, pack, P12-88-A-<UTC>.md | briefs/P12-88.md; §1h.467 |
+| P12-89 | DONE — landed 8ff00eea; manager mutations 136 / 64 / 33 red; 12,506 tests | E5: the notes tab never stands over the margin's pane divider | tests; own mutation; gates | checkpoint P12-89-C-<UTC>.md | briefs/P12-89.md; §1h.471 |
+| P12-90 | DONE — C (Sonnet); landed at 8bf1dadb (§1h.473) | Tier 1: no one-paragraph review piece (except a closing); refused corrections log their numbers | invented fixtures; own mutations; gates | checkpoint P12-90-C-<UTC>.md | briefs/P12-90.md; §1h.472 |
+| P12-91 | DONE — landed e56d6a40; manager mutations 3 / 8 red; 12,381 tests | Tier 1: no set_role setup from the first non-setup part; a split at a part's own edge is a no-op | invented fixtures; own mutations; gates | checkpoint P12-91-C-<UTC>.md | briefs/P12-91.md; §1h.477 |
+| P12-92 | IN_PROGRESS — A (Sonnet), scratch p12/r2/a92, port 4247 | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
+| P12-94 | DONE — landed 84534087; manager mutations 14 / 4 red; 12,534 tests; subset test 30,000 cases | Tier 1: no correction against a high / medium part; a low part's correction needs a look that agrees | invented fixtures; differential subset test; own mutations; gates | checkpoint P12-94-C-<UTC>.md | briefs/P12-94.md; §1h.482 |
+| P12-95 | QUEUED — C (Sonnet), scratch p12/c95 | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

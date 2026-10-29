@@ -334,8 +334,62 @@ async function buildPublicResult(input: FullTextInput): Promise<FullTextResult> 
 }
 
 /** Upload readings in flight, by cache key: the reading request and the
- *  report request for one page open arrive together and share one read. */
+ *  report request for one page open arrive together and share one read — and
+ *  so does every later ask while the first is still running (P12-58: the page
+ *  asks again until the body is there, and none of those asks starts a second
+ *  extraction of a 25 MB PDF). */
 const uploadsInFlight = new Map<string, Promise<FullTextResult>>();
+
+/**
+ * P12-58: how long a settled reading stays in `uploadsInFlight`, so an ask that arrives just after
+ * it settled is given it. The page asks again every 2 to 20 seconds while the reading route's
+ * answer is "pending", and each ask waits eight seconds at most: an extraction that ends in the
+ * gap between two asks (a scan has nothing to keep, so nothing else would remember it) would
+ * otherwise be started again by the next ask, and again, for as long as the page asked. A minute is
+ * three times the longest gap. Nothing is kept past it, and a read that threw is not kept at all.
+ */
+const SETTLED_HOLD_MS = 60_000;
+
+/**
+ * The key an upload's extracted document is kept under: owner, hash, revision
+ * and the extractor's version (plus the figure revision, inside `uploadDocKey`).
+ * One function for the read below and for the upload route's write
+ * (`keepUploadDocument`, P12-58), so the document the route keeps is the one
+ * the first reading looks for — and for no other owner, revision or extractor.
+ */
+function uploadDocKeyFor(hash16: string, meta: Pick<UploadMeta, "ownerKey" | "revision">): string {
+  return uploadDocKey(meta.ownerKey ?? "", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION);
+}
+
+/**
+ * P12-58 (rule 1): keep a document that has already been read out of an
+ * upload's PDF, under the key `uploadFullText` reads — so the first reading of
+ * a PDF that was just uploaded reads it from here instead of opening the PDF a
+ * second time (measured on the owner's papers: 2.3 to 31 CPU seconds, the
+ * second of which is what missed the reading route's eight-second wait).
+ *
+ * Only a document that found text is kept (a scan or a failed read is read
+ * again next time, as before), and a failed write is a log line, never an
+ * error: the reading stands, only the cache failed. Returns whether the
+ * document was kept. Called only by a caller that has already established the
+ * owner (the upload route, with the record it has just written; and
+ * `uploadFullText` below, after `ownedUpload`).
+ */
+export async function keepUploadDocument(
+  hash16: string,
+  meta: Pick<UploadMeta, "ownerKey" | "revision">,
+  doc: ExtractedDocument,
+): Promise<boolean> {
+  if (doc.sections.length === 0) return false;
+  try {
+    await writeUploadDoc(hash16, uploadDocKeyFor(hash16, meta), doc);
+    return true;
+  } catch (error) {
+    // The reading stands; only the cache failed. No text in the log.
+    console.warn("[papers/full-text] could not keep an upload's text:", (error as NodeJS.ErrnoException)?.code ?? "unknown error");
+    return false;
+  }
+}
 
 /**
  * P0-02 (spec D0): an upload's text, read out of the PDF once per owner,
@@ -349,9 +403,15 @@ const uploadsInFlight = new Map<string, Promise<FullTextResult>>();
  * The extraction version is `UPLOAD_CONCEPT_EXTRACTION_VERSION`, the
  * upload's own record of which extractor read it: bumping it when the
  * extractor changes (P0-03) retires every document read by the old one.
+ *
+ * P12-58: the upload route keeps the document it extracts at upload time
+ * under this same key (`keepUploadDocument`), so for an upload made now the
+ * first branch below is the one taken; the extraction below it remains for an
+ * upload that predates that, or whose document has expired, and is shared by
+ * every request that arrives while it runs (`uploadsInFlight`).
  */
 async function uploadFullText(hash16: string, meta: UploadMeta): Promise<FullTextResult> {
-  const key = uploadDocKey(meta.ownerKey ?? "", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION);
+  const key = uploadDocKeyFor(hash16, meta);
   const inFlight = uploadsInFlight.get(key);
   if (inFlight) return inFlight;
 
@@ -362,19 +422,20 @@ async function uploadFullText(hash16: string, meta: UploadMeta): Promise<FullTex
       return { status: "ok", doc: kept, sourceLink: link, attempts: [{ link, outcome: "ok" }] };
     }
     const result = await readOwnedUpload(hash16);
-    if (result.status === "ok" && result.doc) {
-      await writeUploadDoc(hash16, key, result.doc).catch((error: NodeJS.ErrnoException) => {
-        // The reading stands; only the cache failed. No text in the log.
-        console.warn("[papers/full-text] could not keep an upload's text:", error?.code ?? "unknown error");
-      });
-    }
+    if (result.status === "ok" && result.doc) await keepUploadDocument(hash16, meta, result.doc);
     return result;
   })();
   uploadsInFlight.set(key, pending);
   try {
-    return await pending;
-  } finally {
-    uploadsInFlight.delete(key);
+    const result = await pending;
+    const release = setTimeout(() => {
+      if (uploadsInFlight.get(key) === pending) uploadsInFlight.delete(key);
+    }, SETTLED_HOLD_MS);
+    release.unref?.();
+    return result;
+  } catch (error) {
+    if (uploadsInFlight.get(key) === pending) uploadsInFlight.delete(key);
+    throw error;
   }
 }
 

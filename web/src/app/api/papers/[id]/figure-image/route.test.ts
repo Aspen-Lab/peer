@@ -7,6 +7,7 @@
 // invented PDFs. Only the public paper's lookup, its full text and its PDF
 // download are stubbed — those are the network.
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { barChart, bodyText, figurePdf, panel, pngInfo, type FigurePage } from "@/lib/figures/figure-pdf.test-helper";
@@ -26,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   getFullText: vi.fn(),
   getPdfBytes: vi.fn(),
   extractPdfFigures: vi.fn(),
-  readUploadPdf: vi.fn(),
+  withUploadPdfSource: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -44,7 +45,7 @@ vi.mock("@/lib/papers/pdf-text", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/papers/pdf-text")>()),
   getPdfBytes: mocks.getPdfBytes,
 }));
-// The engine and the upload store's byte read are the real ones, watched.
+// The engine and the upload store's reader of the stored PDF are the real ones, watched.
 vi.mock("@/lib/figures/pdf-engine", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/figures/pdf-engine")>();
   mocks.extractPdfFigures.mockImplementation(actual.extractPdfFigures);
@@ -52,8 +53,8 @@ vi.mock("@/lib/figures/pdf-engine", async (importOriginal) => {
 });
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/papers/upload-store")>();
-  mocks.readUploadPdf.mockImplementation(actual.readUploadPdf);
-  return { ...actual, readUploadPdf: mocks.readUploadPdf };
+  mocks.withUploadPdfSource.mockImplementation(actual.withUploadPdfSource);
+  return { ...actual, withUploadPdfSource: mocks.withUploadPdfSource };
 });
 
 import { GET } from "./route";
@@ -148,12 +149,15 @@ async function widthOf(res: Response): Promise<number> {
   return info.width;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // P12-61: an upload's first cut is kept beside it, and the upload here is the same bytes in every
+  // test — so each test starts with nothing kept, and a test that expects the engine to run does run it.
+  await rm(join(uploadDir, "figure-cuts"), { recursive: true, force: true });
   mocks.fetchPaperById.mockReset();
   mocks.getFullText.mockReset();
   mocks.getPdfBytes.mockReset();
   mocks.extractPdfFigures.mockClear();
-  mocks.readUploadPdf.mockClear();
+  mocks.withUploadPdfSource.mockClear();
   mocks.token.value = undefined;
   publicPaper();
 });
@@ -188,7 +192,7 @@ describe("GET /api/papers/[id]/figure-image — the parameters", () => {
     const res = await call(UPLOAD_ID, "?page=0&fig=3");
     expect(res.status).toBe(400);
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
-    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
+    expect(mocks.withUploadPdfSource).not.toHaveBeenCalled();
   });
 });
 
@@ -284,8 +288,9 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
     expect(mocks.getFullText).not.toHaveBeenCalled();
     expect(mocks.getPdfBytes).not.toHaveBeenCalled();
+    // P12-61 (part 3), re-aimed: an upload's PDF reaches the engine as a file to read from, not as bytes in memory.
     expect(mocks.extractPdfFigures).toHaveBeenCalledWith(
-      expect.any(Uint8Array),
+      expect.objectContaining({ filePath: expect.any(String) }),
       expect.objectContaining({ onlyPage: 2, label: "Figure 4" }),
     );
   });
@@ -310,7 +315,7 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
     expect(res.headers.get("Content-Type")).not.toBe("image/png");
     expect(res.headers.get("X-Peer-Figure-Engine")).toBeNull();
-    expect(mocks.readUploadPdf).not.toHaveBeenCalled();
+    expect(mocks.withUploadPdfSource).not.toHaveBeenCalled();
     expect(mocks.extractPdfFigures).not.toHaveBeenCalled();
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
   });
@@ -354,7 +359,7 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
 
   it("answers 404, privately, when the stored bytes are gone", async () => {
     await storeUpload(OWNER);
-    mocks.readUploadPdf.mockResolvedValueOnce(null);
+    mocks.withUploadPdfSource.mockResolvedValueOnce(null);
     const res = await call(UPLOAD_ID, "?page=2&fig=3");
     expect(res.status).toBe(404);
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
@@ -367,5 +372,126 @@ describe("GET /api/papers/[id]/figure-image — an upload", () => {
     const res = await call(UPLOAD_ID, "?page=2&fig=3");
     expect(res.status).toBe(502);
     expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
+  });
+});
+
+// ── P12-56 (R14a, ruling §1h.433): `fig=ed3` is "Extended Data Fig. 3", its own numbering ─────────────────────
+//
+// An invented PDF that prints "Fig. 3" and "Extended Data Fig. 3" on one page (two panels of different widths, so
+// which region came back shows in the PNG's width), and "Supplementary Fig. 3" alone on the next.
+
+const EXTENDED_PAGES: FigurePage[] = [
+  {
+    text: [
+      ["Fig. 3 | The wide panel of a two-figure page.", 100, 262, 9],
+      ["Extended Data Fig. 3 | The narrow panel of a two-figure page.", 100, 492, 9],
+    ],
+    shapes: [...panel(100, 80, 370, 160), ...panel(100, 330, 250, 140)],
+  },
+  { text: [["Supplementary Fig. 3 | A panel that belongs to the other file.", 100, 262, 9]], shapes: panel(100, 80, 300, 160) },
+];
+const EXTENDED_PDF = figurePdf(EXTENDED_PAGES);
+
+function publicExtendedPaper(): void {
+  publicPaper();
+  mocks.getFullText.mockResolvedValue({
+    status: "ok",
+    doc: { source: "pdf", pageCount: 2, sections: [], figureCaptions: [] },
+    sourceLink: { url: "https://arxiv.org/pdf/2610.00001", kind: "pdf", label: "arxiv", rank: 1 },
+    attempts: [],
+  });
+  mocks.getPdfBytes.mockResolvedValue({ bytes: Buffer.from(EXTENDED_PDF) });
+}
+
+describe("GET /api/papers/[id]/figure-image — fig=ed<N> is an Extended Data figure (P12-56, R14a)", () => {
+  it("answers the Extended Data panel for ed3 and the main panel for 3, on one page, each its own", async () => {
+    publicExtendedPaper();
+    const main = await widthOf(await call(PUBLIC_ID, "?page=1&fig=3"));
+    const extended = await widthOf(await call(PUBLIC_ID, "?page=1&fig=ed3"));
+    expect(main).toBeGreaterThan(WIDE - 4);
+    expect(main).toBeLessThan(WIDE + 4);
+    expect(extended).toBeGreaterThan(NARROW - 4);
+    expect(extended).toBeLessThan(NARROW + 4);
+  });
+
+  it("asks the engine for the label 'Extended Data Fig. 3', and for 'Figure 3' for the number", async () => {
+    publicExtendedPaper();
+    await call(PUBLIC_ID, "?page=1&fig=ed3");
+    await call(PUBLIC_ID, "?page=1&fig=3");
+    expect(mocks.extractPdfFigures).toHaveBeenNthCalledWith(1, expect.any(Uint8Array), expect.objectContaining({ onlyPage: 1, label: "Extended Data Fig. 3", maxFigures: 1 }));
+    expect(mocks.extractPdfFigures).toHaveBeenNthCalledWith(2, expect.any(Uint8Array), expect.objectContaining({ onlyPage: 1, label: "Figure 3", maxFigures: 1 }));
+  });
+
+  it("keeps the public edge cache and the engine header on an Extended Data picture", async () => {
+    publicExtendedPaper();
+    const res = await call(PUBLIC_ID, "?page=1&fig=ed3");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("image/png");
+    expect(res.headers.get("Cache-Control")).toBe(PUBLIC_CACHE);
+    expect(res.headers.get("X-Peer-Figure-Engine")).toBe("mupdf");
+  });
+
+  it("(a) a supplementary figure is not on the PDF: ed3 and 3 find nothing on the page that prints 'Supplementary Fig. 3', and 'S3' is refused", async () => {
+    publicExtendedPaper();
+    const asNumber = await call(PUBLIC_ID, "?page=2&fig=3");
+    expect(asNumber.status).toBe(404);
+    expect((await call(PUBLIC_ID, "?page=2&fig=ed3")).status).toBe(404);
+    expect((await call(PUBLIC_ID, "?page=1&fig=ed4")).status).toBe(404);
+    for (const fig of ["S3", "s3", "Supplementary%203", "edS3", "eds3"]) {
+      const res = await call(PUBLIC_ID, `?page=2&fig=${fig}`);
+      expect(res.status, fig).toBe(400);
+    }
+  });
+
+  it.each([
+    ["ed alone", "ed"],
+    ["ed and zero", "ed0"],
+    ["ed and a leading zero", "ed03"],
+    ["ed and four digits", "ed1000"],
+    ["capitals", "ED3"],
+    ["Ed", "Ed3"],
+    ["a letter after the digit", "ed3a"],
+    ["a space", "ed%203"],
+    ["a sign", "ed-3"],
+    ["a decimal", "ed3.5"],
+    ["the label spelled out", "Extended%20Data%20Fig.%203"],
+    ["two prefixes", "eded3"],
+    ["a prefix other than ed", "xd3"],
+    ["an exponent", "ed1e1"],
+  ])("answers 400 for %s, before any lookup or any reading of a PDF", async (_name, fig) => {
+    const res = await call(PUBLIC_ID, `?page=1&fig=${fig}`);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(mocks.fetchPaperById).not.toHaveBeenCalled();
+    expect(mocks.extractPdfFigures).not.toHaveBeenCalled();
+  });
+
+  it("answers an upload's owner the Extended Data picture, privately, and a stranger 404", async () => {
+    const hash = sha16(EXTENDED_PDF);
+    mocks.token.value = OWNER;
+    const ownerKey = await uploadOwner();
+    await writeUploadPdfIfAbsent(hash, Buffer.from(EXTENDED_PDF));
+    await writeUploadMeta(hash, {
+      hash16: hash,
+      fileName: "paper.pdf",
+      title: "An invented upload",
+      pageCount: 2,
+      uploadedAt: new Date().toISOString(),
+      textStatus: "ok",
+      ownerKey: ownerKey ?? undefined,
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      status: "ready",
+      revision: 1,
+    });
+    const res = await call(`upload:${hash}`, "?page=1&fig=ed3");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
+    const width = await widthOf(res);
+    expect(width).toBeGreaterThan(NARROW - 4);
+    expect(width).toBeLessThan(NARROW + 4);
+    mocks.token.value = STRANGER;
+    const stranger = await call(`upload:${hash}`, "?page=1&fig=ed3");
+    expect(stranger.status).toBe(404);
+    expect(stranger.headers.get("Cache-Control")).toBe(PRIVATE_CACHE);
   });
 });

@@ -29,6 +29,8 @@ export type BlockType =
 /** P10-09a (ruling §1h.78 (f)): the passage a sticky note was taken on. It rides on the sticky's `h3` block
  *  ("Note N") and is never a block's text, so no export carries it. */
 export interface NoteAnchor {
+  /** Ordered source provenance of a selection crossing drawable blocks. Never exported. */
+  segments?: PassageSegment[];
   paperId: string;
   /** The paper's paragraph, as `paragraphAnchor` writes it (`paper-section-1-p2`). */
   paragraphId: string;
@@ -47,10 +49,22 @@ export interface NoteAnchor {
  *  is `highlight-colours.ts`; a stored id that is not one of these reads as `yellow`. */
 export type HighlightColourId = "yellow" | "green" | "blue" | "pink" | "orange" | "ink";
 
+/** One actual drawable range, in document order. Offsets belong to this block alone. */
+export interface PassageSegment {
+  paragraphId: string;
+  quote: string;
+  start: number;
+  end: number;
+  source?: "paper" | "summary" | "answer";
+  kind?: "paragraph" | "heading" | "caption";
+}
+
 /** P11-07 (B P11-04 §2.2): the words a highlight was made on. It rides on a block of its own (`type: "highlight"`, `text`
  *  empty) in the paper's note — not on a sticky's `anchor` — so a highlight is never numbered, never tagged and never taken
  *  for an empty sticky. Unlike a sticky's quote, `quote` is the WHOLE passage: the highlight's words are its content. */
 export interface HighlightSpot {
+  /** Additive group representation; legacy records keep their single primary range. */
+  segments?: PassageSegment[];
   paperId: string;
   /** The paper's paragraph, as `paragraphAnchor` writes it (`paper-section-1-p2`). */
   paragraphId: string;
@@ -78,6 +92,10 @@ export interface Block {
   hint?: string;
   /** A sticky note's heading ("Note N") carries the passage it was taken on. Never exported. */
   anchor?: NoteAnchor;
+  /** Explicit owner for structured sticky content; old text-only notes need no migration. */
+  stickyId?: string;
+  /** An explicitly saved empty sticky is intentional, rather than an abandoned draft. */
+  stickySaved?: boolean;
   /** P11-07: a highlight's words, their place in the paper and their colour; only on a block of type `highlight`. */
   highlight?: HighlightSpot;
 }

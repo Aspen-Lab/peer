@@ -31,6 +31,7 @@ import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import { MAX_EXPLAIN_ITEMS, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper } from "@/types";
 import type { SelectionTarget } from "./paper-body";
+import { explainRequestRange } from "@/lib/reader/explain-range";
 
 /** What sending a follow-up comes to: Peer's reply, or nothing (an outage, a
  *  refusal, a thread the server calls full, a gone upload — all one line,
@@ -178,9 +179,12 @@ export async function requestReply(args: {
 }): Promise<ReplyResult> {
   const { paper, selection, sectionId, thread, message, detail, llmOverride } = args;
   try {
+    const projected = explainRequestRange(selection);
+    if (!projected) return "unavailable";
     const response = await postExplain(paper.id, {
       paper,
-      passage: selection.passage,
+      passage: projected.passage,
+      ...(projected.range ? { range: projected.range } : {}),
       sectionId,
       paragraphIndex: selection.paragraphIndex,
       thread: [...threadAsSent(thread), { role: "reader", text: message }],

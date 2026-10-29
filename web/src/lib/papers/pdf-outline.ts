@@ -27,7 +27,7 @@
 // nothing, and says so, rather than inventing sections.
 import { blockMarker } from "@/lib/text/math";
 
-import { bucketInheritor, canonicalizeHeading, dropStrayHeadings, headingNumber } from "./html-text";
+import { bucketInheritor, canonicalizeHeading, dropStrayHeadings, headingNumber, STRONG_BUCKETS } from "./html-text";
 
 /** One run of text from the PDF's text layer. */
 export interface PdfTextItem {
@@ -46,6 +46,9 @@ export interface PdfTextItem {
 export interface PdfPageText {
   page: number;
   items: PdfTextItem[];
+  /** P12-64: the titles the PDF itself carries (its Info dictionary's, its XMP's), as `readPages` found them. Only
+   *  on a paper's first page. A witness for `titleOf` to choose among the first page's lines by; never the title. */
+  embeddedTitles?: string[];
 }
 
 export interface PdfLine {
@@ -57,6 +60,10 @@ export interface PdfLine {
   x: number;
   y: number;
   size: number;
+  /** P12-64: the size most of the line's characters are set in (`characterSize`). `size` is the tallest run's, which
+   *  one oversized letter (a drop cap) lifts for the whole line it stands on; this is not. Read by `titleOf` and by
+   *  the first page's title skip only; a line built by hand without it is read at `size`. */
+  titleSize?: number;
   font: string;
   /** How far the line's runs reach to the right of `x`. `foldStacks` compares the x-ranges of a
    *  fraction's rows by it (P9-13a). */
@@ -69,6 +76,13 @@ export interface PdfLine {
   runs?: readonly PdfTextItem[];
   raised?: ReadonlySet<PdfTextItem>;
   lowered?: ReadonlySet<PdfTextItem>;
+  /** P12-70: set on a row that holds a drop cap: its largest runs hold one or two characters (`letters`) and every other
+   *  run is set at less than 1 / `DROP_CAP_RATIO` of them. `rest` is the size of the largest of the other runs (the
+   *  words beside the cap) and `textX` where they start; `joined` that `lineOf` wrote the letters and the word after them
+   *  as one (the cap opens its row and the word continues it). A cap that spans several lines stands on the last of them, so
+   *  its row is not the paragraph's first line (`placeDropCaps`). A row set larger as a whole (a title, a heading)
+   *  carries none. */
+  cap?: { rest: number; letters?: string; textX?: number; joined?: true };
 }
 
 export interface OutlineSection {
@@ -76,6 +90,9 @@ export interface OutlineSection {
   canonical?: string;
   page?: number;
   text?: string;
+  /** P12-75: 1 for the heading of a part that holds only sub-headings and has no number ("Methods", then at once its first
+   *  sub-heading: a row with no words); 2 for a sub-heading set smaller than it, which took its bucket. Absent otherwise. */
+  level?: 1 | 2;
 }
 
 export interface OutlineCaption {
@@ -108,6 +125,8 @@ const LINE_TOLERANCE = 2.2;
 const HEADING_MAX = 90;
 /** Text set this much larger than the body reads as a heading. */
 const HEADING_SIZE_RATIO = 1.12;
+/** C P12-74 (R1, R4): a numbered line is a heading, or ends a caption, only at this share of the body's size or more. */
+const NUMBERED_SIZE_RATIO = 0.95;
 /** Sections after one of these are the paper's apparatus, not its argument.
  *  Compared against what `canonicalizeHeading` returns. */
 const TERMINAL = new Set(["references"]);
@@ -173,9 +192,94 @@ function endsTheArgument(heading: string, canonical: string, afterBody = false):
 /** The first of these ends the cover and starts the paper. */
 const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 
+// ── What follows an end-matter heading (P12-51, O5) ─────────────────────────────────────────────────────
+//
+// The first end-matter heading closes the argument, and the outline no longer stops there. A journal prints
+// Methods after its references, a second block of notes after that, and a paper that opens its end matter
+// with a supporting-information line prints its acknowledgements and statements after the line. P12-62: the
+// first end-matter heading is read as the later ones are (P7-18 had left it and its text out): a note opens
+// its section and its text is read; the references, and an appendix, stay out. What follows is read by what
+// each heading names:
+//   a note      another end-matter part (acknowledgements, a statement, author contributions...): its own
+//               section, in the apparatus bucket, and its text is read;
+//   an argument a heading that names a part of the argument (methods above all): its own section, and its
+//               sub-headings are read as the body's are;
+//   out         the references: their text stays out, as it always did;
+//   an appendix the bulky apparatus (an appendix, the supplementary material, a lettered "B Additional
+//               results"): its text stays out as it did, and nothing after it is taken for a part of the
+//               argument, whatever words its headings hold;
+//   (nothing)   any other heading, which reads whatever its surroundings read (the sub-headings of an
+//               argument part), and in the notes' company reads nothing (the authors' affiliation blocks, a
+//               reference entry the page set as a heading).
+
+/** The buckets that name a part of the argument. */
+const ARGUMENT_PARTS = new Set(["introduction", "related_work", "methods", "results", "discussion", "conclusion", "limitations"]);
+/** The apparatus too long to be a note: it stays out after the argument, as it did. */
+const BULKY_END_MATTER = /^(?:appendix|appendices|supplementary\s+(?:materials?|information))\b/i;
+/** A heading numbered by a letter or a numeral ("B Additional results", "C.1 Setup", "IV. Proofs"), once the
+ *  argument is over, is a section of an appendix. */
+const APPENDIX_NUMBER = /^(?:[A-Z]|[IVX]+)(?:\.\d+)*\.?\s+\S/;
+/** A heading named only by its bucket's words is a short line: a reference entry the page set as a
+ *  heading is longer than this, carries a comma after its authors or the year of its journal. */
+const PLAIN_HEADING_WORDS = 8;
+const PRINT_YEAR = /\b(?:1[5-9]|20)\d\d\b/;
+
+type TailPart = "note" | "argument" | "out" | "appendix" | null;
+
+/** What a heading met once the argument is over stands for (see above); `ends` is `endsTheArgument` of it. */
+function tailPartOf(heading: string, canonical: string, ends: boolean): TailPart {
+  if (canonical === "references") return "out";
+  const bare = heading.trim().replace(GLYPH_LEAD, "");
+  const own = bare.replace(SECTION_LEAD, "");
+  if (ends) return BULKY_END_MATTER.test(own) ? "appendix" : "note";
+  if (APPENDIX_NUMBER.test(bare)) return "appendix";
+  if (own.split(/\s+/).length > PLAIN_HEADING_WORDS || own.includes(",") || PRINT_YEAR.test(own)) return null;
+  if (canonical === "acknowledgments") return "note";
+  return ARGUMENT_PARTS.has(canonical) ? "argument" : null;
+}
+
 // Roman numerals only in caps: lower case ate the "c" of "Figure captions
 // are elsewhere" and called it Figure C.
 const CAPTION = /^(fig(?:ure)?|table|scheme|chart)\s*\.?\s*(\d{1,3}|[IVXL]{1,5})\b\s*[.:—–-]?\s*(.*)$/i;
+
+/** `word` as a pattern for either case of each letter. The caption pattern below cannot take the `i`
+ *  flag: it asks for a capital letter, and under `i` a small letter is one too. */
+const anyCase = (word: string): string => [...word].map((c) => `[${c.toLowerCase()}${c.toUpperCase()}]`).join("");
+
+/** A panel mark in a bracket, "(a)", "(B)", "(a,b)", "(a-c)", "(ii)": one or two letters, or a short list of them. */
+const PANEL_MARK = String.raw`\(\s*\p{L}{1,2}(?:\s*[,\u2013-]\s*\p{L}{1,2})*\s*\)`;
+
+/**
+ * P12-46 (R6a): `CAPTION`, and a separator after the label's number. A caption's number is followed by
+ * a full stop, a colon, a bar or a dash (the dashes are the hyphen, the Unicode hyphens and dashes
+ * U+2010–2015, and the minus sign U+2212), with or without a space before it; or by a space and a
+ * capital letter ("Table 1 Scores of …"); or by nothing, the label standing alone on its line with its
+ * words on the next. A body line that opens with a citation does not have one: "Fig. 8) is consistent
+ * with …", "Fig. 3, left, …", "Fig. 2; the …", "Figure 3 shows …" (a small letter after the space).
+ * The groups are an optional "Extended Data" prefix, then `CAPTION`'s: label, number, words; the words are cut
+ * from the line as they always were, except that a bar is cut with the full stop and the colon (P12-56, R15a):
+ * Nature sets "Fig. 1 | Title", and the bar is the separator, not the first word of the title.
+ *
+ * P12-56 (R14a): "Extended Data Fig. 3 | Title" is a caption of its own numbering. The prefix is read before
+ * "Fig." and "Figure" only (`captionOf` refuses it before "Table"); "Supplementary Fig. 3" and "Fig. S3" are
+ * not a label this pattern knows: they are figures of another file, and a PDF that does not print one lists none.
+ * `CAPTION` itself stays as it was: `headingOf` uses it to keep a line that opens with a figure's label
+ * out of the headings, caption or not.
+ *
+ * P12-56 (R6b): a space and a bracket after the number is a caption when the bracket is a panel mark and
+ * a capital letter, a separator or the end of the line follows it: "Fig. 1 (a) Title", "Figure 2 (A)
+ * Overview". "Fig. 5 (left) shows ...", "Fig. 1 (a) shows ..." and "Fig. 2 (see below) ..." are still
+ * citations. A citation that is a panel mark and a capital ("Fig. 1 (a) Observed ...") after a line
+ * that does not end a sentence is refused by `opensMidSentence`, not by this pattern.
+ */
+const CAPTION_SEPARATED = new RegExp(
+  `^(?:(${anyCase("extended")}\\s+${anyCase("data")})\\s+)?` +
+    `(${anyCase("fig")}(?:${anyCase("ure")})?|${anyCase("table")}|${anyCase("scheme")}|${anyCase("chart")})` +
+    String.raw`\s*\.?\s*(\d{1,3}|[IVXLivxl]{1,5})\b` +
+    String.raw`(?=\s*(?:$|[.:|\u2010-\u2015\u2212-])|\s+\p{Lu}|\s+${PANEL_MARK}\s*(?:$|\p{Lu}|[.:|\u2010-\u2015\u2212-]))` +
+    String.raw`\s*[.:|—–-]?\s*(.*)$`,
+  "u",
+);
 const NUMBERED_HEADING = /^(\d+(?:\.\d+)*)\s*[.)]?\s+(\S.*)$/;
 const FOLIO = /^(page\s*)?\d{1,4}$/i;
 /** A line of the publication history a journal prints in a box on the first
@@ -229,6 +333,63 @@ export function linePitch(lines: PdfLine[]): number {
   return gaps[Math.floor(gaps.length * 0.25)];
 }
 
+/** How far the gap under a caption's line may stand from the caption's own leading (or, where it has none to measure
+ *  yet, from one line pitch), as a share of it, for the line below to be read as the caption's own next line (R7a). */
+const TITLE_PITCH_TOLERANCE = 0.2;
+/** A line is "smaller than the body" for a caption's face change past its first line when it is set this many points
+ *  under the body's size or more: prose in the body's size is never smaller than itself (P12-82, R1-B). */
+const TITLE_SMALLER_BY = 0.6;
+
+/**
+ * What `continuesCaption` is told of the caption it is extending (P12-82, R1-B): the face change, the leading and
+ * the size are all read against what the caption has shown so far, not against the paper alone.
+ */
+export interface CaptionContext {
+  /** The caption's lines so far, in order: the line that opens it first, `previous` last. */
+  lines: readonly PdfLine[];
+  /** The line after `next` on the page, if any: where the caption has one line so far, its leading is the gap under `next`. */
+  after?: PdfLine;
+}
+
+/**
+ * P12-46 (R7a), widened by P12-82 (R1-B): whether `next`, in another face than `previous`, is still the caption's next line.
+ *
+ * A caption changes face once, anywhere in it: a bold title, then text in the paper's face (the bold run is the longest
+ * of the first line, so that line reads as bold and the regular line under it as another face). The change is let by
+ * when the caption has not changed face yet, and
+ *  - right after its first line (the line that opens with the label), at the caption's size (`continuesCaption` holds
+ *    that); or
+ *  - later (a title wrapped onto two lines, then the text face) only to a line set smaller than the body: prose
+ *    resumes at the body's size, so a caption's second face must be smaller than that to be told from it.
+ * Either way the gap must be the caption's OWN leading, within `TITLE_PITCH_TOLERANCE`. That is the gap between its
+ * last two lines; with one line so far, the gap under `next` where the line after it goes on in `next`'s face and size
+ * and within a line pitch and a half; and only with neither, the paper's pitch for the size (with no pitch to measure,
+ * 0, the change is not let by). The page's pitch alone cut a caption set at 10.5 points of leading on a paper whose
+ * 25th-percentile gap, figure text rows included, was 8.7. The prose that resumes under a figure sits further below or
+ * at another leading, and stays out.
+ * With no `context` the caption is taken not to have changed face yet and to have `previous` for its only line.
+ */
+function titleFaceChange(
+  previous: PdfLine,
+  next: PdfLine,
+  gap: number,
+  pitch: number,
+  body: { size: number; font: string },
+  context?: CaptionContext,
+): boolean {
+  const lines = context?.lines ?? [previous];
+  if (lines.some((line, i) => i > 0 && line.font !== lines[i - 1].font)) return false;
+  if (!captionOf(previous) && !(next.size <= body.size - TITLE_SMALLER_BY)) return false;
+  const after = context?.after;
+  const measured = after && after.page === next.page && after.font === next.font && Math.abs(after.size - next.size) <= 0.6 ? next.y - after.y : 0;
+  let leading: number;
+  if (lines.length >= 2) leading = lines[lines.length - 2].y - previous.y;
+  else if (measured > 0 && (pitch <= 0 || measured <= pitch * 1.5)) leading = measured;
+  else leading = pitch > 0 ? (body.size > 0 ? pitch * (next.size / body.size) : pitch) : 0;
+  if (leading <= 0) return false;
+  return Math.abs(gap - leading) <= leading * TITLE_PITCH_TOLERANCE;
+}
+
 /**
  * Whether `next` is the next printed line of the caption `previous` is part
  * of: the same page, within a line pitch and a half below, in the SAME FACE
@@ -240,6 +401,13 @@ export function linePitch(lines: PdfLine[]): number {
  * size told the two apart not at all, and the prose under the figure read
  * as more caption. And `headingOf` is not consulted: it takes "in the other
  * face" for a heading, which is exactly what a caption's second line is.
+ *
+ * C P12-74 (R4): a numbered heading ends a caption only when it is set at 0.95 of the body or more (`NUMBERED_SIZE_RATIO`).
+ *
+ * P12-46 (R7a), P12-82 (R1-B): one change of face is let by, anywhere in the caption (`titleFaceChange`): a caption set
+ * with a bold title over lines in the text face is one caption, whether the title is one line or wraps onto two.
+ * A second change of face, or a first one that the size or the leading do not bear out, ends it as before.
+ * `context` is what the caption has shown so far; the callers that read a caption line by line (`captionEnd`) pass it.
  */
 export function continuesCaption(
   previous: PdfLine,
@@ -247,22 +415,47 @@ export function continuesCaption(
   pitch: number,
   body: { size: number; font: string },
   furniture: Set<string>,
+  context?: CaptionContext,
 ): boolean {
   if (next.page !== previous.page) return false;
   const gap = previous.y - next.y;
   if (gap <= 0) return false;
   if (pitch > 0 && gap > pitch * 1.5) return false;
-  if (next.font !== previous.font) return false;
+  if (next.font !== previous.font && !titleFaceChange(previous, next, gap, pitch, body, context)) return false;
   if (Math.abs(next.size - previous.size) > 0.6) return false;
   const text = next.text.trim();
   if (!text) return false;
   if (isFurniture(next, furniture)) return false;
   if (captionOf(next)) return false;
-  if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX) return false;
-  // `body` is kept in the signature for the callers that pass it; the face
-  // test above is what distinguishes caption from prose.
-  void body;
+  // C P12-74 (R4): a numbered line ends a caption only at 0.95 of the body or more; a caption's own middle line that
+  // opens with a number and a unit ("25 C and 45 C ...") is set as small as the rest of it and goes on.
+  if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX && next.size >= body.size * NUMBERED_SIZE_RATIO) return false;
+  // The face test above is what distinguishes caption from prose; `body` only sizes the face change
+  // `titleFaceChange` looks for.
   return true;
+}
+
+/**
+ * P12-82 (R1-B): the index of the last line of the caption that opens at `read[start]`: the lines `continuesCaption`
+ * takes in turn, each told what the caption has shown so far. The one place a caption's extent is read, so that the
+ * reading (`buildOutline`), the figure text it leaves out (`figureTextOf`) and the chain `inCaption` follows agree.
+ * `until` stops the walk at that index (the caller only asks whether the caption reaches it).
+ */
+function captionEnd(
+  read: PdfLine[],
+  start: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  until: number = read.length - 1,
+): number {
+  const lines = [read[start]];
+  let end = start;
+  while (end < until && continuesCaption(read[end], read[end + 1], pitch, body, furniture, { lines, after: read[end + 2] })) {
+    end++;
+    lines.push(read[end]);
+  }
+  return end;
 }
 
 /**
@@ -322,8 +515,17 @@ const SCRIPT_RATIO = 0.75;
 const SCRIPT_RISE = 7.5;
 /** ...or this far below it (a subscript). */
 const SCRIPT_DROP = 3.5;
-/** A gutter is at least this many ems wide. */
+/** A gutter is at least this many ems wide... */
 const GUTTER_EM = 2;
+/** ...or this many when it lies in the middle of the text's width (P12-50): a journal that sets 9.3pt type 11pt
+ *  apart has a gutter of 1.2 em, and no page of it showed a gutter of 2. */
+const GUTTER_NARROW_EM = 1;
+/** The middle of the text's width: a narrow gutter's centre lies between these shares of it. */
+const GUTTER_MIDDLE: readonly [number, number] = [1 / 3, 2 / 3];
+/** Two pages' gutters are one position when their right columns' left edges stand within this many points (P12-50)... */
+const GUTTER_SAME_PT = 6;
+/** ...or this share of an em, whichever is more. */
+const GUTTER_SAME_EM = 0.5;
 /** The gutter is looked for in the middle of the text's width: between these
  *  shares of it. */
 const GUTTER_SEARCH: readonly [number, number] = [0.35, 0.65];
@@ -600,6 +802,9 @@ function lineOf(
   raised?: ReadonlySet<PdfTextItem>,
   lowered?: ReadonlySet<PdfTextItem>,
 ): PdfLine | null {
+  // P12-70: a row a drop cap heads, if it is one.
+  const capRow = capRowOf(runs);
+  let capWasJoined = false;
   // A PDF stores runs, not words: two runs set apart on the page are two
   // words even where neither carries a space ("Ashish Vaswani" and "Noam
   // Shazeer" arrived as one string until this gap was measured).
@@ -701,7 +906,10 @@ function lineOf(
     const argument = !!last && !!lowered?.has(item) && !!lowered.has(last) && item.str.trimStart().startsWith("(");
     // A subscript follows its formula, and its own characters follow each other, with no space.
     const subscript = subLeft > 0 && i >= subFrom && i <= subTo;
-    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument || subscript;
+    // P12-70: a drop cap is joined to the word it starts ("S" + "econdary"), though the page leaves the gap of its padding.
+    const capJoined = capRow !== undefined && i === capRow.next && gap <= capRow.size * CAP_WORD_GAP_EM && CAP_CONTINUES.test(item.str);
+    if (capJoined) capWasJoined = true;
+    const joined = isMark || (tied && gap < MARK_REACH_EM * item.height) || i === labelFrom || argument || subscript || capJoined;
     if (!joined && text && Number.isFinite(cursor) && gap > Math.max(1, item.height * 0.18) && !/\s$/.test(text)) {
       text += " ";
     }
@@ -743,8 +951,35 @@ function lineOf(
     x: round(runs[0].x),
     y: round(y),
     size: round(Math.max(...runs.map((i) => i.height))),
+    titleSize: characterSize(runs),
     font: longestRun(runs).fontName,
+    ...(capRow ? { cap: { rest: capRow.rest, letters: capRow.letters, textX: round(capRow.textX), ...(capWasJoined ? { joined: true as const } : {}) } } : {}),
   };
+}
+
+/** P12-64: sizes this close (points) are one size when the title is read: a title wraps onto lines set alike. */
+const TITLE_SIZE_JOIN = 0.6;
+
+/**
+ * P12-64: the size most of a line's characters are set in. Each run weighs its characters (white space not
+ * counted); sizes within `TITLE_SIZE_JOIN` of one another weigh together; the heaviest wins, the larger on a tie, and
+ * is read as the mean of the sizes that weigh with it. A line set in one size reads that size, as `size` does; a 40 pt
+ * drop cap on a line of 9 pt words reads 9, and a 24 pt title line with a raised 12 pt mark still reads 24.
+ */
+function characterSize(runs: readonly PdfTextItem[]): number {
+  const weighed = runs
+    .map((run) => ({ size: run.height, chars: [...run.str.replace(/\s+/g, "")].length }))
+    .filter((run) => run.chars > 0);
+  if (weighed.length === 0) return round(Math.max(...runs.map((run) => run.height)));
+  let best = { anchor: -Infinity, weight: 0, mean: 0 };
+  for (const { size } of weighed) {
+    const near = weighed.filter((run) => Math.abs(run.size - size) <= TITLE_SIZE_JOIN);
+    const weight = near.reduce((n, run) => n + run.chars, 0);
+    if (weight > best.weight || (weight === best.weight && size > best.anchor)) {
+      best = { anchor: size, weight, mean: near.reduce((n, run) => n + run.size * run.chars, 0) / weight };
+    }
+  }
+  return round(best.mean);
 }
 
 /**
@@ -798,9 +1033,12 @@ function longestClearRun(rows: Row[], x0: number, width: number): Row[] {
  * sides in at least that many of them, each side spans a good share of the
  * page's text and its median line fills it. Rows that cross the band — a
  * title, a figure caption — end a run but do not stop the page from being
- * two columns. A page of fewer than twice `GUTTER_MIN_ROWS` baselines has too
- * little text to show a gutter of its own; it takes the paper's
- * (`gutterPrior`). `text` is the page's usual text height; scripts are not ink.
+ * two columns. Where no 2-em band is a gutter, a band of 1 em whose centre
+ * lies in the middle third of the text's width is tried the same way (P12-50):
+ * a journal can set its columns 1.2 em apart. A page of fewer than twice
+ * `GUTTER_MIN_ROWS` baselines has too little text to show a gutter of its own;
+ * it takes the paper's (`gutterPrior`). `text` is the page's usual text
+ * height; scripts are not ink.
  */
 export function gutterOf(items: PdfTextItem[], text: number): Gutter | null {
   const ink = items.filter((i) => i.str.trim() && i.width > 0 && i.height >= text * SCRIPT_RATIO);
@@ -809,10 +1047,32 @@ export function gutterOf(items: PdfTextItem[], text: number): Gutter | null {
   const lo = Math.min(...ink.map((i) => i.x));
   const hi = Math.max(...ink.map((i) => i.x + i.width));
   const span = hi - lo;
-  const width = GUTTER_EM * text;
 
+  const width = GUTTER_EM * text;
+  const slid: number[] = [];
+  for (let x0 = lo + span * GUTTER_SEARCH[0]; x0 + width <= lo + span * GUTTER_SEARCH[1]; x0 += 1) slid.push(x0);
+  const narrow = GUTTER_NARROW_EM * text;
+  return (
+    gutterIn(rows, slid, width, span) ??
+    gutterIn(rows, narrowStarts(ink, lo + span * GUTTER_MIDDLE[0] - narrow / 2, lo + span * GUTTER_MIDDLE[1] - narrow / 2), narrow, span)
+  );
+}
+
+/**
+ * Where a band of a narrow gutter's width is worth trying, from `from` to `to`: where the window opens and
+ * wherever an item ends inside it. A clear band slid left stays clear until it meets the end of an item, so
+ * these places are all the bands there are — a one-point slide can step over a gutter 1.05 em wide.
+ */
+function narrowStarts(ink: PdfTextItem[], from: number, to: number): number[] {
+  const starts = new Set([from]);
+  for (const i of ink) if (i.x + i.width > from && i.x + i.width <= to) starts.add(i.x + i.width);
+  return [...starts].sort((x, y) => x - y);
+}
+
+/** The gutter of `rows` that a band of `width` starting at one of `starts` makes, or null: the rule `gutterOf` explains. */
+function gutterIn(rows: Row[], starts: number[], width: number, span: number): Gutter | null {
   let best: { x0: number; run: Row[] } | null = null;
-  for (let x0 = lo + span * GUTTER_SEARCH[0]; x0 + width <= lo + span * GUTTER_SEARCH[1]; x0 += 1) {
+  for (const x0 of starts) {
     const run = longestClearRun(rows, x0, width);
     if (run.length < GUTTER_MIN_ROWS || (best && run.length <= best.run.length)) continue;
     // A column can be mostly a figure (a page of one column of text and one of
@@ -843,22 +1103,29 @@ export function gutterOf(items: PdfTextItem[], text: number): Gutter | null {
 
 /**
  * The gutter most pages of a paper agree on: what a page that shows none of
- * its own (a page of figures, a page of few lines) is set in. Null when fewer
- * than two pages agree.
+ * its own (a page of figures, a page of few lines) is set in. The pages'
+ * gutters are grouped by position — the right column's left edge, within about
+ * 6pt or half an em (P12-50), for the same journal's gutter falls a few points
+ * either side from page to page — and the group with the most pages is the
+ * paper's. Null when fewer than two pages agree.
  */
 export function gutterPrior(pages: PdfPageText[]): Gutter | null {
-  const votes = new Map<number, Gutter & { n: number }>();
+  const found: (Gutter & { reach: number })[] = [];
   for (const { items: all } of pages) {
     const items = all.filter((i) => i.str);
-    const gutter = gutterOf(items, usualHeight(items));
-    if (!gutter) continue;
-    const key = Math.round(gutter.b / 3);
-    const vote = votes.get(key);
-    // The right column's left edge is the steady one; the left edge moves with an overhang.
-    votes.set(key, { a: vote ? Math.min(vote.a, gutter.a) : gutter.a, b: gutter.b, n: (vote?.n ?? 0) + 1 });
+    const text = usualHeight(items);
+    const gutter = gutterOf(items, text);
+    if (gutter) found.push({ ...gutter, reach: Math.max(GUTTER_SAME_PT, GUTTER_SAME_EM * text) });
   }
-  const top = [...votes.values()].sort((x, y) => y.n - x.n)[0];
-  return top && top.n >= 2 ? { a: top.a, b: top.b } : null;
+  // Each gutter is tried as the group's centre; the first of the largest groups wins a tie.
+  let top: typeof found = [];
+  for (const centre of found) {
+    const group = found.filter((g) => Math.abs(g.b - centre.b) <= Math.max(g.reach, centre.reach));
+    if (group.length > top.length) top = group;
+  }
+  if (top.length < 2) return null;
+  // The right column's left edge is the steady one; the left edge moves with an overhang.
+  return { a: Math.min(...top.map((g) => g.a)), b: median(top.map((g) => g.b)) };
 }
 
 /** Whether a row's text runs unbroken across the gutter — a title, a caption,
@@ -936,17 +1203,53 @@ export function linesOfPage(page: PdfPageText): PdfLine[] {
   return linesOfPageWith(page, null);
 }
 
-/** The size and face most of the paper's words are set in. */
-export function bodyStyle(lines: PdfLine[]): { size: number; font: string } {
-  const bySize = new Map<number, number>();
-  const byFont = new Map<string, number>();
+// ── The body's style, and what the paper's numbering and reference list rule out (P12-49) ─────────────
+
+/**
+ * The size and face the paper's body is set in, and — when the paper has any — the numbered lines its own
+ * numbering and its reference list rule out of its headings (`headingOf` reads them; see `numberedOut`).
+ */
+export interface BodyStyle {
+  size: number;
+  font: string;
+  /** The keys (`lineKey`) of the numbered lines that are not headings: an entry of a reference list, a
+   *  number that goes back. Present only when there is one. */
+  notHeadings?: ReadonlySet<string>;
+}
+
+/** A size is the body's when it holds at least this share of the heaviest size's characters... */
+const BODY_SIZE_SHARE = 0.35;
+/** ...and is set on at least this many lines: a title of three lines is not the body of a short page. */
+const BODY_MIN_LINES = 5;
+
+/**
+ * The size and face the paper's body is set in: the **largest size that holds at least 35 % of the heaviest
+ * size's characters** (and is set on a body's worth of lines: five), and the face most of that size's
+ * characters are set in.
+ *
+ * P12-49 (O1): the size with the most characters is not the body where the methods, the references and the
+ * captions are set small and outweigh it (7.5 pt against a 9.3 pt body, on the owner's third paper): every body
+ * line then reads as "bigger" than the body and each short unpunctuated one became a heading — a hundred
+ * sections from eleven pages. A paper whose heaviest size is its body is read as before.
+ */
+export function bodyStyle(lines: PdfLine[]): BodyStyle {
+  const bySize = new Map<number, { chars: number; lines: number }>();
   for (const line of lines) {
-    bySize.set(line.size, (bySize.get(line.size) ?? 0) + line.text.length);
-    byFont.set(line.font, (byFont.get(line.font) ?? 0) + line.text.length);
+    const known = bySize.get(line.size) ?? { chars: 0, lines: 0 };
+    bySize.set(line.size, { chars: known.chars + line.text.length, lines: known.lines + 1 });
   }
-  const top = <T>(counts: Map<T, number>, fallback: T): T =>
-    [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? fallback;
-  return { size: top(bySize, 10), font: top(byFont, "") };
+  const heaviest = Math.max(0, ...[...bySize.values()].map((n) => n.chars));
+  const holding = [...bySize]
+    .filter(([, n]) => n.chars === heaviest || (n.chars >= heaviest * BODY_SIZE_SHARE && n.lines >= BODY_MIN_LINES))
+    .map(([s]) => s);
+  const size = heaviest > 0 ? Math.max(...holding) : 10;
+  // The face follows the size: the one most of the body-size characters are set in.
+  const byFont = new Map<string, number>();
+  for (const line of lines) if (line.size === size) byFont.set(line.font, (byFont.get(line.font) ?? 0) + line.text.length);
+  const font = [...byFont].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+  const body = { size, font };
+  const out = numberedOut(lines, body);
+  return out.size > 0 ? { ...body, notHeadings: out } : body;
 }
 
 /** A running head is on at least this many pages (P10-33, BACKLOG-84): two pages that open with the same
@@ -956,9 +1259,10 @@ const FURNITURE_MIN_PAGES = 3;
  *  journal line, an author line above them: three. Wording mid-page, or the fifth row down, is the body's. */
 const FURNITURE_BAND_ROWS = 3;
 
-/** Whether a line stands in the top or bottom band of its page (`FURNITURE_BAND_ROWS` rows from an edge, rows
- *  being the page's distinct baselines to the nearest 3 points, so two columns' lines share one). */
-function bandOf(lines: PdfLine[]): (line: PdfLine) => boolean {
+/** Which band of its page a line stands in — the top one or the bottom one (`FURNITURE_BAND_ROWS` rows from an
+ *  edge, rows being the page's distinct baselines to the nearest 3 points, so two columns' lines share one) —
+ *  or neither. */
+function bandOf(lines: PdfLine[]): (line: PdfLine) => "top" | "bottom" | null {
   const rows = new Map<number, number[]>();
   for (const { page, y } of lines) {
     const row = Math.round(y / 3);
@@ -969,34 +1273,104 @@ function bandOf(lines: PdfLine[]): (line: PdfLine) => boolean {
   for (const known of rows.values()) known.sort((a, b) => b - a);
   return (line) => {
     const known = rows.get(line.page);
-    if (!known) return false;
+    if (!known) return null;
     const at = known.indexOf(Math.round(line.y / 3));
-    return at < FURNITURE_BAND_ROWS || at >= known.length - FURNITURE_BAND_ROWS;
+    if (at >= FURNITURE_BAND_ROWS && at < known.length - FURNITURE_BAND_ROWS) return null;
+    return at < known.length / 2 ? "top" : "bottom";
   };
 }
 
-/** Lines that repeat across pages at the same height, in the page's top or bottom band, on at least three
- *  pages (and 40% of them): running heads, folios, preprint stamps. They are the page's furniture, not the
- *  paper's words. */
-export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
-  const seen = new Map<string, Set<number>>();
-  const inBand = bandOf(lines);
-  for (const line of lines) {
-    if (line.text.length > 120 || !inBand(line)) continue;
-    const key = `${Math.round(line.y / 6)}:${line.text.replace(/\d+/g, "#").toLowerCase()}`;
-    seen.set(key, (seen.get(key) ?? new Set()).add(line.page));
+/** A running head by its words alone: the digits (a folio, a volume) and the case are not part of it. */
+const headKey = (text: string): string => text.replace(/\d+/g, "#").replace(/\s+/g, " ").trim().toLowerCase();
+
+/** A head stands within this many points of a height it was seen at (P12-49, O4): the pages of a paper do not
+ *  set it on one baseline to the hundredth, and a row of two columns' heads has two. */
+const HEAD_REACH = 12;
+/** A head that is only part of a longer one, or a line made of several heads, has at least this many characters:
+ *  a word or two of a head are not it. */
+const HEAD_PART_MIN = 8;
+
+/**
+ * The running heads `furnitureOf` found: a Set of their keys (the band they stand in, then their words, so `has`
+ * and `size` read as they always did), and where each of them stood on the pages it was seen on.
+ */
+class RunningHeads extends Set<string> {
+  /** Each head's words, and the heights (baselines) it was seen at. */
+  readonly stands = new Map<string, { words: string; heights: number[] }>();
+
+  /** Whether `words`, a line's words at height `y`, are one of the heads, or one of two heads a row holds in two
+   *  columns, or the two of them set as one line. */
+  covers(words: string, y: number): boolean {
+    const near = (heights: number[]) => heights.some((h) => Math.abs(h - y) <= HEAD_REACH);
+    for (const band of ["top", "bottom"]) {
+      const own = this.stands.get(`${band}:${words}`);
+      if (own && near(own.heights)) return true;
+    }
+    if (words.length < HEAD_PART_MIN) return false;
+    // A row of two columns' heads is one line on a page whose gutter is not found and two on another: each of the
+    // two is furniture where the whole row is, and the whole row where each of the two is.
+    let rest = words;
+    for (const head of this.stands.values()) {
+      if (head.words.length < HEAD_PART_MIN || !near(head.heights)) continue;
+      if (head.words !== words && wholeWords(head.words, words)) return true;
+      rest = rest.split(head.words).join(" ");
+    }
+    return rest !== words && !/[\p{L}\p{N}]/u.test(rest.replace(/#/g, ""));
   }
-  const repeated = new Set<string>();
+}
+
+/** Whether `part` stands in `whole` as whole words. */
+function wholeWords(whole: string, part: string): boolean {
+  for (let at = whole.indexOf(part); at >= 0; at = whole.indexOf(part, at + 1)) {
+    const before = whole[at - 1];
+    const after = whole[at + part.length];
+    if ((before === undefined || before === " ") && (after === undefined || after === " ")) return true;
+  }
+  return false;
+}
+
+/** Lines that repeat across pages in the page's top or bottom band, on at least three pages (and 40% of them):
+ *  running heads, folios, preprint stamps. They are the page's furniture, not the paper's words.
+ *
+ *  P12-49 (O4): a head is known by its normalised words and the band it stands in, **whatever its column or its
+ *  exact height**. It was keyed by its words and its height rounded to 6 pt, so a head that two pages set a point
+ *  apart across a rounding edge, and a row of two heads in two columns that one page splits into two lines and
+ *  another welds into one, were never found on enough pages — and the running head read as a heading. */
+export function furnitureOf(lines: PdfLine[], pageCount: number): Set<string> {
+  const seen = new Map<string, { words: string; pages: Set<number>; heights: number[] }>();
+  const bandIn = bandOf(lines);
+  for (const line of lines) {
+    const band = line.text.length > 120 ? null : bandIn(line);
+    if (band === null) continue;
+    const words = headKey(line.text);
+    const key = `${band}:${words}`;
+    const entry = seen.get(key) ?? { words, pages: new Set<number>(), heights: [] };
+    entry.pages.add(line.page);
+    entry.heights.push(line.y);
+    seen.set(key, entry);
+  }
+  const repeated = new RunningHeads();
   const threshold = Math.max(FURNITURE_MIN_PAGES, Math.ceil(pageCount * 0.4));
-  for (const [key, pages] of seen) if (pages.size >= threshold) repeated.add(key);
+  for (const [key, { words, pages, heights }] of seen) {
+    if (pages.size < threshold) continue;
+    repeated.add(key);
+    repeated.stands.set(key, { words, heights });
+  }
   return repeated;
 }
 
-function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
+/** Whether this line is the page's furniture: a folio, or one of the running heads `furnitureOf` found (or one of
+ *  the two heads a row holds in two columns, or the two of them set as one line). */
+export function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
   if (FOLIO.test(line.text)) return true;
-  const key = `${Math.round(line.y / 6)}:${line.text.replace(/\d+/g, "#").toLowerCase()}`;
-  return furniture.has(key);
+  const words = headKey(line.text);
+  // A Set that is not `furnitureOf`'s knows the words only.
+  return furniture instanceof RunningHeads ? furniture.covers(words, line.y) : furniture.has(words);
 }
+
+/** Small print beyond a page's text is a footer or a stamp up to this many rows (3 pt apart); past it, it is a
+ *  section set small (P12-49). */
+const MARGIN_PRINT_ROWS = 8;
 
 /**
  * The lines that are margin print: small print above the page's first or
@@ -1005,17 +1379,75 @@ function isFurniture(line: PdfLine, furniture: Set<string>): boolean {
  * repetition marks them as furniture, and they landed in the middle of the
  * sentence that crosses the page break.
  */
-function marginPrintOf(lines: PdfLine[], body: { size: number }): (line: PdfLine) => boolean {
+function marginPrintOf(lines: PdfLine[], body: { size: number; font: string }): (line: PdfLine) => boolean {
+  const footnote = footnoteOf(lines, body);
   const edges = new Map<number, { top: number; bottom: number }>();
   for (const line of lines) {
     if (line.size < body.size * FULL_SIZE_RATIO) continue;
     const edge = edges.get(line.page) ?? { top: -Infinity, bottom: Infinity };
     edges.set(line.page, { top: Math.max(edge.top, line.y), bottom: Math.min(edge.bottom, line.y) });
   }
-  return (line) => {
+  const sideOf = (line: PdfLine): "top" | "bottom" | null => {
     const edge = edges.get(line.page);
-    return !!edge && line.size < body.size * MARGIN_PRINT_RATIO && (line.y < edge.bottom || line.y > edge.top);
+    if (!edge || line.size >= body.size * MARGIN_PRINT_RATIO) return null;
+    return line.y < edge.bottom ? "bottom" : line.y > edge.top ? "top" : null;
   };
+  // P12-49 (O1): the body is now the larger size, so a section set small (the methods, the references) can stand
+  // below the page's last full-size line. A footer or a stamp is a few rows; many rows of small print are a section.
+  const rows = new Map<string, Set<number>>();
+  for (const line of lines) {
+    const side = sideOf(line);
+    if (side === null) continue;
+    const key = `${line.page}:${side}`;
+    rows.set(key, (rows.get(key) ?? new Set<number>()).add(Math.round(line.y / 3)));
+  }
+  return (line) => {
+    if (footnote.has(line)) return true;
+    const side = sideOf(line);
+    return side !== null && (rows.get(`${line.page}:${side}`)?.size ?? 0) <= MARGIN_PRINT_ROWS;
+  };
+}
+
+/** C P12-74 (M6): a footnote opens with its marker: a digit or one of the footnote symbols, directly before a letter
+ *  ("1 Department of ...", "∗ Corresponding author"). Without the marker a 9 pt note under the text is the paper's. */
+const FOOTNOTE_MARKER = /^[\d∗*†‡§¶]\s?\p{L}/u;
+/** The last line of the body's prose is at least this long: a folio or a one-word label at the foot is not prose. */
+const PROSE_LINE_MIN = 30;
+/** A line is in the body's size when it is within this many points of it: the running foot of a page, set a third of
+ *  a point smaller, is a size of its own. */
+const BODY_SIZE_SLACK = 0.3;
+/** Small print is set under this share of the body's size. */
+const SMALL_PRINT_RATIO = 0.95;
+
+/**
+ * C P12-74 (M6, B P12-73): the lines of the opening page's footnote — the authors' affiliations, printed on page 1 only
+ * (so no repetition makes them furniture), at 0.86 of the body (so `MARGIN_PRINT_RATIO` leaves them), under the text.
+ * They are **small print under the last line in the body's face and size** (the page's edge for this rule, not the last
+ * full-size line: a running foot at 0.96 of the body is the edge of the other rule), set apart from that line by more
+ * than a pitch, opening with a footnote marker, at most `MARGIN_PRINT_ROWS` rows, and holding no caption. None of
+ * them is the paper's text. Only the opening page has a footnote of this kind; small print under the text of any other
+ * page is a table or a section set small.
+ */
+function footnoteOf(lines: PdfLine[], body: { size: number; font: string }): Set<PdfLine> {
+  const none = new Set<PdfLine>();
+  let opening = Infinity;
+  for (const line of lines) opening = Math.min(opening, line.page);
+  // The last line of prose in the body's face and size: the edge the footnote stands under.
+  let edge = Infinity;
+  for (const line of lines) {
+    if (line.page !== opening || line.block || line.font !== body.font || Math.abs(line.size - body.size) >= BODY_SIZE_SLACK) continue;
+    if (line.text.trim().length >= PROSE_LINE_MIN) edge = Math.min(edge, line.y);
+  }
+  if (edge === Infinity) return none;
+  const below = lines
+    .filter((line) => line.page === opening && !line.block && line.y < edge && line.size < body.size * SMALL_PRINT_RATIO)
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+  if (below.length === 0) return none;
+  const pitch = linePitch(lines) || body.size * 1.2;
+  if (edge - below[0].y <= pitch || !FOOTNOTE_MARKER.test(below[0].text.trim())) return none;
+  if (below.some((line) => captionOf(line) !== null)) return none;
+  if (new Set(below.map((line) => Math.round(line.y / 3))).size > MARGIN_PRINT_ROWS) return none;
+  return new Set(below);
 }
 
 /**
@@ -1032,16 +1464,153 @@ function wrapsHeading(previous: PdfLine | null, line: PdfLine, text: string): bo
   return drop > 0 && drop <= line.size * HEADING_WRAP_LEADING && !NUMBERED_HEADING.test(text);
 }
 
+/** The ordinal of "Extended Data Fig. N" is this and N (R14a): above any "Fig. N" the figure route can draw. */
+const EXTENDED_ORDINAL_BASE = 1000;
+
 export function captionOf(line: PdfLine): OutlineCaption | null {
-  const m = line.text.match(CAPTION);
+  const m = line.text.match(CAPTION_SEPARATED);
   if (!m) return null;
-  const ordinal = /^\d+$/.test(m[2]) ? Number(m[2]) : undefined;
+  const extended = m[1] !== undefined;
+  // "Extended Data Table 1" is not read: only figures have a second numbering here.
+  if (extended && !/^fig/i.test(m[2])) return null;
+  // An Extended Data figure's number is its own: its ordinal is in a range of its own (1000 + N; a figure's number
+  // has at most three digits), so nothing that finds a caption by its ordinal (the binder's model answer) can take
+  // "Extended Data Fig. 3" for "Fig. 3".
+  const ordinal = /^\d+$/.test(m[3]) ? (extended ? EXTENDED_ORDINAL_BASE : 0) + Number(m[3]) : undefined;
   return {
     ordinal,
-    label: `${m[1]} ${m[2]}`.replace(/\s+/g, " ").trim(),
-    caption: m[3].trim(),
+    label: `${extended ? "Extended Data " : ""}${m[2]} ${m[3]}`.replace(/\s+/g, " ").trim(),
+    caption: m[4].trim(),
     page: line.page,
   };
+}
+
+/** What a citation mark leaves at the end of a sentence's last line: a run of superscript digits ("shown.¹²,¹³") or
+ *  a bracketed number list ("shown. [12, 13]"). Taken off before asking whether the line ends a sentence. */
+const CITATION_TAIL = new RegExp(
+  String.raw`(?:\s|[\u00B2\u00B3\u00B9\u2070-\u209F]+[,\u2013-]?|\[[\d,\s\u2013-]+\])+$`,
+  "u",
+);
+
+/** Whether a line's last words close a sentence: `.` `!` `?` or `:`, a closing bracket or quote after it allowed, and
+ *  a citation mark after that. */
+function endsSentence(text: string): boolean {
+  return /[.!?:][)\]"'\u201D\u2019\u00BB]*$/.test(text.trim().replace(CITATION_TAIL, ""));
+}
+
+/** How far a caption's own lines are looked for above a line (R6b), in lines; a caption is not longer than this. */
+const CAPTION_LOOKBACK = 80;
+/** A line starts in the column of the line above it when the two left edges are within this many body sizes
+ *  (a paragraph's indent is one or two). */
+const SAME_COLUMN_EMS = 2.5;
+
+/**
+ * P12-56 (R6b): whether the line `read[index]`, which opens with a figure's label, is the next words of a sentence the
+ * line above it did not finish. That is when the line above is, in the same column and directly above (within a line
+ * pitch and a half), on the same page, set in the body's size and face, and does not end a sentence (`endsSentence`):
+ * "...as shown in" over "Fig. 4. Then the signal rises ...". A caption is never that: it follows a sentence's end,
+ * a gap, a figure, another column or a face of its own. The line above is not body text when it is itself part of a
+ * caption (the next caption of a list follows a caption's last line, which may end without a stop).
+ */
+function opensMidSentence(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
+): boolean {
+  return followsOpenProse(read, index, pitch, body, furniture, leftOut) && !inCaption(read, index - 1, pitch, body, furniture, leftOut);
+}
+
+/** A line shorter than this share of the line above it (same face and size, directly under it, in its column) is a
+ *  paragraph's last line: a line that wraps runs to the column's edge (P12-70). */
+const SHORT_LAST_LINE = 0.5;
+
+/**
+ * P12-70: whether `read[index]` ends its paragraph by its length: it is under `SHORT_LAST_LINE` of the length of the line
+ * above it, which is set in the same face and size, directly above and in the same column. The sentence it ends needs
+ * no full stop for that (C P12-51's required negative: "of the new set", then a caption).
+ */
+function endsParagraph(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  leftOut?: (index: number) => boolean,
+): boolean {
+  const last = read[index];
+  const before = index > 0 ? read[index - 1] : undefined;
+  if (!before || before.page !== last.page || before.block || leftOut?.(index - 1)) return false;
+  const gap = before.y - last.y;
+  if (gap <= 0 || gap > (pitch > 0 ? pitch : body.size * 1.2) * 1.5) return false;
+  if (Math.abs(before.x - last.x) > body.size * SAME_COLUMN_EMS) return false;
+  if (before.font !== last.font || Math.abs(before.size - last.size) > HEADING_WRAP_SIZE) return false;
+  return last.text.trim().length < before.text.trim().length * SHORT_LAST_LINE;
+}
+
+/**
+ * `leftOut` (P12-70): the lines the reading leaves out of the prose (margin print, the dated box, the text of a
+ * figure's panels). A line left out is not open prose: it is not the first half of a sentence a label line goes on
+ * with, whatever its size and face. (C P12-51's figure text is set in the body's own size and face when it is a few
+ * words of a plot's axis, and stands directly above the caption.)
+ */
+function followsOpenProse(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
+): boolean {
+  const line = read[index];
+  const above = index > 0 ? read[index - 1] : undefined;
+  if (!above || above.page !== line.page || above.block || isFurniture(above, furniture) || leftOut?.(index - 1)) return false;
+  const gap = above.y - line.y;
+  if (gap <= 0 || gap > (pitch > 0 ? pitch : body.size * 1.2) * 1.5) return false;
+  if (Math.abs(above.x - line.x) > body.size * SAME_COLUMN_EMS) return false;
+  if (above.font !== body.font || Math.abs(above.size - body.size) > HEADING_WRAP_SIZE) return false;
+  return above.text.trim().length > 0 && !endsSentence(above.text) && !endsParagraph(read, index - 1, pitch, body, leftOut);
+}
+
+/** Whether `read[last]` is a line of a caption, by the chain `buildOutline` reads one by: back from it to the line that
+ *  opens a caption, which must run on to it (`captionEnd`; P12-82: a caption is read forward from its opener, since
+ *  what it has shown so far decides whether it goes on). A line that opens like a caption but follows open prose is a
+ *  caption exactly when the line above it is in one (a list of captions that end without a stop: each follows the last
+ *  line of the one before). */
+function inCaption(
+  read: PdfLine[],
+  last: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
+): boolean {
+  // The last line of the stretch of caption being traced back to its opener.
+  let reach = last;
+  for (let j = last, steps = 0; j >= 0 && steps < CAPTION_LOOKBACK; j--, steps++) {
+    if (!captionOf(read[j])) continue;
+    if (captionEnd(read, j, pitch, body, furniture, reach) < reach) return false;
+    if (!followsOpenProse(read, j, pitch, body, furniture, leftOut)) return true;
+    reach = j - 1;
+  }
+  return false;
+}
+
+/**
+ * P12-56 (R6b): `captionOf(read[index])`, unless the line is the middle of a sentence (`opensMidSentence`): a body line
+ * that begins with a figure citation after a line that ends mid-clause is prose, not a caption.
+ */
+export function captionAt(
+  read: PdfLine[],
+  index: number,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  leftOut?: (index: number) => boolean,
+): OutlineCaption | null {
+  const caption = captionOf(read[index]);
+  return caption && !opensMidSentence(read, index, pitch, body, furniture, leftOut) ? caption : null;
 }
 
 /**
@@ -1055,11 +1624,225 @@ function sectionNumberOf(text: string): RegExpMatchArray | null {
   return numbered && !/^(?:0\.\d|\d{4,})/.test(numbered[1]) ? numbered : null;
 }
 
-/** The heading this line is, or nothing. */
-export function headingOf(line: PdfLine, body: { size: number; font: string }): string | null {
+// ── What is not a heading: an address, an entry of a reference list, a drop cap, a run-in lead-in (P12-49) ──
+//
+// O3: a line that starts with a number and a capital was a numbered heading whatever it was set in — a street
+// address in an affiliation block, an entry of the reference list. O7: with the body size right, a drop cap (a
+// large letter, welded to the first line it stands beside) and a bold lead-in ("Battery cycling." then the
+// paragraph's first words on the same line) read as headings holding a whole line of prose.
+
+/** A capitalised word of a name or an address: "Quarry", "O'Neil", "St.". */
+const CAP_WORD = String.raw`\p{Lu}[\p{L}'’.-]*`;
+/** A word of a name or an address: a capitalised one, or a small connecting word. */
+const NAME_WORD = `(?:${CAP_WORD}|of|and|for|the|de|la|du|van|von|der|&)`;
+/** A street number ("12", never "12." or "1.2": a section number carries its point) and capitalised words up to
+ *  a comma: "12 Quarry Lane, Fenwick Hall, Elmstead". */
+const STREET_COMMA = new RegExp(`^\\d{1,5}\\s+${CAP_WORD}(?:\\s+${NAME_WORD})*,`, "u");
+/** ...or at least two capitalised words ahead of a postal code: "5 Hamilton Court Springfield IL 62704". */
+const STREET_WORDS = new RegExp(`^\\d{1,5}\\s+${CAP_WORD}(?:\\s+${NAME_WORD})+\\s`, "u");
+const POSTAL_CODE = /\b(?:\d{5}(?:-\d{4})?|[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}|\d{4}\s?[A-Z]{2})\b/;
+
+/** Whether this line, which opens with a plain number and a capital, is a street address (an affiliation's)
+ *  and not a section's number: the number, capitalised words, and a comma or a postal code. */
+function isStreetAddress(text: string): boolean {
+  return STREET_COMMA.test(text) || (STREET_WORDS.test(text) && POSTAL_CODE.test(text));
+}
+
+const SURNAME = String.raw`\p{Lu}[\p{L}'’-]+`;
+/** The first words of a reference-list entry: its number, then the authors as a bibliography writes them —
+ *  "17 Smith, J. A.; Doe", "3. J. A. Smith, B. Doe", "12 Zhang Q, Li W". */
+const ENTRY_AUTHORS = new RegExp(
+  `^\\d{1,3}\\.?\\s+(?:${SURNAME},\\s+(?:\\p{Lu}\\.\\s?){1,3}|(?:\\p{Lu}\\.\\s?){1,3}${SURNAME}(?:,|\\s+and\\s|\\s+&\\s|\\s+et\\s+al)|${SURNAME}\\s+\\p{Lu}{1,3},\\s)`,
+  "u",
+);
+
+/** A drop cap is set at least this many times the body's size (it stands beside two lines or more). */
+const DROP_CAP_RATIO = 1.8;
+
+/** A drop cap is one or two characters (P12-70, ruling §1h.443: O7's "one or two large letters"). */
+const DROP_CAP_CHARS = 2;
+/** The words beside a drop cap are body-sized: within this share of the body's size above it. */
+const DROP_CAP_REST_RATIO = 1.25;
+/** A run is "at the row's size" from this share of the row's largest height. */
+const SAME_SIZE_SHARE = 0.9;
+
+/** A drop cap and the word it starts stand within this share of the cap's size of one another. */
+const CAP_WORD_GAP_EM = 0.25;
+/** What follows a drop cap in its word: more letters in lower case, or the rest of a word set in capitals ("T" + "HE"). */
+const CAP_CONTINUES = /^(?:\p{Ll}|\p{Lu}{2,}(?![\p{L}]))/u;
+
+/**
+ * P12-70: a row that holds a drop cap: its largest runs hold one or two characters (`letters`) and every other run is
+ * set under 1 / `DROP_CAP_RATIO` of them. `size` is the cap's, `rest` the largest of the other runs' (the words
+ * beside the cap), `textX` where they start and `next` the index of the run that follows a cap that opens the row
+ * (-1 when it does not). A row set in one size has none, and neither has a row whose large part is a word or more (a
+ * title or a heading set large). Where the cap stands in the row, whether its baseline is the words' to the hundredth,
+ * and whether the page marks the words raised for it, do not matter: the cap is a mark of one or two characters.
+ */
+function capRowOf(runs: PdfTextItem[]): { size: number; rest: number; letters: string; textX: number; next: number } | undefined {
+  const seen = runs.map((run, index) => ({ run, index })).filter(({ run }) => run.str.trim());
+  const top = Math.max(0, ...seen.map(({ run }) => run.height));
+  const isLarge = ({ run }: { run: PdfTextItem }) => run.height >= top * SAME_SIZE_SHARE;
+  const large = seen.filter(isLarge);
+  const rest = seen.filter((entry) => !isLarge(entry));
+  if (large.length === 0 || rest.length === 0) return undefined;
+  const letters = large.map(({ run }) => run.str.replace(/\s/g, "")).join("");
+  const restSize = Math.max(...rest.map(({ run }) => run.height));
+  if (letters.length > DROP_CAP_CHARS || restSize * DROP_CAP_RATIO > top) return undefined;
+  const opens = seen[0] === large[0] && large.every((entry, k) => seen[k] === entry);
+  return { size: top, rest: round(restSize), letters, textX: Math.min(...rest.map(({ run }) => run.x)), next: opens ? rest[0].index : -1 };
+}
+
+/**
+ * Whether this line is a drop cap: the large first letter (or two) of a paragraph, alone on its row or with the
+ * first words of the paragraph that the row carries beside it (so the longest run, and the face, are the
+ * body's). It is no heading; it belongs to the word it starts.
+ *
+ * P12-70 (ruling §1h.443): the large part of the row is at most two characters (`PdfLine.cap`, set from the row's
+ * runs) and the rest of the row is body-sized. A title or a heading set large in the body's face is one run of
+ * several words, and is not a drop cap.
+ */
+export function isDropCap(line: PdfLine, body: { size: number; font: string }): boolean {
+  if (line.size < body.size * DROP_CAP_RATIO) return false;
+  const text = line.text.trim();
+  if (/^\p{L}{1,2}$/u.test(text)) return true;
+  return (
+    line.cap !== undefined &&
+    line.cap.rest <= body.size * DROP_CAP_REST_RATIO &&
+    line.font === body.font &&
+    /^\p{Lu}/u.test(text)
+  );
+}
+
+/** P12-70 (ruling §1h.448): English has two one-letter words, "A" and "I". Any other one-letter cap starts the word beside it,
+ *  whatever the paper prints that bare letter as (a unit "S", a variable "T"). */
+const ONE_LETTER_WORD = /^[AI]$/;
+
+/**
+ * P12-70 (ruling §1h.446): whether a one-letter cap is a word of its own ("A" before "study", "I" before "think")
+ * and not the first letter of the word beside it ("S" before "nail"). The paper's own words are the witness, as for a
+ * ligature (P12-67): the cap is a word when the bare letter is printed in the paper and the joined word ("astudy") is
+ * printed nowhere else; otherwise it starts the word, as it always did. `vocab` holds the paper's words in lower case.
+ * P12-70 (ruling §1h.448): only "A" and "I" can be a word.
+ */
+function capIsWord(letters: string, word: string, vocab: Vocabulary): boolean {
+  return (
+    ONE_LETTER_WORD.test(letters) &&
+    vocab.words.has(letters.toLowerCase()) &&
+    !vocab.words.has(`${letters}${word}`.toLowerCase())
+  );
+}
+
+/** A drop cap spans at most this many lines; the lines it stands beside are looked for this far above its row. */
+const DROP_CAP_LINES_MAX = 4;
+/** A capital's height as a share of its size: how far above its baseline a drop cap reaches. */
+const CAP_HEIGHT_SHARE = 0.75;
+/** The first line a cap stands beside rises above the cap's row by the cap's reach less the body capital's, plus this
+ *  many sizes of the words (a drop cap is set a point or two off the grid). */
+const DROP_CAP_SLACK_EM = 0.7;
+/** The lines of a paragraph are set within this many sizes of one another. */
+const DROP_CAP_LEADING_EM = 1.6;
+
+/**
+ * P12-70 (ruling §1h.445): a drop cap that spans several lines stands on the baseline of the last of them, so its row
+ * holds the capital and the words of that third (or second) line, and the lines above it are the paragraph's first,
+ * indented by the cap's width ("nail density rises ...", the first word without its capital). The capital belongs at the
+ * start of the paragraph's first line, joined to its first word; the row it shares a baseline with is an ordinary line
+ * of the paragraph. Each drop-cap row (`isDropCap`: one or two large letters over body-sized words, `titleSize` the
+ * body's) is searched for the lines above it that it stands beside: contiguous, on its page, in its face, at the size
+ * of its words, starting where its words start, within the cap's reach. When there are none the cap opens its own row
+ * (the usual drop cap, whose letters `lineOf` has joined to the word they start) and nothing moves. A row is never a
+ * heading for it (`isDropCap`) and always prose.
+ */
+function placeDropCaps(lines: PdfLine[], body: { size: number; font: string }): PdfLine[] {
+  let out: PdfLine[] | null = null;
+  // P12-70 (ruling §1h.446): the paper's own words, read once (without the caps' letters, which would witness
+  // themselves) when a one-letter cap needs them.
+  let vocab: Vocabulary | undefined;
+  const standsAlone = (letters: string, words: string): boolean => {
+    const word = /^\p{L}+/u.exec(words)?.[0];
+    if (letters.length !== 1 || !word) return false;
+    vocab ??= vocabularyOf(lines.map((l) => (l.cap?.letters && l.text.startsWith(l.cap.letters) ? { ...l, text: l.text.slice(l.cap.letters.length) } : l)));
+    return capIsWord(letters, word, vocab);
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const row = lines[i];
+    const cap = row.cap;
+    if (!cap || !cap.letters || cap.textX === undefined || !isDropCap(row, body) || !row.text.startsWith(cap.letters)) continue;
+    const reach = (row.size - cap.rest) * CAP_HEIGHT_SHARE + cap.rest * DROP_CAP_SLACK_EM;
+    let first = -1;
+    let below = row;
+    for (let j = i - 1; j >= 0 && i - j <= DROP_CAP_LINES_MAX; j--) {
+      const above = lines[j];
+      const gap = above.y - below.y;
+      if (above.page !== row.page || above.block || above.cap || gap <= 0 || gap > cap.rest * DROP_CAP_LEADING_EM) break;
+      if (above.y - row.y > reach || above.font !== row.font) break;
+      if (Math.abs(above.size - cap.rest) > OPENING_SIZE_SLACK || Math.abs(above.x - cap.textX) > cap.rest) break;
+      first = j;
+      below = above;
+    }
+    const words = row.text.slice(cap.letters.length).trimStart();
+    if (first < 0) {
+      // The cap opens its row and `lineOf` joined it to its word: a cap that is a word of its own ("A", "I") is not.
+      if (cap.joined && standsAlone(cap.letters, words)) {
+        out ??= lines.slice();
+        out[i] = { ...row, text: `${cap.letters} ${words}` };
+      }
+      continue;
+    }
+    if (words.length === 0) continue;
+    out ??= lines.slice();
+    // The lines the cap stands beside are indented by its width; they start where the cap does, or each would open a
+    // paragraph of its own (`joinProse` breaks at an indent).
+    for (let j = first; j < i; j++) out[j] = { ...lines[j], x: row.x };
+    const head = lines[first];
+    const welds = CAP_CONTINUES.test(head.text) && !standsAlone(cap.letters, head.text);
+    out[first] = { ...out[first], text: `${cap.letters}${welds ? "" : " "}${head.text}` };
+    const plain: PdfLine = { ...row, text: words, size: cap.rest };
+    delete plain.cap;
+    out[i] = plain;
+  }
+  return out ?? lines;
+}
+
+/** A lead-in is the first sentence of the line, ending with a period; a line of a larger size is a heading. */
+const LEAD_IN = /^([^.!?]{3,80}?)\.\s+(?=[\p{Lu}\d(\[])/u;
+const LEAD_IN_MAX_RATIO = 1.25;
+/** The words a period follows without ending a sentence. */
+const ABBREVIATION = /^(?:figs?|eqs?|refs?|vol|sec|etc|resp|approx|inc|ltd|mrs|prof)$/i;
+
+/**
+ * Whether the line opens with a run-in lead-in: a phrase ending with a period, with more text on the same line
+ * — "Battery cycling. Cells were assembled in an argon-". A heading is a phrase; it has no sentence after it.
+ */
+function opensWithLeadIn(text: string): boolean {
+  const word = LEAD_IN.exec(text)?.[1].match(/(\p{L}+)$/u)?.[1];
+  return !!word && word.length >= 3 && !ABBREVIATION.test(word);
+}
+
+/** Whether the line is set apart from the body by its size or its face. */
+function isSetApart(line: PdfLine, body: { size: number; font: string }): boolean {
+  return line.size >= body.size * HEADING_SIZE_RATIO || (line.font !== body.font && line.size >= body.size * 0.95);
+}
+
+/** C P12-74 (R3): a lone panel letter, b to h (never "a", a word of its own): a figure's "b Discharge curve". */
+const PANEL_LETTER = /(?:^|\s)[b-h](?=\s|$)/;
+
+/** C P12-74 (R5): a key in quotes, then a colon: `'optimizer': 'adamw'`, `"lr": 0.01`. */
+const QUOTED_KEY = /['"][\w .-]+['"]\s*:/;
+
+/** The heading this line would be, judged on the line alone: its shape, its size and its face. */
+function candidateOf(line: PdfLine, body: { size: number; font: string }): string | null {
   const text = line.text.trim();
   if (text.length === 0 || text.length > HEADING_MAX) return null;
   if (CAPTION.test(text)) return null;
+  if (isDropCap(line, body)) return null;
+  // C P12-74 (R3, B P12-73 M1): a single letter b to h between spaces, or at an end of the line, is a figure's panel
+  // label ("a Charge curve  b Discharge curve"): the line is figure text, not a heading.
+  if (PANEL_LETTER.test(text)) return null;
+  // C P12-74 (R5, B P12-73 M1): a quoted key and a colon ("'optimizer': 'adamw'") is a line of source code or a settings
+  // listing, set in a monospace face the body's other face rule takes for a heading's.
+  if (QUOTED_KEY.test(text)) return null;
   const numbered = sectionNumberOf(text);
   // A sentence that happens to be short is still a sentence.
   if (/[.;,]$/.test(text) && !numbered) return null;
@@ -1072,7 +1855,17 @@ export function headingOf(line: PdfLine, body: { size: number; font: string }): 
   if (letters < text.length * 0.5) return null;
   // "2.1 Constant velocity model" is a heading; "10 and the flow is clearly
   // laminar" is a line of prose that happens to start with a number.
-  if (numbered && numbered[2].length >= 3 && /^[A-Z(]/.test(numbered[2])) return text;
+  if (numbered && numbered[2].length >= 3 && /^[A-Z(]/.test(numbered[2])) {
+    // ...and neither is a street address ("12 Quarry Lane, Elmstead", unless the line is set larger than the
+    // body) nor the first line of a reference-list entry ("17 Smith, J. A.; Doe, B.").
+    const larger = line.size >= body.size * HEADING_SIZE_RATIO;
+    if ((!larger && isStreetAddress(text)) || ENTRY_AUTHORS.test(text)) return null;
+    // C P12-74 (R1, B P12-73 M1): ...nor a numbered line set smaller than the body, whatever its face: an axis
+    // tick ("80 Capacity retention"), a legend, a reference entry, small print. A heading is not set smaller than
+    // the text it heads (the unnumbered path below has always asked for 0.95 of the body or more).
+    if (line.size < body.size * NUMBERED_SIZE_RATIO) return null;
+    return text;
+  }
   const bigger = line.size >= body.size * HEADING_SIZE_RATIO;
   const otherFace = line.font !== body.font && line.size >= body.size * 0.95;
   if (!bigger && !otherFace) return null;
@@ -1080,7 +1873,131 @@ export function headingOf(line: PdfLine, body: { size: number; font: string }): 
   // symbols set in the maths face ("qe,ic0,1 ka,ic0,iqe,1") is an equation
   // the page happens to set apart.
   if (!/[A-Za-z]{4}/.test(text)) return null;
+  // A phrase in another face with a sentence after it on the line is a paragraph's lead-in, not a heading.
+  if (line.size < body.size * LEAD_IN_MAX_RATIO && opensWithLeadIn(text)) return null;
   return text;
+}
+
+/** A line, as a key that survives a copy of it: its page, its place and its words. */
+const lineKey = (line: PdfLine): string => `${line.page}|${line.x}|${line.y}|${line.text}`;
+
+/** A section number's groups: "2.10" is [2, 10]. */
+const numberParts = (group: string): number[] => group.split(".").map(Number);
+
+/** Whether the numbering `a` comes after `b` ([2, 1] after [2], [3] after [2, 4]; not [2] after [2, 1]). */
+function numbersAfter(a: number[], b: number[]): boolean {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return a.length > b.length;
+}
+
+/** A top-level number this far past the last one is a heading that skipped some, and moves the numbering on;
+ *  one further ("20. EXTRAS" after 3) is a heading, and leaves the numbering where it stood. */
+const NUMBER_REACH = 3;
+
+/** The words of the heading that opens a reference list. */
+const REFERENCES_HEADING =
+  /^(?:references?(?:\s+(?:and|&)\s+notes)?|reference\s+list|bibliography|notes\s+and\s+references|literature\s+cited|works\s+cited)\s*[:.]?\s*$/i;
+
+/**
+ * Whether a numbered line's words after its number are a **plain heading that names a part**: `tailPartOf`'s test
+ * (P12-51) — at most `PLAIN_HEADING_WORDS` words, no comma, no year — and the words name a part of the argument
+ * (methods above all) or an end-matter note. A reference entry has an author shape, a comma or a year.
+ */
+function namesAPart(head: string): boolean {
+  const own = head.trim().replace(GLYPH_LEAD, "").replace(SECTION_LEAD, "");
+  if (own.split(/\s+/).length > PLAIN_HEADING_WORDS || own.includes(",") || PRINT_YEAR.test(own)) return false;
+  const canonical = canonicalizeHeading(head);
+  const part = tailPartOf(head, canonical, endsTheArgument(head, canonical));
+  return part === "argument" || part === "note";
+}
+
+/**
+ * The numbered lines of a paper that are not its headings (P12-49, O3), as `lineKey`s. A numbered line is a
+ * heading only when its number **continues the paper's numbering**: it comes after the last section number met
+ * ([2, 1] after [2], [3] after [2, 4]), and the paper's numbering starts at its first named part, not on the cover.
+ * A number that goes back is a list, an entry or a footnote: "1", "2", "3" under the references after a paper of
+ * four sections. And **no line in a references section** is one — that section runs from its heading to the next
+ * heading, which is a line set apart (larger, or in another face) or a plain numbered heading that names a part
+ * (`namesAPart`: "5 Methods" after the references).
+ *
+ * The numbering is the headings that are set apart: they move it. A line in the body's own face is judged against
+ * it and moves it only while no heading has (the plain fixtures of a test), so a paper's stray "2 Institute of ..."
+ * in the footnote of page 1 neither takes the number of the real "2. Results" nor turns it away; and a set-apart
+ * heading that goes back is taken only while the numbering is still the body-face lines' own.
+ *
+ * C P12-74 (R2): and a numbered line in the body's own face and size that follows open prose (`followsOpenProse`: the
+ * line above is body prose in its column, one pitch up, and does not end a sentence) is the middle of that sentence,
+ * not a heading, unless the line above is a heading candidate itself (stacked numbered headings).
+ */
+function numberedOut(lines: PdfLine[], body: { size: number; font: string }): Set<string> {
+  const out = new Set<string>();
+  const furniture = furnitureOf(lines, new Set(lines.map((line) => line.page)).size);
+  const margin = marginPrintOf(lines, body);
+  const heads: { line: PdfLine; head: string }[] = [];
+  // C P12-74 (R2): where each line stands among the lines, and the pitch they are read at, for `followsOpenProse`.
+  const placeOf = new Map(lines.map((line, i) => [line, i] as const));
+  const pitch = linePitch(lines);
+  for (const line of lines) {
+    if (isFurniture(line, furniture) || margin(line)) continue;
+    const head = candidateOf(line, body);
+    if (head !== null) heads.push({ line, head });
+  }
+  // The paper starts at its first named part (as `buildOutline` reads it); above that is the cover.
+  const start = Math.max(0, heads.findIndex(({ head }) => FRONT_MATTER_END.has(canonicalizeHeading(head))));
+  let last: number[] = [];
+  // Whether a heading set apart has moved the numbering.
+  let set = false;
+  let inReferences = false;
+  for (const { line, head } of heads.slice(start)) {
+    const numbered = sectionNumberOf(head);
+    if (!numbered) {
+      inReferences = REFERENCES_HEADING.test(head.replace(GLYPH_LEAD, "").trim());
+      continue;
+    }
+    const apart = isSetApart(line, body);
+    // C P12-74 (R2, B P12-73 M1): a numbered line in the body's own face and size that goes on from a sentence the line
+    // above did not finish is the middle of a paragraph ("... charged at" over "4 A g-1 and then held ..."), not a
+    // heading. Unless the line above is itself a heading candidate: stacked numbered headings in plain fixtures
+    // ("5 Methods" over "5.1 Cell assembly", both in the body's face) are headings.
+    const at = placeOf.get(line) ?? 0;
+    if (
+      !apart &&
+      line.font === body.font &&
+      followsOpenProse(lines, at, pitch, body, furniture) &&
+      candidateOf(lines[at - 1], body) === null
+    ) {
+      out.add(lineKey(line));
+      continue;
+    }
+    if (inReferences) {
+      // A numbered line in the body's face is an entry, unless its words are a plain heading naming a part (a
+      // journal that prints its Methods after the references, numbered: "5 Methods"): that ends the list.
+      if (!apart && !namesAPart(head)) {
+        out.add(lineKey(line));
+        continue;
+      }
+      inReferences = false;
+    }
+    const parts = numberParts(numbered[1]);
+    const continues = numbersAfter(parts, last);
+    if (!continues && !(apart && !set)) {
+      out.add(lineKey(line));
+      continue;
+    }
+    // A number far ahead is a heading, and leaves the numbering where it stood.
+    if ((apart || !set) && (!continues || parts[0] <= (last[0] ?? 0) + NUMBER_REACH)) {
+      last = parts;
+      set = set || apart;
+    }
+    inReferences = REFERENCES_HEADING.test(numbered[2].trim());
+  }
+  return out;
+}
+
+/** The heading this line is, or nothing. */
+export function headingOf(line: PdfLine, body: BodyStyle): string | null {
+  const head = candidateOf(line, body);
+  return head !== null && !body.notHeadings?.has(lineKey(line)) ? head : null;
 }
 
 // ── Line ends: the document's own words decide a hyphen (P9-09, cluster C) ──────
@@ -1647,12 +2564,25 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
   // The line pitch, not the average gap: a section with one paragraph break
   // in three lines has a median that IS the break, and then nothing breaks.
   const pitch = gaps.length > 0 ? gaps[Math.floor(gaps.length * 0.25)] : 0;
-  // The section's usual left edge: the 10th percentile of its line starts, not
-  // the leftmost one, so a margin label or one hanging line does not make every
+  // A page's usual left edge: the 10th percentile of its line starts, not the
+  // leftmost one, so a margin label or one hanging line does not make every
   // other line read as indented. Under ten lines that is the minimum: too few
-  // to tell an outlier from an edge.
-  const starts = lines.map((l) => l.x).sort((a, b) => a - b);
-  const left = starts.length > 0 ? starts[Math.floor(LEFT_EDGE_QUANTILE * (starts.length - 1))] : 0;
+  // to tell an outlier from an edge. C P12-76 (M8): the page's own, not the
+  // section's. A page set at another origin (its text starts at x = -26 where
+  // the others' start at 40) is more than the tenth that sets the quantile when
+  // taken over the whole section, and every line of every other page then read
+  // as an indent and began a paragraph.
+  const startsOf = new Map<number, number[]>();
+  for (const l of lines) {
+    const xs = startsOf.get(l.page);
+    if (xs) xs.push(l.x);
+    else startsOf.set(l.page, [l.x]);
+  }
+  const leftOf = new Map<number, number>();
+  for (const [page, xs] of startsOf) {
+    xs.sort((a, b) => a - b);
+    leftOf.set(page, xs[Math.floor(LEFT_EDGE_QUANTILE * (xs.length - 1))]);
+  }
 
   for (const line of lines) {
     if (line.block) {
@@ -1675,7 +2605,7 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
       previous !== null &&
       !line.continues &&
       ((bigGap && !floatGap) ||
-        (samePage && line.x > left + 6) ||
+        (samePage && line.x > (leftOf.get(line.page) ?? 0) + 6) ||
         previous?.block === true ||
         (previous.page !== line.page && current.trim() !== "" && !continuesAcrossPage(current, line.text)));
     if (breaks && current.trim()) {
@@ -1699,19 +2629,325 @@ export function joinProse(lines: readonly FlowLine[], options: JoinOptions = {})
  */
 const STAMP = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
 
-/** The paper's title: the largest words on its first page, above the body. */
-function titleOf(lines: PdfLine[], body: { size: number }): string | null {
-  const first = lines.filter((line) => line.page === 1 && line.size > body.size * 1.25 && !STAMP.test(line.text));
-  if (first.length === 0) return null;
-  const biggest = Math.max(...first.map((line) => line.size));
-  const title = first
-    .filter((line) => line.size >= biggest - 0.6)
-    .map((line) => line.text)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return title.length >= 6 ? title : null;
+/** P12-64: the size a line is read at for the title: the size most of its characters are set in. */
+const titleSizeOf = (line: PdfLine): number => line.titleSize ?? line.size;
+
+/** P12-64: a row of one or two letters is a drop cap standing alone on its baseline, never a title. */
+const CAP_ROW = /^\p{L}{1,2}$/u;
+
+/** The first page's lines set larger than the body, in classes of one size (`TITLE_SIZE_JOIN`), the largest first. */
+interface TitleClass {
+  size: number;
+  lines: PdfLine[];
+  text: string;
+  /** The class's words as `titleWords` reads them. */
+  words: string[];
+  /** Where its highest line stands on the page. */
+  top: number;
 }
+
+/** P12-64: a word, for the title's comparisons: letters and digits, lower case, accents and ligatures folded. */
+const titleWords = (text: string): string[] =>
+  text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+
+function titleClassesOf(candidates: PdfLine[]): TitleClass[] {
+  const anchors: number[] = [];
+  for (const size of [...new Set(candidates.map(titleSizeOf))].sort((a, b) => b - a)) {
+    if (anchors.length === 0 || size < anchors[anchors.length - 1] - TITLE_SIZE_JOIN) anchors.push(size);
+  }
+  const classes = anchors.map((size): TitleClass => ({ size, lines: [], text: "", words: [], top: -Infinity }));
+  for (const line of candidates) {
+    const at = anchors.findIndex((anchor) => titleSizeOf(line) >= anchor - TITLE_SIZE_JOIN);
+    classes[at].lines.push(line);
+    classes[at].top = Math.max(classes[at].top, line.y);
+  }
+  for (const cls of classes) {
+    cls.text = cls.lines.map((line) => line.text).join(" ").replace(/\s+/g, " ").trim();
+    cls.words = titleWords(cls.text);
+  }
+  return classes.filter((cls) => !cls.lines.every((line) => CAP_ROW.test(line.text.trim())));
+}
+
+/** P12-64: an embedded title is a witness only when it has at least this many words. */
+const WITNESS_MIN_WORDS = 3;
+/** …and the longest, in characters, a title field may be and still be read (a field that holds an abstract is no title). */
+const WITNESS_MAX_CHARS = 300;
+/** A file name, or the name an authoring tool gives a document it has no title for. */
+const FILE_NAME_TITLE =
+  /\.(?:pdf|docx?|dotx?|tex|dvi|ps|eps|rtf|odt|indd|pages|pptx?|xlsx?|html?|xml|txt|tmp)\b|^(?:microsoft\s+(?:word|powerpoint|excel)\b|untitled\b|powerpoint presentation\b)|^\S+$|_.*_/i;
+/** A size class counts for the first page's words in an embedded title when this share of its words is in it… */
+const WITNESS_INSIDE = 0.8;
+/** …and at least this many words are. */
+const WITNESS_MIN_MATCHES = 2;
+/** A masthead stands over a title set at least this share of its own size; a smaller line below it is the authors'. */
+const MASTHEAD_TITLE_RATIO = 0.7;
+/** A masthead of fewer words than this, above a title block, is a name (a journal's), not a title. */
+const MASTHEAD_MAX_WORDS = 3;
+/** A line of a running head sits in this many of the first or last rows of a page, as `bandOf` counts them. */
+const HEAD_ROWS = 3;
+
+/** The words of an embedded title, or null when it is no witness: under three words, a file name, a stamp, too long. */
+function witnessWords(raw: string): Set<string> | null {
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (text.length > WITNESS_MAX_CHARS || STAMP.test(text) || FILE_NAME_TITLE.test(text)) return null;
+  const words = titleWords(text);
+  return words.length >= WITNESS_MIN_WORDS ? new Set(words) : null;
+}
+
+/** The words of the lines that stand in the first or last rows of the pages after the first, joined one string per
+ *  line and with the pages that carry each: what a running head says. */
+function runningHeads(lines: PdfLine[]): Map<string, Set<number>> {
+  const rows = new Map<number, number[]>();
+  for (const { page, y } of lines) {
+    if (page === 1) continue;
+    const row = Math.round(y / 3);
+    const known = rows.get(page);
+    if (!known) rows.set(page, [row]);
+    else if (!known.includes(row)) known.push(row);
+  }
+  for (const known of rows.values()) known.sort((a, b) => b - a);
+  const heads = new Map<string, Set<number>>();
+  for (const line of lines) {
+    const known = rows.get(line.page);
+    if (!known || line.text.length > 120) continue;
+    const at = known.indexOf(Math.round(line.y / 3));
+    if (at >= HEAD_ROWS && at < known.length - HEAD_ROWS) continue;
+    const words = titleWords(line.text).join(" ");
+    if (words) heads.set(words, (heads.get(words) ?? new Set<number>()).add(line.page));
+  }
+  return heads;
+}
+
+/**
+ * The paper's title: the largest words on its first page, above the body.
+ *
+ * P12-64 (rule 1): "largest" is by the size most of a line's characters are set in (`titleSize`), not by its
+ * tallest run, so one oversized letter (a drop cap) no longer lifts the body line it stands on; and a row of
+ * one or two letters that stands alone is a drop cap, not a title.
+ *
+ * P12-64 (rule 2): the first page's lines fall into classes of one size, and the PDF's own title (`embedded`: the
+ * Info and XMP titles `readPages` found) is a witness to choose among them by. A witness counts when it has three
+ * words or more and is not a file name, a stamp, or the journal's name; the class chosen is the one most of whose
+ * words are in it (80%, and two at least), the most words in it winning, the larger size a tie. The title returned is
+ * the page's own text, never the embedded string. With no witness, or none that matches, it is the largest class
+ * that is not a masthead. A masthead is a class above a title block (a class of three words or more, set at 70% of
+ * its size or more) that is a line the running heads repeat (a journal's name stands on every page), or is under three
+ * words and matches no witness (a name, not a title). A paper whose masthead is neither, with no embedded title, still
+ * reads its masthead. Within the class a witness chose, only the lines most of whose words are in the witness are the
+ * title (an article-type label set at the title's size is not).
+ */
+function titleOf(lines: PdfLine[], body: { size: number }, embedded: readonly string[] = []): string | null {
+  const first = lines.filter((line) => line.page === 1 && titleSizeOf(line) > body.size * 1.25 && !STAMP.test(line.text));
+  const classes = titleClassesOf(first);
+  if (classes.length === 0) return null;
+
+  let heads: Map<string, Set<number>> | null = null;
+  const pageCount = lines.reduce((n, line) => Math.max(n, line.page), 1);
+  const repeated = (cls: TitleClass): boolean => {
+    if (cls.words.length === 0) return false;
+    heads ??= runningHeads(lines);
+    const needle = ` ${cls.words.join(" ")} `;
+    const pages = new Set<number>();
+    for (const [head, on] of heads) if (` ${head} `.includes(needle)) for (const page of on) pages.add(page);
+    return pages.size >= 2 && pages.size >= (pageCount - 1) * 0.4;
+  };
+  /** Whether a class of three words or more, below `cls` and not smaller than a title would be, is the title block. */
+  const standsOver = (cls: TitleClass): boolean =>
+    classes.some(
+      (c) => c !== cls && c.top < cls.top && c.words.length >= MASTHEAD_MAX_WORDS && c.size >= cls.size * MASTHEAD_TITLE_RATIO && !repeated(c),
+    );
+  const isMasthead = (cls: TitleClass, witnessed: boolean): boolean =>
+    standsOver(cls) && (repeated(cls) || (!witnessed && cls.words.length < MASTHEAD_MAX_WORDS));
+
+  const matched = new Set<TitleClass>();
+  let best: { cls: TitleClass; inside: number; witness: Set<string> } | null = null;
+  for (const raw of embedded) {
+    const witness = witnessWords(raw);
+    if (!witness) continue;
+    for (const cls of classes) {
+      const inside = cls.words.filter((word) => witness.has(word)).length;
+      if (inside < WITNESS_MIN_MATCHES || inside < cls.words.length * WITNESS_INSIDE) continue;
+      matched.add(cls);
+      // A witness that names a masthead is the journal's name, not the paper's.
+      if (isMasthead(cls, true)) continue;
+      if (!best || inside > best.inside) best = { cls, inside, witness };
+    }
+  }
+
+  if (best) {
+    // The class's own lines that are in the witness: an article-type label set at the title's size is not the title.
+    const { cls, witness } = best;
+    const inWitness = cls.lines.filter((line) => {
+      const words = titleWords(line.text);
+      const n = words.filter((word) => witness.has(word)).length;
+      return n > 0 && n >= words.length / 2;
+    });
+    const text = (inWitness.length > 0 ? inWitness : cls.lines).map((line) => line.text).join(" ").replace(/\s+/g, " ").trim();
+    return text.length >= 6 ? text : null;
+  }
+  const chosen = classes.find((cls) => !isMasthead(cls, matched.has(cls))) ?? classes[0];
+  return chosen.text.length >= 6 ? chosen.text : null;
+}
+
+// ── The opening of a paper that names no abstract or introduction (P12-51, O6) ────────────────────────────
+//
+// The paper starts at its first named part, and the cover above it is cut. A paper that names neither
+// (a journal that prints a summary paragraph and goes straight on, with no heading over its introduction)
+// had no such part to start at: the cover stayed, every name and affiliation read as a heading of its own,
+// and the introduction fell under the last of them. Its prose is found by its style instead: the first
+// run of lines set in the body's size and face. What stands above the run is the cover, and the run is the
+// paper's opening, which the first heading after it closes as a section with no heading of its own.
+
+/** A line is in the body's style when it is set in the body's face within this many points of its size. */
+const OPENING_SIZE_SLACK = 0.6;
+/** The opening is a run of at least this many such lines: a name, a date or a note is not one. */
+const OPENING_RUN_LINES = 3;
+/** A line of this many characters or fewer, between the opening's lines, is a drop cap or a mark, not a break. */
+const OPENING_MARK_MAX = 2;
+/** The lines above the opening that are all headings, at least this many, are a paragraph set apart (a
+ *  summary in another face), not a heading with prose under it. */
+const COVER_HEADING_STACK = 3;
+
+/**
+ * Where the paper's opening starts, as an index into `lines`, or 0 when there is nothing to cut: no run of
+ * body-style lines on the first page that has text, no cover above it, or a real heading standing directly
+ * over it (then the prose belongs to that heading, and the paper is read as it always was). Furniture,
+ * margin print and the dated box are not lines here, as they are not in the reading itself.
+ */
+function openingStart(
+  lines: PdfLine[],
+  body: { size: number; font: string },
+  furniture: Set<string>,
+  isMarginPrint: (line: PdfLine) => boolean,
+): number {
+  const dated = lines.map((line) => PUBLICATION_DATE.test(line.text.trim()));
+  const live: number[] = [];
+  lines.forEach((line, i) => {
+    const inBox = dated[i] && (dated[i - 1] === true || dated[i + 1] === true);
+    if (!isFurniture(line, furniture) && !isMarginPrint(line) && !inBox) live.push(i);
+  });
+  if (live.length === 0) return 0;
+  const firstPage = lines[live[0]].page;
+  // P12-70 (ruling §1h.444): a line is set in the body's size when its tallest run is, or when the only taller part is a
+  // drop cap (one or two large letters, welded to the body-sized words of the first line) and the size most of its
+  // characters are set in is the body's.
+  const bodySized = (line: PdfLine): boolean =>
+    Math.abs(line.size - body.size) <= OPENING_SIZE_SLACK ||
+    (isDropCap(line, body) && Math.abs(titleSizeOf(line) - body.size) <= OPENING_SIZE_SLACK);
+  const isProse = (i: number): boolean => {
+    const line = lines[i];
+    return (
+      line.page === firstPage &&
+      !line.block &&
+      line.font === body.font &&
+      bodySized(line) &&
+      !captionOf(line) &&
+      headingOf(line, body) === null
+    );
+  };
+  let at = -1;
+  for (let k = 0; k < live.length && lines[live[k]].page === firstPage; k++) {
+    if (!isProse(live[k])) continue;
+    let end = k;
+    while (end + 1 < live.length && isProse(live[end + 1])) end++;
+    if (end - k + 1 >= OPENING_RUN_LINES) {
+      at = k;
+      break;
+    }
+    k = end;
+  }
+  if (at < 0) return 0;
+  // A drop cap sits between the first lines of the opening and the rest; the lines before it are the opening's.
+  while (at > 0 && (isProse(live[at - 1]) || lines[live[at - 1]].text.trim().length <= OPENING_MARK_MAX)) at--;
+  if (at === 0) return 0;
+  const above = lines[live[at - 1]];
+  if (headingOf(above, body) !== null) {
+    let stack = 0;
+    for (let k = at - 1; k >= 0 && headingOf(lines[live[k]], body) !== null; k--) stack++;
+    if (stack < COVER_HEADING_STACK) return 0;
+  }
+  return live[at];
+}
+
+// ── Figure text (P12-51, O8) ─────────────────────────────────────────────────────────────────────────────
+//
+// A figure's panels are text in the PDF: panel letters, tick strings, axis labels. They arrive as lines of
+// a few characters, and the outline read them as the paper's prose, as rows of their own when one has the
+// shape of a heading ("5 Min"), and as an equation when they stand close enough to fold. The text next to a
+// figure's caption that is nothing else is dropped: three or more lines in a row, each short, unpunctuated
+// and either free of any word of four letters or set smaller than the body.
+
+/** A line of figure text is at most this many characters. */
+const PANEL_LINE_MAX = 25;
+/** Fewer lines in a row than this are not figure text: the short last line of a paragraph is one. */
+const PANEL_RUN_MIN = 3;
+/** Figure text is "next to" a caption within this many body sizes of it on the page. */
+const PANEL_REACH = 8;
+/** A line is set smaller than the body below this share of its size. */
+const SMALLER_THAN_BODY = 0.95;
+
+function isPanelLine(line: PdfLine, body: { size: number }): boolean {
+  const text = line.text.trim();
+  if (line.block || text.length === 0 || text.length > PANEL_LINE_MAX) return false;
+  if (SENTENCE_END.test(text) || captionOf(line) || equationOf(line)) return false;
+  return !/\p{L}{4,}/u.test(text) || line.size < body.size * SMALLER_THAN_BODY;
+}
+
+/**
+ * The indices into `read` of the lines that are figure text. `skipped` marks the lines the reading leaves
+ * out anyway (furniture, margin print, the dated box); a caption and the lines it runs on to (the reading's
+ * own `continuesCaption`) are the caption's and never figure text.
+ */
+function figureTextOf(
+  read: PdfLine[],
+  skipped: boolean[],
+  body: { size: number; font: string },
+  pitch: number,
+  furniture: Set<string>,
+): Set<number> {
+  const captions: PdfLine[] = [];
+  const taken = new Set<number>();
+  for (let i = 0; i < read.length; i++) {
+    if (skipped[i] || !captionOf(read[i])) continue;
+    captions.push(read[i]);
+    taken.add(i);
+    const end = captionEnd(read, i, pitch, body, furniture);
+    while (i < end) taken.add(++i);
+  }
+  const figure = new Set<number>();
+  if (captions.length === 0) return figure;
+  const reach = body.size * PANEL_REACH;
+  let run: number[] = [];
+  const close = () => {
+    if (run.length >= PANEL_RUN_MIN) {
+      const page = read[run[0]].page;
+      const beside = captions.some((c) => c.page === page && run.some((i) => Math.abs(c.y - read[i].y) <= reach));
+      if (beside) for (const i of run) figure.add(i);
+    }
+    run = [];
+  };
+  for (let i = 0; i < read.length; i++) {
+    if (skipped[i]) continue;
+    if (taken.has(i) || !isPanelLine(read[i], body)) {
+      close();
+      continue;
+    }
+    if (run.length > 0 && read[run[0]].page !== read[i].page) close();
+    run.push(i);
+  }
+  close();
+  return figure;
+}
+
+/**
+ * P12-75 (B P12-73, M2): the whole heading names a part of the argument. A heading that is one of these, has no number and
+ * no text of its own, only sub-headings under it, is the part's group row ("Methods" in a paper that numbers nothing).
+ * Only the whole heading counts: a descriptive heading that holds one of the words is not a part name.
+ */
+const PART_NAME =
+  /^(?:(?:online|extended)\s+)?(?:(?:materials?|experimental)\s+(?:and|&)\s+)?(?:methods?|methodology|experimental(?:\s+(?:section|procedures?|details?|methods?|part))?)$|^results(?:\s+(?:and|&)\s+discussions?)?$|^discussions?$|^conclusions?$|^introduction$/i;
+/** P12-75: a sub-heading is smaller than its part's heading by more than this many points. */
+const GROUP_STEP = 0.3;
 
 /**
  * The whole reading: pages of text items in, a document out. `reason` is set
@@ -1721,13 +2957,15 @@ function titleOf(lines: PdfLine[], body: { size: number }): string | null {
  * it already.
  */
 export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutterPrior(pages)): PdfOutline {
-  const lines = pages.flatMap((page) => linesOfPageWith(page, prior));
-  if (lines.length === 0 || lines.reduce((n, l) => n + l.text.length, 0) < 200) {
+  const drawn = pages.flatMap((page) => linesOfPageWith(page, prior));
+  if (drawn.length === 0 || drawn.reduce((n, l) => n + l.text.length, 0) < 200) {
     return { pageCount: pages.length, reason: "no-text-layer" };
   }
-  const body = bodyStyle(lines);
+  const body = bodyStyle(drawn);
+  // P12-70 (§1h.445): the capital of a drop cap that spans several lines goes to the start of the paragraph's first line.
+  const lines = placeDropCaps(drawn, body);
   const furniture = furnitureOf(lines, pages.length);
-  const title = titleOf(lines, body);
+  const title = titleOf(lines, body, pages[0]?.embeddedTitles);
   // P9-09: the paper's own words, read once from every line, decide each hyphen a line ends in.
   const vocab = vocabularyOf(lines);
 
@@ -1738,16 +2976,37 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
     const head = headingOf(line, body);
     return head !== null && FRONT_MATTER_END.has(canonicalizeHeading(head));
   });
-  const read = firstNamed > 0 ? lines.slice(firstNamed) : lines;
+  const isMarginPrint = marginPrintOf(lines, body);
+  // P12-51 (O6): a paper that names neither starts at its opening, found by its style; what stands above
+  // it is the cover. The opening is read as text before the first heading, a section with no heading.
+  const start = firstNamed > 0 ? firstNamed : firstNamed < 0 ? openingStart(lines, body, furniture, isMarginPrint) : 0;
+  const read = start > 0 ? lines.slice(start) : lines;
 
   const sections: OutlineSection[] = [];
   const figureCaptions: OutlineCaption[] = [];
   const equations: OutlineEquation[] = [];
   let heading: string | null = null;
   let canonical = "body";
-  let page = pages[0]?.page ?? 1;
+  let page = (firstNamed < 0 && start > 0 ? read[0]?.page : undefined) ?? pages[0]?.page ?? 1;
   let held: PdfLine[] = [];
-  let done = false;
+  // P12-51 (O5): the first end-matter heading closes the argument (`tail`); what the lines under a heading
+  // are is read by what the heading names (`tailPartOf`), and they are read (`reading`) or not. P12-62: the
+  // first end-matter heading is named the same way, as a note, the references or an appendix. `resumed`: the
+  // current stretch is a part of the argument, whose sub-headings are read; `opensTail`: the heading that
+  // closed the argument, which stays closed when a wrapped second line joins it (and is named again by the
+  // joined words); `appendix`: an appendix has begun (P12-62: the first end-matter heading may be one), and
+  // no heading after it opens a part of the argument again.
+  let tail = false;
+  let reading = true;
+  let resumed = false;
+  let opensTail = false;
+  let appendix = false;
+  // P12-75 (M2): the part an unnumbered, empty named heading opens ("Methods", then at once its first sub-heading): the
+  // bucket it gives and the size its heading was set in. The unnumbered headings that follow it, set smaller, are its
+  // sub-headings and take the bucket (as numbered ones take their parent's); a heading as large, a numbered one or one
+  // that names a structural bucket (limitations, references, acknowledgments, supplementary, abstract) ends it.
+  let group: { canonical: string; size: number } | null = null;
+  let headingSize = 0;
 
   // P7-18 (F3): every heading takes its place in the numbering, a heading with nothing under it
   // too ("2. RESULTS AND DISCUSSION" holds only its subsections and is no section), so "2.1 …"
@@ -1762,13 +3021,32 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       return blockMarker(equations.length - 1);
     });
     const text = joinProse(lifted, { vocab });
+    let level: 1 | 2 | undefined;
+    // P12-75 (item 2, §1h.452): a heading whose own words are a part name starts a part, whatever its size; it is never
+    // a sub-heading of the part before it ("Discussion" set smaller than an empty "Results" is not a results child).
+    const partName = heading !== null && PART_NAME.test(heading.replace(GLYPH_LEAD, "").trim());
+    if (heading === null || headingNumber(heading) !== null) {
+      group = null;
+    } else if (group !== null && !partName && !STRONG_BUCKETS.has(canonical) && headingSize < group.size - GROUP_STEP) {
+      canonical = group.canonical;
+      level = 2;
+    } else {
+      group = null;
+      if (text.trim().length === 0 && reading && headingSize > 0 && partName) {
+        group = { canonical, size: headingSize };
+        level = 1;
+      }
+    }
     if (text.trim().length > 0) {
-      sections.push({ heading: heading ?? undefined, canonical, page, text });
-    } else if (heading !== null && !done && headingNumber(heading) !== null) {
+      sections.push({ heading: heading ?? undefined, canonical, page, text, ...(level === 2 ? { level } : {}) });
+    } else if (heading !== null && reading && level === 1) {
+      // P12-75: the group row, with no words. `dropStrayHeadings` keeps it only when a sub-heading with text follows.
+      sections.push({ heading, canonical, page, text: "", level });
+    } else if (heading !== null && reading && headingNumber(heading) !== null) {
       // P10-04 (review 3.3): a numbered heading with nothing under it may be the paper's own group
       // heading ("2. RESULTS AND DISCUSSION", then "2.1 …"). Kept here with empty text; `dropStrayHeadings`
       // below keeps it if the next section's number is its child, and drops it (a stray) if not. Never one
-      // that sits in the end matter.
+      // whose text is not read (the references, the first end-matter heading).
       sections.push({ heading, canonical, page, text: "" });
     }
     held = [];
@@ -1778,13 +3056,15 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   // one block — so a caption's second line can be told from the prose that
   // resumes under the figure by the space above it.
   const pitch = linePitch(read);
-  const isMarginPrint = marginPrintOf(lines, body);
   // The Received / Revised / Accepted / Published box: two or more consecutive
   // lines that each open with one of those words and a date are the journal's
   // furniture, wherever they stand (on the owner's paper, inside the
   // Introduction). One such line is a sentence or a note, and stays.
   const dated = read.map((line) => PUBLICATION_DATE.test(line.text.trim()));
   const inDateBox = (i: number) => dated[i] && (dated[i - 1] === true || dated[i + 1] === true);
+  // P12-51 (O8): the text of a figure's panels is the figure's, not a section's: out of the prose and never a heading.
+  const skipped = read.map((line, i) => isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i));
+  const figureText = figureTextOf(read, skipped, body, pitch, furniture);
   // P7-18 (F2): where the body's last numbered section stands. A heading that is end matter only
   // after the body ("Funding": some templates print it on page 1, under the abstract) ends the
   // argument only past this line; a paper with no numbered section has no such line, and there
@@ -1792,7 +3072,7 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
   let lastNumbered = -1;
   for (let i = read.length - 1; i >= 0 && lastNumbered < 0; i--) {
     const line = read[i];
-    if (isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i)) continue;
+    if (skipped[i] || figureText.has(i)) continue;
     const head = headingOf(line, body);
     // A numbered end-matter heading ("6. Funding", "7. Acknowledgements") is not the body's.
     if (head && sectionNumberOf(head) && !endsTheArgument(head, canonicalizeHeading(head), true)) lastNumbered = i;
@@ -1801,8 +3081,8 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
 
   for (let i = 0; i < read.length; i++) {
     const line = read[i];
-    if (isFurniture(line, furniture) || isMarginPrint(line) || inDateBox(i)) continue;
-    const caption = captionOf(line);
+    if (skipped[i] || figureText.has(i)) continue;
+    const caption = captionAt(read, i, pitch, body, furniture, (j) => skipped[j] || figureText.has(j));
     if (caption) {
       // A caption belongs to the figure pool, not to the prose it interrupts.
       // It is as many lines as it was printed on: the lines under it at the
@@ -1810,15 +3090,9 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       // returns. The old reading took the first line and stopped, and a
       // caption arrived as "Medical image analysis pipeline showing
       // preprocessing," — a clause with its sentence cut off.
-      const rest: string[] = [];
-      let previous = line;
-      while (i + 1 < read.length) {
-        const nextLine = read[i + 1];
-        if (!continuesCaption(previous, nextLine, pitch, body, furniture)) break;
-        rest.push(nextLine.text.trim());
-        previous = nextLine;
-        i++;
-      }
+      const end = captionEnd(read, i, pitch, body, furniture);
+      const rest = read.slice(i + 1, end + 1).map((l) => l.text.trim());
+      i = end;
       const full = foldLines([caption.caption ?? "", ...rest], vocab).replace(/\s+/g, " ").trim().slice(0, CAPTION_MAX);
       if (full.length > 0) figureCaptions.push({ ...caption, caption: full });
       continue;
@@ -1830,20 +3104,46 @@ export function buildOutline(pages: PdfPageText[], prior: Gutter | null = gutter
       } else {
         flush();
         heading = next;
+        headingSize = line.size;
         page = line.page;
+        opensTail = false;
       }
       lastHeading = line;
       canonical = canonicalizeHeading(heading);
       // The argument ends at the references, the acknowledgements or an
       // appendix, or at the end matter a journal prints after it (associated
       // content, author information, data availability, funding past the
-      // body ...); what follows is apparatus.
-      if (endsTheArgument(heading, canonical, lastNumbered >= 0 && i > lastNumbered)) done = true;
+      // body ...); what follows is apparatus. P12-51 (O5): the first of them
+      // closes the argument and the outline reads on; a heading after it that
+      // names an argument part or another end-matter part opens a section of
+      // its own. P12-62: so does the first of them, as a note: a data
+      // statement, the acknowledgements, a supporting-information line open
+      // their sections and their text is read; the references, and an appendix
+      // (the bulky apparatus), stay out as they do later.
+      const ends = endsTheArgument(heading, canonical, lastNumbered >= 0 && i > lastNumbered);
+      if (!tail && ends) {
+        tail = true;
+        opensTail = true;
+      }
+      if (tail) {
+        // The heading that closed the argument ends it by definition, and is named like the ones after it.
+        let part = tailPartOf(heading, canonical, opensTail || ends);
+        if (part === "appendix") appendix = true;
+        else if (part === "argument" && appendix) part = null;
+        if (part !== null) {
+          reading = part === "note" || part === "argument";
+          resumed = part === "argument";
+        } else {
+          reading = resumed;
+        }
+        // An end-matter part no bucket names ("Associated content") is the apparatus bucket's, as its notes are.
+        if (part === "note" && canonical === "body") canonical = "acknowledgments";
+      }
       continue;
     }
     lastHeading = null;
-    if (done) continue;
-    if (title && line.page === 1 && line.size > body.size * 1.25) continue;
+    if (!reading) continue;
+    if (title && line.page === 1 && titleSizeOf(line) > body.size * 1.25) continue;
     const equation = equationOf(line);
     if (equation) {
       // The equation keeps its place in the prose as a marker paragraph,

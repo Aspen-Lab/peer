@@ -252,7 +252,7 @@ describe("export", () => {
         "As [@muller2021theory] argues.",
         "",
         "- one",
-        "    - two",
+        "  - two", // P12: portable two-space nesting, unchanged item and order.
         "1. first",
         "2. second",
         "- [x] check",

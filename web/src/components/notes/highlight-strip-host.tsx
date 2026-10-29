@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useLayoutEffect, useSyncExternalStore, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import { create } from "zustand";
-import { MODAL_OVER_PAGE } from "@/components/reader/explain-dock";
+import { DOCK_TOP_PX, MODAL_OVER_PAGE } from "@/components/reader/explain-dock";
 import type { ViewRect } from "@/components/reader/paper-body";
 import { MARGIN_INSET_PX, clearOfHeaders, readCardObstacles, type CardObstacles, type Clearance } from "@/components/reader/selection-toolbar";
 import { placeInMargin, useMarginRect, type MarginRect } from "@/lib/reader/margin";
@@ -88,7 +88,8 @@ export function stripStanding(input: {
   const { mark, viewport, margin } = input;
   const box = input.box ?? mark;
   // The mark's extent: the box, and the first line too (the box is the whole of the mark, so it holds it, but a caller's box may be the first line's alone).
-  if (Math.max(box.bottom, mark.bottom) <= margin.top || Math.min(box.top, mark.top) >= viewport.height) return null;
+  const bottomDock = (margin as MarginRect & { presentation?: string }).presentation === "bottom";
+  if (Math.max(box.bottom, mark.bottom) <= (bottomDock ? DOCK_TOP_PX : margin.top) || Math.min(box.top, mark.top) >= viewport.height) return null;
   const inner = Math.max(0, margin.width - 2 * MARGIN_INSET_PX);
   const room = Math.max(STRIP_MIN_WIDTH_PX, inner);
   const oneRow = room >= STRIP_ONE_ROW_WIDTH_PX;
@@ -99,7 +100,18 @@ export function stripStanding(input: {
 }
 
 /** The first line of the highlight's mark on the page now (its own mark and the nested parts of it, in reading order), or null when it is not drawn. */
-export function markLine(doc: Pick<Document, "querySelector">, id: string): ViewRect | null {
+type MarkDocument = Pick<Document, "querySelector"> & Partial<Pick<Document, "querySelectorAll">>;
+
+function markRects(doc: MarkDocument, id: string): ViewRect[] {
+  const marks = doc.querySelectorAll?.(highlightMarks(id));
+  const drawable = marks ? Array.from(marks).filter((mark) => typeof mark.getClientRects === "function") : [];
+  if (drawable.length > 0) return drawable.flatMap((mark) => Array.from(mark.getClientRects()).map((box) => ({ left: box.left, top: box.top, right: box.right, bottom: box.bottom })));
+  const mark = doc.querySelector(highlightMarks(id));
+  return mark ? Array.from(mark.getClientRects()) : [];
+}
+
+export function markLine(doc: MarkDocument, id: string, band?: { top: number; bottom: number }): ViewRect | null {
+  if (band) return markRects(doc, id).find((box) => box.bottom > band.top && box.top < band.bottom && box.right > box.left) ?? null;
   const mark = doc.querySelector(highlightMarks(id));
   if (!mark) return null;
   const box = mark.getClientRects()[0] ?? mark.getBoundingClientRect();
@@ -110,7 +122,12 @@ export function markLine(doc: Pick<Document, "querySelector">, id: string): View
  * The whole of the highlight's mark on the page now: from the top of its first piece's first line (a nested part comes before the mark's own words) to the bottom
  * of the last line of its own mark, or null when it is not drawn. P11-27 rule 3: the strip stays while any of it is in the window. The numbers are copied.
  */
-export function markBox(doc: Pick<Document, "querySelector">, id: string): ViewRect | null {
+export function markBox(doc: MarkDocument, id: string): ViewRect | null {
+  if (typeof doc.querySelectorAll === "function") {
+    const rects = markRects(doc, id);
+    if (!rects.length) return null;
+    return { left: Math.min(...rects.map((r) => r.left)), top: Math.min(...rects.map((r) => r.top)), right: Math.max(...rects.map((r) => r.right)), bottom: Math.max(...rects.map((r) => r.bottom)) };
+  }
   const first = doc.querySelector(highlightMarks(id));
   if (!first) return null;
   const own = doc.querySelector(`mark[data-highlight="${id.replace(/["\\]/g, "\\$&")}"]`) ?? first;
@@ -184,7 +201,7 @@ export function HighlightStripHost({ paperId }: { paperId: string }): ReactEleme
   const place = useCallback((): void => {
     const current = useHighlightStrip.getState().id;
     if (current === null || margin === null) return;
-    const line = markLine(document, current);
+    const line = markLine(document, current, { top: DOCK_TOP_PX, bottom: window.innerHeight });
     const box = line === null ? null : markBox(document, current);
     const cards: CardObstacles = line === null || typeof document.querySelectorAll !== "function" ? { headers: [], controls: [], words: [] } : readCardObstacles(document);
     const next =

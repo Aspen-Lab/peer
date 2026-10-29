@@ -1,3 +1,4 @@
+// P12-06: native disabled assertions re-aimed to guarded, keyboard-reachable aria-disabled.
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -44,7 +45,7 @@ describe("QuestionField — what it shows", () => {
     expect(html.match(/<textarea/g)).toHaveLength(1);
     expect(html).not.toContain("<input");
     expect(html.match(/<button/g)).toHaveLength(1);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Submit<\/button>/);
+    expect(html).toMatch(/<button[^>]*aria-disabled="true"[^>]*>Submit<\/button>/);
     expect(html).not.toContain(ASK.chips.gist);
     // Examples wait for focus and are a dropdown (question-field.bar.test.tsx).
     expect(render(PAPER, EXAMPLES)).not.toContain(ASK.fromProfile);
@@ -189,7 +190,7 @@ describe("QuestionField — the line is a growing textarea (P7-13, R11a)", () =>
 // too — it settles the ledger.
 describe("QuestionField — the Submit button (P7-13, R11c)", () => {
   const AT = "2026-10-05T00:00:00.000Z";
-  const button = (html: string) => /<button[^>]*>Submit<\/button>/.exec(html)?.[0];
+  const button = (html: string) => /<button[^>]*>Submit(?:ted)?<\/button>/.exec(html)?.[0];
   beforeEach(() => {
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
     useProfileStore.setState({ profile: { ...defaultProfile } });
@@ -197,7 +198,7 @@ describe("QuestionField — the Submit button (P7-13, R11c)", () => {
 
   // P10-03 re-aim of "is not in the quiet box: no question, nothing focused": the bar always has its control.
   it("is in the bar even when it is empty, inert", () => {
-    expect(button(render())).toContain('disabled=""');
+    expect(button(render())).toContain('aria-disabled="true"');
   });
 
   // P10-03 re-aim of "shows under the lines of a question, before the hint and the chips": it is inside the
@@ -235,14 +236,14 @@ describe("QuestionField — the Submit button (P7-13, R11c)", () => {
   it("is enabled while the typed question is not the settled one", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
 
-    expect(button(render())).not.toContain('disabled=""');
+    expect(button(render())).toContain('aria-disabled="false"');
   });
 
   it("is disabled when the cleaned item equals the settled set", () => {
     useReadingQuestionsStore.getState().set(PAPER, ["How does LCO degrade?"], false, AT);
     useReadingQuestionsStore.getState().settle(PAPER);
 
-    expect(button(render())).toContain('disabled=""');
+    expect(button(render())).toContain('aria-disabled="true"');
   });
 
   it("shows with no key: it settles the ledger, which needs none", () => {

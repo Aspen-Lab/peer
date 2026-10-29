@@ -106,8 +106,12 @@ describe("globals.css — the text steps scale the reading text inside the wrapp
   it("puts every size-setting rule under `.reading-scaled`, so nothing outside the wrappers moves", () => {
     const scaled = css.match(/font-size:\s*calc\([^;}]*--reading-scale[^;}]*\)/g) ?? [];
     expect(scaled).toHaveLength(rules.size);
-    // and none of them is a bare selector: every rule block that reads --reading-scale starts with `.reading-scaled`
+    // The ruled centre cap scales its measure; every font rule remains scoped.
     for (const block of css.matchAll(/([^{}]+)\{[^{}]*--reading-scale[^{}]*\}/g)) {
+      if (block[1].trim() === ".reader-centre-inner") {
+        expect(block[0].slice(block[0].indexOf("{") + 1, -1).trim().replace(/\s+/g, " ")).toBe("max-width: calc(38em * var(--reading-scale, 1)); margin-inline: auto;");
+        continue;
+      }
       expect(block[1].trim().startsWith(".reading-scaled"), `unscoped rule: ${block[1].trim().slice(0, 60)}`).toBe(true);
     }
   });
@@ -115,7 +119,8 @@ describe("globals.css — the text steps scale the reading text inside the wrapp
   it("keeps the scale to the three wrappers of reader-layout.tsx (the left pane, the cards and the legend are outside)", () => {
     const layout = stripComments(read("../components/reader/reader-layout.tsx"));
     expect(layout.match(/className="reading-scaled[ "]/g) ?? []).toHaveLength(3);
-    expect(layout).toMatch(/<div id=\{COMMON_ID\} className="reading-scaled /);
+    // P12-15: the stable common key preserves native Range ancestry through resize.
+    expect(layout).toMatch(/<div key="common" id=\{COMMON_ID\} className="reading-scaled scroll-mt-20" style=\{readingScaleStyle\}>\{p\.common\}<\/div>/);
     expect(layout).toMatch(/<div className="reading-scaled" style=\{readingScaleStyle\}>\{p\.words\}<\/div>/);
     expect(layout).toMatch(/<div className="reading-scaled" style=\{readingScaleStyle\}>\{p\.additions\}<\/div>/);
   });

@@ -14,7 +14,7 @@
 
 import type { DigestProvider } from "@/lib/llm/providers/types";
 import type { ExtractedFigureCaption } from "./html-text";
-import { pdfFigureUrl } from "./reading";
+import { pdfFigureUrl, pictureNumber } from "./reading";
 import type { PaperReport, PaperReportKeyResult } from "./report";
 import { bareUploadId } from "./upload-id";
 import {
@@ -43,18 +43,45 @@ function tokenize(text: string): string[] {
     .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
 }
 
+/**
+ * The numbering a figure label or citation belongs to (P12-56, R14a): the paper's own ("Fig. 3"), the Extended Data's
+ * ("Extended Data Fig. 3") or a supplementary file's ("Fig. S3", "Supplementary Fig. 3"). Three numberings, three
+ * different figures: a number is never read across them.
+ */
+type Space = "main" | "extended" | "supplementary";
+
+const SUPPLEMENTARY_PREFIX = /^supp(?:lementary|lemental)?\.?(?:\s+information)?$/i;
+const spaceOf = (prefix: string | undefined, supplementaryMark: string | undefined): Space =>
+  supplementaryMark || (prefix && SUPPLEMENTARY_PREFIX.test(prefix.trim())) ? "supplementary" : prefix ? "extended" : "main";
+
+/** The numbering of a label as a caption or the binder prints it ("Fig 3", "Extended Data Figure 3", "Figure S3"). */
+function labelSpace(label: string): Space {
+  const m = /^\s*(extended\s+data|supp(?:lementary|lemental)?\.?(?:\s+information)?)?\s*(?:fig(?:ure)?\.?\s*)?(S)?\d/i.exec(label);
+  return m ? spaceOf(m[1], m[2]) : "main";
+}
+
+const SPACE_PREFIX: Record<Space, string> = { main: "", extended: "Extended Data ", supplementary: "Supplementary " };
+
+/**
+ * The first figure the text cites that the PDF itself can print: "Fig. 3" or "Extended Data Fig. 3". A citation of a
+ * supplementary figure ("Fig. S3", "Supplementary Fig. 3") is another file's and is passed over, as "Fig. S3" always
+ * was; it is never read as "Fig. 3".
+ */
 function extractExplicitFigureLabel(text: string): string | null {
   if (!text) return null;
-  const match = text.match(/\b(fig(?:ure)?\.?\s*(\d+)([a-z]?))\b/i);
-  if (!match) return null;
-  const suffix = (match[3] ?? "").toUpperCase();
-  return `Figure ${match[2]}${suffix}`;
+  const citation = /\b(?:(extended\s+data|supp(?:lementary|lemental)?\.?(?:\s+information)?)\s+)?fig(?:ure)?\.?\s*(S?)(\d+)([a-z]?)\b/gi;
+  for (const match of text.matchAll(citation)) {
+    const space = spaceOf(match[1], match[2]);
+    if (space === "supplementary") continue;
+    return `${SPACE_PREFIX[space]}Figure ${match[3]}${(match[4] ?? "").toUpperCase()}`;
+  }
+  return null;
 }
 
 function normalizeLabel(label: string): string {
   const match = label.match(/(\d+)([a-z]?)/i);
   if (!match) return label.trim();
-  return `Figure ${match[1]}${(match[2] ?? "").toUpperCase()}`.trim();
+  return `${SPACE_PREFIX[labelSpace(label)]}Figure ${match[1]}${(match[2] ?? "").toUpperCase()}`.trim();
 }
 
 function findCaptionByLabel(
@@ -281,18 +308,6 @@ interface PdfSource {
 }
 
 /**
- * The number a "Figure 3" / "Fig. 3" label names, or null where the figure
- * route has nothing to look for: "Figure S3", "Figure 3b", "Figure IV",
- * "Table 1". The same rule as `pictureNumber` in `reading.ts`, which is private
- * there; `figure-binding.route-url.test.ts` pins that the two offer a route URL
- * for exactly the same labels.
- */
-function pictureNumber(label: string): number | null {
-  const m = /^fig(?:ure)?\.?\s*([1-9]\d{0,2})$/i.exec(label.trim());
-  return m ? Number(m[1]) : null;
-}
-
-/**
  * Whether the figure-image route can find this id's PDF: a canonical upload id
  * (answered to its owner only), or one of the two public ids `fetchPaperById`
  * looks up. A paper from another source (`semantic_scholar:`, `pubmed:`, …)
@@ -302,10 +317,33 @@ function routeCanFind(paperId: string): boolean {
   return bareUploadId(paperId) !== null || /^(?:arxiv|openalex):\S/.test(paperId);
 }
 
-/** The figure number a caption names, as the pool reads it ("Figure 3" -> "3", "Fig. 3b" -> "3b"). */
+/**
+ * The figure number a caption names, as the pool reads it ("Figure 3" -> "3", "Fig. 3b" -> "3b"); an Extended Data
+ * figure's is `ed3` (the route's token for it), and a supplementary figure's `s3`, which no route token equals.
+ */
 function namedFigure(caption: string | null): string | null {
-  const m = caption?.match(/\bfig(?:ure)?\.?\s*(\d+)([a-z]?)/i);
-  return m ? `${m[1]}${m[2].toLowerCase()}` : null;
+  const m = caption?.match(/\b(?:(extended\s+data|supp(?:lementary|lemental)?\.?(?:\s+information)?)\s+)?fig(?:ure)?\.?\s*(S?)(\d+)([a-z]?)/i);
+  if (!m) return null;
+  const space = spaceOf(m[1], m[2]);
+  return `${space === "extended" ? "ed" : space === "supplementary" ? "s" : ""}${m[3]}${m[4].toLowerCase()}`;
+}
+
+/**
+ * The pool's entries that are figures of the numbering `label` is in: an Extended Data label is looked up among the
+ * entries whose caption opens "Extended Data Fig.", and a label of the paper's own numbering among the rest of them,
+ * so that `pickFigureForCaption`, which reads a bare "Fig. 3" out of either, cannot hand "Extended Data Fig. 3" the
+ * picture of "Fig. 3" or the other way round. A supplementary label has no number the pool reads (`pickFigureForCaption`
+ * finds none in "Figure S3"), so it keeps the whole pool and the words decide, as before.
+ */
+function poolOfSpace(pool: FigurePool, label: string): FigurePool {
+  const wanted = labelSpace(label);
+  // A caption the document prints as "Figure S3" is paired with the pool's picture by its words, as it always was.
+  if (wanted === "supplementary") return pool;
+  const entries = pool.entries.filter((e) => {
+    const m = e.caption?.match(/^\s*(extended\s+data|supp(?:lementary|lemental)?\.?(?:\s+information)?)\s+fig/i);
+    return (m ? spaceOf(m[1], undefined) : "main") === wanted;
+  });
+  return entries.length === pool.entries.length ? pool : { ...pool, entries };
 }
 
 /**
@@ -344,8 +382,10 @@ function resolveImage(
   pdf?: PdfSource | null,
 ): AttachedImage {
   if (!pool || pool.entries.length === 0) return NO_IMAGE;
+  const ofSpace = poolOfSpace(pool, matchedLabel);
+  if (ofSpace.entries.length === 0) return NO_IMAGE;
   const entry: FigurePoolEntry | null = pickFigureForCaption(
-    pool,
+    ofSpace,
     matchedCaption,
     matchedLabel,
   );

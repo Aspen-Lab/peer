@@ -40,7 +40,7 @@ function termsProblems(source: string): string[] {
 
   // P10-04 (review 3.1): the map is in the layout's own `map` slot — under the strip, under both tabs — not in
   // the additions; the page mounts it exactly once.
-  const mapSlot = text.indexOf("map={hasBody && shownMap ?");
+  const mapSlot = text.indexOf("map={hasBody && reviewedMap ?"); // Re-aimed (P12-53): `reviewedMap` is `shownMap` with the structure review laid over it.
   const mapMount = text.indexOf("<ReadingMapView");
   const additions = text.indexOf("additions={");
   if (mapMount < 0) problems.push("the map is no longer mounted");
@@ -76,7 +76,7 @@ describe("the page's defined-terms wiring (P3-01; P10-02: no strip)", () => {
   });
 
   it("would notice the map moved back into the additions, under one tab only", () => {
-    const mapLine = /\s*map=\{hasBody && shownMap \? <ReadingMapView [^\n]*\n/.exec(source)![0];
+    const mapLine = /\s*map=\{hasBody && reviewedMap \? <ReadingMapView [^\n]*\n/.exec(source)![0];
     const moved = source.replace(mapLine, "\n").replace("<PaperBody reading={reading}", `{reading.map && <ReadingMapView map={reading.map} />}\n<PaperBody reading={reading}`);
 
     expect(moved).not.toBe(source);

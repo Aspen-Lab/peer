@@ -27,7 +27,7 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // (`reader-shell.tsx`) takes the whole window: today's 760px column below it, full-bleed from it — no cap, no side padding (the
       // panes have their own), and no A / A step in the width: the centre is the window less the panes. The `spread` width above stays
       // for the loading mat and the error states.
-      reader: "max-w-[760px] lg:max-w-none lg:px-0",
+      reader: "max-w-none [&]:px-0",
       content: "max-w-[820px]",  // home column, /privacy, /saved
       // The feed board. It held 1280 at every width above 1280, so a 1920
       // screen spent a third of itself on margins and still dealt three
@@ -52,7 +52,7 @@ export const pageContainer = cva("mx-auto w-full px-6", {
   },
   // The reader's top stays 16px from 1024 (`lg`), not from xl: the shell is the page from there, and its pinned pane sticks at 4rem =
   // the 48px masthead + this 16px, so the stuck position is the first-paint position and the pane never slides.
-  compoundVariants: [{ width: "reader", rhythm: "reader", class: "lg:pt-4" }],
+  compoundVariants: [{ width: "reader", rhythm: "reader", class: "has-[.reader-shell]:pt-4" }],
   defaultVariants: {
     width: "content",
     rhythm: "page",

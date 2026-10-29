@@ -62,7 +62,7 @@ export interface SurfaceApi {
   key: (e: KeyboardEvent<HTMLElement>, id: string) => void;
   paste: (e: ClipboardEvent<HTMLElement>, id: string) => void;
   caret: (id: string, el: HTMLElement) => void;
-  blur: (id: string) => void;
+  blur: (id: string, next?: EventTarget | null) => void;
   /** Text is about to be typed: true when the owner wrote it itself (a mark toggled with nothing selected). */
   typing: (id: string, data: string) => boolean;
 }
@@ -82,6 +82,7 @@ export function Surface({
   placeholder,
   className,
   autoFocus = false,
+  formatShortcut = false,
 }: {
   id: string;
   text: string;
@@ -91,6 +92,8 @@ export function Surface({
   placeholder: string;
   className?: string;
   autoFocus?: boolean;
+  /** Only the block editor supplies a Format toolbar; plain fields do not. */
+  formatShortcut?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   /** The source the DOM was last drawn from, or last wrote. */
@@ -196,7 +199,9 @@ export function Surface({
       onKeyDown={(e) => api.current.key(e, id)}
       onPaste={(e) => api.current.paste(e, id)}
       onSelect={(e) => api.current.caret(id, e.currentTarget)}
-      onBlur={() => api.current.blur(id)}
+      onBlur={(e) => api.current.blur(id, e.relatedTarget)}
+      aria-keyshortcuts={formatShortcut ? "Alt+F10" : undefined}
+      title={formatShortcut ? "Alt+F10 moves between this block and Format." : undefined}
       className={cn(
         className,
         "block min-h-[1lh] w-full whitespace-pre-wrap break-words bg-transparent p-0 outline-none",

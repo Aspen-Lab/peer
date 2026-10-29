@@ -31,7 +31,7 @@ import { useFeedStore } from "@/store/feed";
 import { RouteGlyph } from "@/components/shell/icons";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { EXPLAIN, RAIL } from "@/components/reader/copy";
-import { useExplainOffer, useHighlightOffer } from "@/lib/reader/explain-offer";
+import { useExplainOffer, useHighlightOffer, useNoteOffer } from "@/lib/reader/explain-offer";
 import { paperNav } from "@/lib/reader/paper-nav";
 import { readerActions } from "@/lib/reader/reader-keys";
 import {
@@ -129,11 +129,13 @@ function Rail({
   const positioned = railHasPosition(nav);
   const explaining = useExplainOffer();
   const highlighting = useHighlightOffer();
+  const noting = useNoteOffer();
   // P11-13: a selection on offer — the cells are the rail, one share of the width each.
-  if (explaining || highlighting) {
+  if (explaining || highlighting || noting) {
     return (
-      <div className={`grid h-14 items-center gap-2 px-3 ${explaining && highlighting ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className="grid h-14 grid-flow-col auto-cols-fr items-center gap-2 px-3">
         {explaining && <ExplainCell />}
+        {noting && <NoteCell />}
         {highlighting && <HighlightCell />}
       </div>
     );
@@ -201,4 +203,12 @@ export function HighlightCell() {
       Highlight
     </button>
   );
+}
+
+export function NoteCell() {
+  return <button type="button" data-selection-note-ask="" onMouseDown={(event) => event.preventDefault()}
+    onClick={() => readerActions()?.note?.()}
+    className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-border-strong bg-surface px-2 font-mono text-caption text-heading transition-colors hover:bg-surface-hover">
+    Take notes
+  </button>;
 }

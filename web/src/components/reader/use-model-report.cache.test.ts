@@ -52,7 +52,7 @@ import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { emptyReport, type PaperReport } from "@/lib/papers/report";
 import { buildReportKey, REPORT_CACHE_BUDGET_CHARS, rememberReport, useModelReport, withoutFigureData } from "./use-model-report";
 
-const STORAGE_KEY = "peer-paper-report-v7";
+const STORAGE_KEY = "peer-paper-report-v9";
 /** The ceiling the brief names for the cache's budget (rule 2: "≤ 1.5 M characters"). */
 const CEILING = 1_500_000;
 /** The origin's quota in the stub: A's P9-W3 measured 5.24 M characters in its browser. */
@@ -183,6 +183,24 @@ afterEach(() => {
 // ── rule 1 ────────────────────────────────────────────────────────────
 
 describe("the report cache holds no figure by value (P9-48 rule 1)", () => {
+  it("P12-28: an old persisted report cannot reopen a stale derived figure URL; the normal request refreshes it once", async () => {
+    const old = report("old-engine", { proposal: "/api/papers/arxiv%3A2610.00001/figure-image?page=1&fig=4" });
+    localStorage.setItem("peer-paper-report-v7", JSON.stringify({ [keyFor()]: { report: old, savedAt: Date.now() } }));
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+  });
+
+  it("P12-28: a version 8 report refreshes once after figure geometry changes", async () => {
+    const old = report("old-geometry", { proposal: "/api/papers/arxiv%3A2610.00001/figure-image?page=1&fig=4&v=2" });
+    localStorage.setItem("peer-paper-report-v8", JSON.stringify({ [keyFor()]: { report: old, savedAt: Date.now() } }));
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+    await open();
+    expect(net.streamCalls).toHaveLength(1);
+  });
+
   it("stores no data: URL — the proposal's, a result's, or a figure two places share", () => {
     const shared = dataUrl(300_000);
     rememberReport(keyFor(), report("r", { proposal: shared, results: [shared, dataUrl(200_000), null] }));

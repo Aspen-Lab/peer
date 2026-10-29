@@ -513,7 +513,7 @@ describe("scan 5 — every route that can reach a model is behind requireAiReque
   });
 
   it("reports the guarded count, so a DROP is visible rather than silent", () => {
-    // A's standing tally as an assertion. Eight routes carry the guard today: the
+    // A's standing tally as an assertion. Nine routes carry the guard today: the
     // feed, the digest, the figure resolver, the paper report, the test-digest
     // diagnostic and, since P3-02, P3-03 and P4-01, the three reading-helper routes
     // that ask a model about one paper ("Explain this?", the paragraph gists and
@@ -535,6 +535,12 @@ describe("scan 5 — every route that can reach a model is behind requireAiReque
     // The count moves from five to eight BECAUSE three spending routes were added
     // behind the guard, and the routes are named so a later drop shows as a name,
     // not only a number.
+    //
+    // P12-53 (§1h.428), RE-AIMED: `papers/[id]/structure` — the model's review of the
+    // rules' structure asks the reader's model once per paper, gated
+    // `requireAiRequest("paper-structure", 20)` in the same place as the gist route's.
+    // The count moves from eight to nine BECAUSE a ninth spending route was added behind
+    // the guard.
     expect(guarded).toEqual([
       "src/app/api/digest/route.ts",
       "src/app/api/feed/route.ts",
@@ -542,6 +548,7 @@ describe("scan 5 — every route that can reach a model is behind requireAiReque
       "src/app/api/papers/[id]/explain/route.ts",
       "src/app/api/papers/[id]/paragraph-guide/route.ts",
       "src/app/api/papers/[id]/plain/route.ts",
+      "src/app/api/papers/[id]/structure/route.ts",
       "src/app/api/papers/report/route.ts",
       "src/app/api/test-digest/route.ts",
     ]);
