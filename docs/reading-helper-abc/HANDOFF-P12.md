@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-29T01:36Z
+AS OF        2026-10-29T01:50Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.488   NEXT RULING §1h.489   NEXT ITEM ID P12-97   NEXT FREE PORT 4248
+LAST RULING  §1h.489   NEXT RULING §1h.490   NEXT ITEM ID P12-97   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) reader B4-r2 (blind, pack r2/a92/pack) ∥ A P12-96 Theme B round 5 (head 45760755); QUEUE: readers B5 → B P12-93; DONE: Theme A, Theme C0, Theme C1; STOP LINE waits on Theme B (round 4: director 97.92 ×3, B4-r1 97.92 ×3); OWNER: none open (tab 18 px hit area reported)
+RUNNING      (max 2, §1h.443) A P12-96 Theme B round 5 (head a6c0761b) ∥ B P12-93 (figure text as paragraphs); QUEUE: readers B5; DONE: Theme A, Theme C0, Theme C1; Theme B round 4 of record 97.92 ×3 (count 1); OWNER: none open (tab 18 px hit area reported)
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -773,6 +773,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-29T01:16Z | manager (Claude) | §1h.487: A P12-92 round 4 landed; E6 void; director 97.92 ×3; reader B4-r1 started | evidence: P12-92-A deliverable, r2/a92/pack | next: B4-r1, C P12-95
 
 - 2026-10-29T01:36Z | manager (Claude) | §1h.488: B4-r1 97.92 ×3; C P12-95 landed (45760755); A P12-96 round 5 started | evidence: r4/readers/B-r1.md, mgr/mutv/u95*.out, mgr/gates-V.log | next: B4-r2, A P12-96
+
+- 2026-10-29T01:50Z | manager (Claude) | §1h.489: Theme B round 4 of record 97.92 ×3 (B4-r1, B4-r2); count 1; B P12-93 started | evidence: r4/readers/B-r1.md, B-r2.md | next: A P12-96, B P12-93
 
 ---
 

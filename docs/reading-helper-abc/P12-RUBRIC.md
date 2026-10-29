@@ -247,3 +247,7 @@ P5 5 / 5 exact on the web tree of `d657933e`. Consecutive 100 % rounds: P1 2, P2
 ## Dated amendment, ruling §1h.487 (2026-10-29): the W3 text column as ruled
 
 The centre's right padding has been 20 px since §1h.478, and at W3 the text column is 468 px. That was accepted at a mean of about 58 characters per line: 57.96 on invented text, and 57.9 to 58.7 on P1–P3. A measure at that ruled width is not a defect under B2. A column narrower than the ruled one is.
+
+## Scores of record — Theme B round 4 (§1h.489)
+
+On `d2d2b8b4`, readers B4-r1 and B4-r2 (blind, pack `r2/a92/pack`) give P1 97.92, P2 97.92, P3 97.92 (12 / 12 PASS; E2 0.25 each). The director's reading agrees. Consecutive rounds at the target (Theme B): 1.
