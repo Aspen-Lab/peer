@@ -239,3 +239,7 @@ From round 5, B1's W3 cell (853 × 480) passes only if an outward drag of the ma
 ## Scores — Theme C1 phase 7 (§1h.485)
 
 On `d657933e`: P5 5 / 5 exact. Consecutive passes: P1 2, P2 2, P3 3, P4 5, P5 1, P6 2. Phase 8 (P5 × 5) decides C1.
+
+## Scores of record — Theme C1 phase 8 (§1h.486): DONE
+
+P5 5 / 5 exact on the web tree of `d657933e`. Consecutive 100 % rounds: P1 2, P2 2, P3 3, P4 5, P5 2, P6 2. **Theme C1 meets the stop line.**

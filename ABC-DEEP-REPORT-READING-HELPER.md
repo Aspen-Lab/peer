@@ -2799,6 +2799,38 @@ The model stub the walks use answers against parts 1 and 2. On a paper where tho
 
 **Count:** P5 has 1 consecutive pass. **Phase 8** (P5 × 5) is the second, within the 47 calls left.
 
+### §1h.486 — 2026-10-29 — C1 PHASE 8: P5 5/5 EXACT; THEME C1 DONE (EVERY PAPER 100 % IN TWO CONSECUTIVE ROUNDS); C P12-95 STARTED
+
+**A P12-57 phase 8** (report landed `4fd88787`, two commits; P5 × 5 on `f406f3e2`, whose web tree equals `d657933e`'s; 10 calls, **243 of 280 spent**; no quota answer; key hits 0; no four-word run of the papers).
+
+**C1, scored by the manager: P5 5 / 5 exact.**
+- All five runs fell back as `unusable` / `all-refused`: 10 `confident-draft` and 4 `same-role` refusals.
+- No look was taken, and no row moved.
+- The fallback is not shown on the page; the reader sees the map, which is the draft. Status varies from phase to phase while the map does not, as phase 7 showed on the same tree.
+
+**Theme C1 is DONE.** Every paper is 100 % in two consecutive scored rounds, per §1h.482's count and §1h.483's lower bound:
+
+| Paper | Phases |
+|---|---|
+| P1 | 2, 6 |
+| P2 | 2, 6 |
+| P3 | 2, 3, 6 |
+| P4 | 2 to 6 |
+| P5 | 7, 8 |
+| P6 | 5, 6 |
+
+The C1 harness stops here. 37 of the 280 calls are left unspent.
+
+**What C1 now means for the product, said plainly to the owner:**
+- With a key, on these six papers, the review changes nothing. Their drafts are already exact, and the review may now act only where the rules are unsure, with a second look that agrees.
+- Its value on a paper whose rules are unsure is not measured by these six papers. That is a limit of the test set, not a finding.
+
+**The stop line now waits only on Theme B:**
+- round 4 (A P12-92, walking);
+- round 5 after C P12-95 (the owner's O1).
+
+C P12-95 starts now in the freed slot.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -3109,7 +3141,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | PHASE 8 RUNNING — phase 7 report fcc83d20: P5 5/5; phase 8 P5 × 5 (47 calls left of 280) | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | DONE — phase 8 report 4fd88787: P5 5/5; C1 DONE (§1h.486); 243 of 280 calls | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
@@ -3146,7 +3178,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-91 | DONE — landed e56d6a40; manager mutations 3 / 8 red; 12,381 tests | Tier 1: no set_role setup from the first non-setup part; a split at a part's own edge is a no-op | invented fixtures; own mutations; gates | checkpoint P12-91-C-<UTC>.md | briefs/P12-91.md; §1h.477 |
 | P12-92 | IN_PROGRESS — A (Sonnet), scratch p12/r2/a92, port 4247 | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
 | P12-94 | DONE — landed 84534087; manager mutations 14 / 4 red; 12,534 tests; subset test 30,000 cases | Tier 1: no correction against a high / medium part; a low part's correction needs a look that agrees | invented fixtures; differential subset test; own mutations; gates | checkpoint P12-94-C-<UTC>.md | briefs/P12-94.md; §1h.482 |
-| P12-95 | QUEUED — C (Sonnet), scratch p12/c95 | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
+| P12-95 | IN_PROGRESS — C (Sonnet), scratch p12/c95 | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
