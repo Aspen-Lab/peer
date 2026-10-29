@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-29T03:19Z
+AS OF        2026-10-29T03:22Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
 LAST RULING  §1h.491   NEXT RULING §1h.492   NEXT ITEM ID P12-98   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-96 Theme B round 5 (head a6c0761b) ∥ A P12-57 phase 9 (C1 spot check P3–P6 × 2, head c30f46ca); QUEUE: readers B5; DONE: Theme A, Theme C0, Theme C1 (spot check running); Theme B count 1; OWNER: none open (tab 18 px hit area reported)
+RUNNING      PAUSED BY THE OWNER ("pause work", 2026-10-29T03:22Z). Nothing runs; the hourly clock trig_01MkdKP21BdT8TbcyZpB4umB is DISABLED. TO RESUME: re-enable the clock only if the owner asks; then (1) A P12-96 Theme B round 5 on a6c0761b — worktree r2/a96/wt (partial deliverable 2078b312, pack 1673 files, uploads r2/a96/uploads): resume from its pack; (2) A P12-57 phase 9 (C1 spot check P3–P6 × 2 on 6d94b66f; worktree a57/wt9; 0 runs done, 37 calls left of 280); (3) readers B5. DONE: Theme A, Theme C0, Theme C1 (spot check pending after C P12-97); Theme B count 1 (round 4 97.92 ×3).
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -779,6 +779,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-29T02:40Z | manager (Claude) | §1h.490: B P12-93 landed; C P12-97 started (R-F, R-B, R-A); done themes to be re-verified after it | evidence: P12-93-B deliverable | next: A P12-96, C P12-97
 
 - 2026-10-29T03:19Z | manager (Claude) | §1h.491: C P12-97 landed (c30f46ca); C0 100 ×6; P1–P2 text identical; no prose lost; phase 9 started | evidence: mgr/out/P*-pre97/post97.json, mgr/diff97.py, mgr/mutv/u97*.out, mgr/gates-V.log | next: A P12-96, phase 9
+
+- 2026-10-29T03:22Z | manager (Claude) | PAUSED on the owner's word: A P12-96 (round 5, partial) and A P12-57 phase 9 (0 runs) stopped; dev servers and browsers stopped; .next deleted; hourly clock disabled | evidence: r2/a96/pack, a57/wt9 | next: wait for the owner
 
 ---
 
