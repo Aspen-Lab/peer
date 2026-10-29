@@ -275,7 +275,7 @@ describe("the reading budget and the drag floor, as the shell fits them (P12-95)
     expect(open().look().vars).toMatchObject({ "--margin-w": "281px" });
   });
 
-  it("1366 at the largest step: a first visit has the left pane at 276 and the margin at 280; a saved margin of 390 is kept, the left pane (not saved) giving way", () => {
+  it("1366 at the largest step: a first visit has the left pane at 276 and the margin at 280; a saved margin of 390 is kept and the left pane keeps its 276", () => {
     useReadingPrefsStore.setState({ scaleIndex: 7 });
     env.win.innerWidth = 1366;
     expect(open().look().vars).toMatchObject({ "--left-pane-w": "276px", "--margin-w": "280px" });

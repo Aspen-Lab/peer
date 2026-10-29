@@ -188,17 +188,20 @@ function squeeze(order: readonly PaneName[], wantLeft: number, wantMargin: numbe
  *   - With no width saved the fit is exactly what it was: the budget, the margin first and then the left pane.
  *   - Whether the left pane can be a column at all is the budget's question, whatever was saved (`railMinimumWidth`, which layout
  *     registers, does not move either): a saved width never turns a rail into a pinned pane.
- *   - Pinned, with a width saved (either) and a drag floor under the budget: the floor is the drag floor, and the panes the reader did
- *     not set give way first, so a dragged pane is the last to give back what it was dragged to. A caller with no drag floor gets the
- *     old answer, saved widths or not.
- *   - As the rail, only the margin is on the page: the floor is the drag floor if the margin was saved, the budget if only the left
- *     pane was (a width the page does not show takes nothing).
+ *   - As the rail only the margin is on the page: the floor is the drag floor if the margin was saved, the budget if only the left pane
+ *     was (a width the page does not show takes nothing).
+ *   - Pinned, with a width saved and a drag floor under the budget, the floor is the drag floor, and the pane the reader did not set
+ *     gives way first, so a dragged pane is the last to give back what it was dragged to. That pane is never wanted wider than the
+ *     window gave it before (`unsavedKeeps`): releasing a divider does not move the other pane back out to its default. A caller with
+ *     no drag floor gets the old answer, saved widths or not.
  */
 export function fitPanes(request: PaneRequest): PaneFit {
   const viewport = finite(request.viewport) ? request.viewport : SHELL_MIN_VIEWPORT_PX;
   const gutters = 2 * DIVIDER_PX;
-  const wantLeft = clampPane("left", finite(request.left) ? request.left : defaultPanePx("left", viewport));
-  const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : MARGIN_DEFAULT_PX);
+  const defaultLeft = clampPane("left", defaultPanePx("left", viewport));
+  const defaultMargin = clampPane("margin", MARGIN_DEFAULT_PX);
+  const wantLeft = clampPane("left", finite(request.left) ? request.left : defaultLeft);
+  const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : defaultMargin);
   const wantPinned = request.leftPinned ?? true;
   const centreMinimum = request.centreMinimum ?? CENTRE_MIN_PX;
   const dragMinimum = Math.min(request.centreDragMinimum ?? centreMinimum, centreMinimum);
@@ -208,11 +211,25 @@ export function fitPanes(request: PaneRequest): PaneFit {
   if (wantPinned) {
     const atBudget = squeeze(["margin", "left"], wantLeft, wantMargin, centreMinimum, viewport);
     if (atBudget.over <= 0) {
-      // The margin gives first, as ever — unless only the margin was saved: then the left pane, which the reader did not set, goes before it.
-      const order: PaneName[] = savedMargin && !savedLeft ? ["left", "margin"] : ["margin", "left"];
-      const lowered = (savedLeft || savedMargin) && dragMinimum < centreMinimum;
-      const { left, margin } = lowered ? squeeze(order, wantLeft, wantMargin, dragMinimum, viewport) : atBudget;
-      return { left, leftTrack: left, margin, centre: viewport - left - margin - gutters, pinned: true, forced: false };
+      let fit = atBudget;
+      if ((savedLeft || savedMargin) && dragMinimum < centreMinimum) {
+        // The pane the reader did not set gives way first, to the drag floor, but is wanted no wider than it was: its width on a first visit, or
+        // what the budget left it with the saved width — whichever is more. (Both saved: both are the reader's, the margin gives first.)
+        let left = wantLeft;
+        let margin = wantMargin;
+        let order: PaneName[] = ["margin", "left"];
+        if (savedMargin !== savedLeft) {
+          const first = squeeze(["margin", "left"], defaultLeft, defaultMargin, centreMinimum, viewport);
+          if (savedMargin) {
+            left = Math.max(first.left, atBudget.left);
+            order = ["left", "margin"];
+          } else {
+            margin = Math.max(first.margin, atBudget.margin);
+          }
+        }
+        fit = squeeze(order, left, margin, dragMinimum, viewport);
+      }
+      return { left: fit.left, leftTrack: fit.left, margin: fit.margin, centre: viewport - fit.left - fit.margin - gutters, pinned: true, forced: false };
     }
   }
 

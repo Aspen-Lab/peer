@@ -413,15 +413,74 @@ describe("fitPanes — a width the reader saved may take the centre down to the 
     expect(fit.centre).toBe(readingCentreDragMinimum(1.6));
   });
 
-  it("the panes the reader did not set give way first: a margin dragged out at 1100 takes the left pane's squeeze, not the other way", () => {
+  it("a margin dragged out at 1100 is kept, and the left pane stays at the 296 the first visit gave it", () => {
     // 1100 at the default step, nothing saved: 320 + 360 + 500 + 24 is 104 over; the margin gives 80, the left pane 24.
     const first = fitPanes({ viewport: 1100, ...floors(1) });
     expect([first.left, first.margin, first.centre]).toEqual([296, 280, 500]);
     const { max } = paneRange("margin", { viewport: 1100, other: first.leftTrack, centreMinimum: readingCentreDragMinimum(1) });
     expect(max).toBe(346);
-    // Saved at 346: the left pane (320 wanted) gives 24 to the floor of 434; the margin keeps what it was dragged to.
+    // Saved at 346: the margin takes the centre's room down to the drag floor of 434; the left pane does not spring back to its 320.
     const fit = fitPanes({ viewport: 1100, margin: max, ...floors(1) });
     expect([fit.left, fit.margin, fit.centre, fit.pinned]).toEqual([296, 346, 434, true]);
+  });
+
+  it("a saved margin that the window cannot give whole is given back by the pane the reader did not set first, to its minimum, then by the margin", () => {
+    // 1440 at the largest step, 560 saved: 320 + 560 + 24 + 676 is 140 over the window; the left pane gives 80 (to 240), the margin 60 (to 500).
+    expect(fitPanes({ viewport: 1440, margin: 560, ...floors(1.6) })).toMatchObject({ left: 240, margin: 500, centre: 676 });
+  });
+
+  it("1093 (a laptop at 125 %): saving the margin moves nothing but the margin - the left pane stays at the 289 the first visit gave it", () => {
+    const first = fitPanes({ viewport: 1093, ...floors(1) });
+    expect([first.left, first.margin, first.centre]).toEqual([289, 280, 500]);
+    // Committed where it already was: nothing moves (the squeezed left pane does not spring back to its 320).
+    expect(fitPanes({ viewport: 1093, margin: 280, ...floors(1) })).toEqual(first);
+    // Widened 20 px: the margin takes the 20 px from the centre; the left pane stays.
+    expect(fitPanes({ viewport: 1093, margin: 300, ...floors(1) })).toMatchObject({ left: 289, margin: 300, centre: 480 });
+    // To the end of its range: 1093 - 289 - 24 - 434 = 346.
+    expect(fitPanes({ viewport: 1093, margin: 346, ...floors(1) })).toMatchObject({ left: 289, margin: 346, centre: 434 });
+  });
+
+  it("a left pane the reader narrowed gives the room back to the margin as before; one the reader widened leaves the margin where it was", () => {
+    // 1100, default step: 240 saved: the margin springs back from its 280 to 336 (the budget's answer, as it was); the drag floor changes nothing.
+    expect(fitPanes({ viewport: 1100, left: 240, ...floors(1) })).toMatchObject({ left: 240, margin: 336, centre: 500 });
+    // 1200: the first visit has the margin at 356; a left pane dragged to the end of its range, 1200 - 356 - 24 - 434 = 386, leaves it there.
+    expect(fitPanes({ viewport: 1200, ...floors(1) })).toMatchObject({ left: 320, margin: 356, centre: 500 });
+    expect(fitPanes({ viewport: 1200, left: 386, ...floors(1) })).toMatchObject({ left: 386, margin: 356, centre: 434 });
+  });
+
+  it("releasing a divider moves only that pane: the width a pane is shown at, saved, changes nothing; widening one leaves the other where it was; narrowing one never shrinks the other", () => {
+    for (const scale of STEPS) {
+      for (let viewport = 853; viewport <= 1920; viewport += 3) {
+        if (viewport < railMinimumWidth(scale)) continue;
+        const first = fitPanes({ viewport, ...floors(scale) });
+        for (const pane of ["margin", "left"] as PaneName[]) {
+          if (pane === "left" && !first.pinned) continue;
+          const other = pane === "margin" ? "left" : "margin";
+          const where = `${pane} at ${viewport}, step ${scale}`;
+          expect(fitPanes({ viewport, [pane]: first[pane], ...floors(scale) }), where).toEqual(first);
+          const range = paneRange(pane, { viewport, other: pane === "margin" ? first.leftTrack : first.margin, centreMinimum: readingCentreDragMinimum(scale) });
+          for (const width of [range.min, Math.round((range.min + range.max) / 2), range.max]) {
+            const after = fitPanes({ viewport, [pane]: width, ...floors(scale) });
+            if (width >= first[pane]) expect(after[other], `${where} to ${width}`).toBe(first[other]);
+            else expect(after[other], `${where} to ${width}`).toBeGreaterThanOrEqual(first[other]);
+          }
+        }
+      }
+    }
+  });
+
+  it("a saved pane has at least what the reading budget alone would have given it: the drag floor takes nothing from a width the reader set", () => {
+    for (const scale of STEPS) {
+      for (let viewport = 853; viewport <= 1920; viewport += 11) {
+        if (viewport < railMinimumWidth(scale)) continue;
+        for (const saved of [{ left: 400 }, { margin: 450 }, { left: 240 }, { margin: 280 }, { left: 480 }, { margin: 560 }]) {
+          const request = { viewport, leftPinned: true, ...saved };
+          const old = fitPanesBefore({ ...request, centreMinimum: readingCentreMinimum(scale) });
+          const now = fitPanes({ ...request, ...floors(scale) });
+          for (const pane of ["left", "margin"] as PaneName[]) if (pane in saved) expect(now[pane], `${viewport} at step ${scale}, ${JSON.stringify(saved)}`).toBeGreaterThanOrEqual(old[pane]);
+        }
+      }
+    }
   });
 
   it("a dragged pane is kept at the end of its range, wherever the window, the step and the other saved width stand (both dividers)", () => {
