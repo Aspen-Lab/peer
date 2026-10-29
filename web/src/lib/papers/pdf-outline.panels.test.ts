@@ -300,3 +300,49 @@ describe("a run of panel lines is beside a caption when only non-body lines lie 
     expect(textOf(pages)).toBe(PROSE);
   });
 });
+
+// ── R-F with R-A and R-B: the foot is not fused to the paragraph above once the figure text is gone ──────────
+
+describe("a foot whose folio alternates sides stays out of the paragraph above it (P12-97, R-F with R-A and R-B)", () => {
+  const FOOT = "Elmstead Journal of Shore Notes 12 (2026)";
+  const footOf = (n: number): string => (n % 2 === 1 ? `${FOOT} | ${340 + n}` : `${340 + n} | ${FOOT}`);
+  const word = (n: number) => String.fromCharCode(97 + (n % 26)) + String.fromCharCode(97 + Math.floor(n / 26));
+  /** Sixteen lines of prose, each different from every other page's, in four paragraphs of four lines. */
+  const proseOf = (n: number): Row[] =>
+    Array.from({ length: 16 }, (_, i) =>
+      r(`Row ${word(n)}${word(i)} counts the tidal pools ${i % 4 === 3 ? "once more." : "on the shore"}`, "body", i % 4 === 0 ? 28 : 14),
+    );
+
+  /** Twelve pages, the foot on the first eight (four odd, four even), none on the last four. Page 2 ends on a sentence that
+   *  goes on over the page break, with a figure's tick strings and its caption between that sentence and the foot. */
+  const paper = (): PdfPageText[] => {
+    const pages: PdfPageText[] = [];
+    for (let n = 1; n <= 12; n += 1) {
+      const rows: Row[] = n === 1 ? [r("A Paper About Shore Notes", "title"), r("1 Introduction", "num", 20)] : [];
+      rows.push(...proseOf(n).slice(0, n === 2 ? 12 : 16));
+      if (n === 2) {
+        rows.push(
+          r("The films were cycled for four hundred rounds at a rate that", "body", 28),
+          ...TICKS.slice(0, 3).map((t, i) => r(t, "small", i === 0 ? 120 : 14)),
+          r("Figure 3: Counts of the tidal pools by month.", "body", 30),
+        );
+      }
+      const laid = page(n, rows, n === 1 ? 780 : 760);
+      pages.push({ page: n, items: n <= 8 ? [...laid.items, item(footOf(n), { y: 40 })] : laid.items });
+    }
+    // The sentence goes on at the head of page 3.
+    pages[2].items.unshift(item("was held fixed for every film in the series.", { y: 770 }));
+    return pages;
+  };
+
+  it("joins the sentence across the page break, with neither the figure's text nor the foot in it", () => {
+    const text = textOf(paper());
+    expect(text).toContain("at a rate that was held fixed for every film in the series.");
+    expect(text).not.toContain("Elmstead Journal");
+    expect(text).not.toMatch(/0\.0 0\.5|\b34\d\b/);
+  });
+
+  it("leaves the foot of every page out of the prose", () => {
+    expect(textOf(paper()).match(/Journal of Shore/g) ?? []).toHaveLength(0);
+  });
+});
