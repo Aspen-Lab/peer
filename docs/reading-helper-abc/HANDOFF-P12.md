@@ -94,12 +94,12 @@ Ruling numbers continue the state file's §1h series (next free: **§1h.183**). 
 ## §5 Current state — always true (update it with every log entry)
 
 ```
-AS OF        2026-10-28T23:30Z
+AS OF        2026-10-29T00:05Z
 BRANCH       update-on-paper-digest; draft PR Aspen-Lab/peer#37; manager checkout /home/user/peer (cloud)
 HELD BY      Claude (Opus), session_017DGPdGJqr95t3pMMcspXjE (§1h.419); only writer of the state file
-LAST RULING  §1h.482   NEXT RULING §1h.483   NEXT ITEM ID P12-95   NEXT FREE PORT 4248
+LAST RULING  §1h.483   NEXT RULING §1h.484   NEXT ITEM ID P12-95   NEXT FREE PORT 4248
 RUBRIC       P12-RUBRIC.md + §1h.420–§1h.424; stop: A, B on P1–P3 and C0 on P1–P6 ≥97.25 in two consecutive rounds; C1 100% once a key; P4–P6 held out until the rules land; counts 0/0
-RUNNING      (max 2, §1h.443) A P12-92 Theme B round 4 (head d2d2b8b4; resumed after the restart) ∥ C P12-94 (the review only on low parts, with an agreeing look); QUEUE: A P12-57 phases 7–8 (P5 × 5 twice; ceiling 280) → readers B4 → B P12-93 (figure text as paragraphs); DONE: Theme A, Theme C0; C1 waits on P5; OWNER: O1
+RUNNING      (max 2, §1h.443) A P12-92 Theme B round 4 (head d2d2b8b4) ∥ A P12-57 phase 7 (P5 × 5, head 84534087); QUEUE: phase 8 (P5 × 5) → readers B4 (spawn text r4/readers/spawn-B.txt) → B P12-93 (figure text as paragraphs); DONE: Theme A, Theme C0; C1 waits on P5; OWNER: O1
 THEN         A P12-37 (Theme A) ∥ A P12-38 (Theme B) → 3 blind readers per theme → director → score → B/C by mechanism
 OWNER'S PDFS P1–P6 (uploads in the manager's session; P4–P6 held out); upload UI only; never commit or quote
 CLOCK        trig_01MkdKP21BdT8TbcyZpB4umB, Haiku, "20 * * * *", enabled, read back 06:23Z; prompt: at most two subagents (§1h.443)
@@ -761,6 +761,8 @@ When a usage limit or a crash stops you mid-unit, write a **PARTIAL** entry firs
 - 2026-10-28T22:57Z | manager (Claude) | §1h.482: restart; phase 6 scored from dumps (P1–P4, P6 5/5; P5 2/5); review only where the rules are unsure; C P12-94; ceiling 280 | evidence: mgr/sealed-c1/*-p6run*.json, a57/out6/summary.jsonl | next: C P12-94, A P12-92
 
 - 2026-10-28T23:30Z | manager (Claude) | two container restarts (about 23:05Z and 23:25Z); A P12-92 (pack 443 files, no deliverable yet) and C P12-94 (rule 2 committed c6b2ac59, rule 1 uncommitted in c94/wt) both resumed by message from their worktrees; both told to commit early | evidence: r2/a92/pack, c94/wt | next: C P12-94, A P12-92
+
+- 2026-10-29T00:05Z | manager (Claude) | §1h.483: C P12-94 landed (84534087); no move_start in any recorded run; phase 7 started | evidence: mgr/mutv/u94a.out, u94b.out, mgr/gates-V.log | next: phase 7, A P12-92
 
 ---
 
