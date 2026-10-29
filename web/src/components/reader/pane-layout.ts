@@ -192,8 +192,8 @@ function squeeze(order: readonly PaneName[], wantLeft: number, wantMargin: numbe
  *     was (a width the page does not show takes nothing).
  *   - Pinned, with a width saved and a drag floor under the budget, the floor is the drag floor, and the pane the reader did not set
  *     gives way first, so a dragged pane is the last to give back what it was dragged to. That pane is never wanted wider than the
- *     window gave it before (`unsavedKeeps`): releasing a divider does not move the other pane back out to its default. A caller with
- *     no drag floor gets the old answer, saved widths or not.
+ *     window gave it before: releasing a divider does not move the other pane back out to its default. A caller with no drag floor
+ *     (absent, not a number, or not under the budget) gets the old answer, saved widths or not.
  */
 export function fitPanes(request: PaneRequest): PaneFit {
   const viewport = finite(request.viewport) ? request.viewport : SHELL_MIN_VIEWPORT_PX;
@@ -204,7 +204,7 @@ export function fitPanes(request: PaneRequest): PaneFit {
   const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : defaultMargin);
   const wantPinned = request.leftPinned ?? true;
   const centreMinimum = request.centreMinimum ?? CENTRE_MIN_PX;
-  const dragMinimum = Math.min(request.centreDragMinimum ?? centreMinimum, centreMinimum);
+  const dragMinimum = finite(request.centreDragMinimum) ? Math.min(request.centreDragMinimum, centreMinimum) : centreMinimum;
   const savedLeft = finite(request.left);
   const savedMargin = finite(request.margin);
 

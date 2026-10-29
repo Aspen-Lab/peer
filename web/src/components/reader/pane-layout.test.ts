@@ -358,6 +358,15 @@ describe("fitPanes — the default layout does not change (P12-95 rule 3)", () =
     expect(fit.centre - 32).toBe(468);
   });
 
+  it("a drag floor that is not a number, or not under the budget, is no drag floor: the old answer with widths saved too", () => {
+    for (const centreDragMinimum of [Number.NaN, Number.POSITIVE_INFINITY, undefined, 500, 900]) {
+      for (const saved of [{ margin: 347 }, { left: 400, margin: 450 }]) {
+        const request = { viewport: 853, leftPinned: true, centreMinimum: 500, ...saved };
+        expect(fitPanes({ ...request, centreDragMinimum }), `${centreDragMinimum} ${JSON.stringify(saved)}`).toEqual(fitPanesBefore(request));
+      }
+    }
+  });
+
   it("with nothing saved, the answer is the old one at every window from 853 to 1920 (half pixels too), every step, every pin", () => {
     for (const scale of STEPS) {
       for (let viewport = 853; viewport <= 1920; viewport += 0.5) {
@@ -404,7 +413,7 @@ describe("fitPanes — a width the reader saved may take the centre down to the 
     expect(fitPanes({ viewport: 853, margin: max, centreMinimum: readingCentreMinimum(1) }).margin).toBe(281);
   });
 
-  it("853 at the largest step is the band, not the shell (railMinimumWidth 1138); at 1366 the largest step's margin is kept to the floor of 676", () => {
+  it("1366 at the largest step: a margin dragged to the end of its range is kept, and the centre is the drag floor, 676", () => {
     const first = fitPanes({ viewport: 1366, ...floors(1.6) });
     expect(first).toMatchObject({ pinned: true, centre: 786 });
     const { max } = paneRange("margin", { viewport: 1366, other: first.leftTrack, centreMinimum: readingCentreDragMinimum(1.6) });
