@@ -2,6 +2,7 @@ import { createElement, type RefObject } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PaneDivider, dragWidth, DRAG_THRESHOLD_PX } from "./pane-divider";
+import { RAIL_PX, readingCentreDragMinimum, readingCentreMinimum } from "./pane-layout";
 
 // P11-10 rule 2 (B P11-01 §2.6; ruling §1h.113 (a)): the separator between two panes — its markup (a `role="separator"` with the three
 // aria values) and the pure arithmetic of a drag. The pointer and keyboard paths are in `pane-divider.flow.test.tsx`.
@@ -88,5 +89,28 @@ describe("dragWidth — the width a drag has reached", () => {
 
   it("the threshold is the lightbox's 4 px", () => {
     expect(DRAG_THRESHOLD_PX).toBe(4);
+  });
+});
+
+// P12-95 rule 2 (the owner's O1; ruling §1h.484): the shell gives each divider the drag floor as the centre's minimum, so at 853 px (a rail,
+// the margin beside the centre) the margin divider has a range, where the reading budget left it 1 px.
+describe("PaneDivider at 853 px with the drag floor for its room (P12-95)", () => {
+  const margin = (centreMinimum: number, value = 281) =>
+    render({ pane: "margin", value, label: "Resize margin", controls: "reader-margin", variable: "--margin-w", room: { viewport: 853, other: RAIL_PX, centreMinimum } });
+
+  it("reports 280 to 347 at the default step, where the reading budget gave 280 to 281", () => {
+    const html = margin(readingCentreDragMinimum(1));
+    expect(html).toContain('aria-valuemin="280"');
+    expect(html).toContain('aria-valuemax="347"');
+    expect(margin(readingCentreMinimum(1))).toContain('aria-valuemax="281"');
+  });
+
+  it("a drag reaches 347 and no further, and an inward drag reaches 280", () => {
+    const room = { viewport: 853, other: RAIL_PX, centreMinimum: readingCentreDragMinimum(1) };
+    expect(dragWidth("margin", 281, -500, 1, room)).toBe(347);
+    expect(dragWidth("margin", 281, -66, 1, room)).toBe(347);
+    expect(dragWidth("margin", 281, -30, 1, room)).toBe(311);
+    expect(dragWidth("margin", 281, 500, 1, room)).toBe(280);
+    expect(dragWidth("margin", 281, -500, 1, { ...room, centreMinimum: readingCentreMinimum(1) })).toBe(281);
   });
 });

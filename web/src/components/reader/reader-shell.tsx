@@ -111,7 +111,7 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true, sid
   const prefs = useSyncExternalStore(useReadingPrefsStore.subscribe, useReadingPrefsStore.getState, useReadingPrefsStore.getInitialState);
   const scale = READING_SCALE_STEPS[prefs.scaleIndex];
   // Two floors for the centre (P12-95, the owner's O1): the window keeps the reading budget for a first visit; a width the reader saved may
-  // take it down to the drag floor.
+  // take it down to the drag floor, and so may a drag - both dividers' ranges (`aria-valuemax`, End, the pointer) end there.
   const centreMinimum = readingCentreMinimum(scale);
   const centreDragMinimum = readingCentreDragMinimum(scale);
   const viewport = measuredWidth ?? windowWidth;
@@ -334,7 +334,7 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true, sid
         <PaneDivider
           pane="left"
           value={fit.left}
-          room={{ viewport, other: fit.margin, centreMinimum }}
+          room={{ viewport, other: fit.margin, centreMinimum: centreDragMinimum }}
           target={grid}
           variable="--left-pane-w"
           label="Resize left panel"
@@ -352,7 +352,7 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true, sid
       {side ? <PaneDivider
         pane="margin"
         value={fit.margin}
-        room={{ viewport, other: fit.leftTrack, centreMinimum }}
+        room={{ viewport, other: fit.leftTrack, centreMinimum: centreDragMinimum }}
         target={grid}
         variable="--margin-w"
         label="Resize margin"

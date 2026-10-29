@@ -313,6 +313,35 @@ describe("the keyboard path", () => {
   });
 });
 
+// P12-95 rule 2 (the owner's O1; ruling §1h.484): the keys and the pointer reach the end of the range the drag floor gives.
+describe("at 853 px with the drag floor for the centre's minimum (P12-95)", () => {
+  const W3 = { pane: "margin", value: 281, variable: "--margin-w", room: { viewport: 853, other: 48, centreMinimum: 434 } } as const;
+
+  it("End commits 347 (the reading budget gave 281), Home 280, an arrow 16 px", async () => {
+    const s = await stand(W3);
+    s.on("onKeyDown")(key("End"));
+    s.on("onKeyDown")(key("Home"));
+    s.on("onKeyDown")(key("ArrowLeft"));
+    expect(s.commits).toEqual([347, 280, 297]);
+    const budget = await stand({ ...W3, room: { viewport: 853, other: 48, centreMinimum: 500 } });
+    budget.on("onKeyDown")(key("End"));
+    expect(budget.commits).toEqual([]);
+  });
+
+  it("a pointer dragged far to the left stops at 347 and commits it, the variable following frame by frame", async () => {
+    const s = await stand(W3);
+    s.on("onPointerDown")(pointer(s.element, "pointerdown", { clientX: 800 }));
+    s.on("onPointerMove")(pointer(s.element, "pointermove", { clientX: 760 }));
+    runFrames();
+    expect(s.writes).toHaveBeenLastCalledWith("--margin-w", "321px");
+    s.on("onPointerMove")(pointer(s.element, "pointermove", { clientX: 100 }));
+    runFrames();
+    expect(s.writes).toHaveBeenLastCalledWith("--margin-w", "347px");
+    s.on("onPointerUp")(pointer(s.element, "pointerup", { clientX: 100 }));
+    expect(s.commits).toEqual([347]);
+  });
+});
+
 describe("a double-click", () => {
   it("is the pane's default width: 320 for the left pane, 360 from 1536, 360 for the margin", async () => {
     const left = await stand({ value: 450 });

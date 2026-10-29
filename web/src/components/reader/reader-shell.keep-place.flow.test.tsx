@@ -306,13 +306,16 @@ describe("a separator dragged by the mouse", () => {
     expect(farthest).toBeLessThan(1);
   });
 
-  it("P12-07: margin drag respects the new476px text floor", () => {
+  // Re-aimed (P12-95 rule 2, the owner's O1; ruling §1h.484): was "P12-07: margin drag respects the new476px text floor" - a -80 px drag stopped at
+  // the 476 px of the reading budget. A divider's range now ends at the drag floor (434 px of centre at the default step, which this page's model
+  // reads as a 410 px column: its insets are 24), so the drag has to go further (-160 px) to meet it, and meets 410.
+  it("P12-95: margin drag respects the drag floor (the 410 px column of this model)", () => {
     const page = open();
     readAt(page.page, "paper-section-5-p2", 0.5);
     const before = place(page.page);
-    const farthest = dragged(page, "margin", -80, before);
+    const farthest = dragged(page, "margin", -160, before);
     expect(page.page.top()!.id).toBe(before.id);
-    expect(env.page.columnPx).toBe(476);
+    expect(env.page.columnPx).toBe(410);
     expect(farthest).toBeLessThan(1);
   });
 
@@ -378,13 +381,15 @@ describe("a separator moved by its keys", () => {
     expect(Math.abs(held(page.page, before))).toBeLessThan(1);
   });
 
-  it("P12-07: End preserves place at the476px text floor", () => {
+  // Re-aimed (P12-95 rule 2): was "P12-07: End preserves place at the476px text floor" - the left divider's End stopped at the reading budget's 476 px
+  // column. It now stops at the drag floor: 1280 - 360 - 24 - 434 = 462 for the pane, a 410 px column in this model.
+  it("P12-95: End preserves place at the drag floor (the 410 px column of this model)", () => {
     const page = open();
     readAt(page.page, "paper-section-5-p2", 0.5);
     const before = place(page.page);
     stagedRuntime.event(() => page.look().left().on("onKeyDown")(key("End")));
     env.page.frame();
-    expect(env.page.columnPx).toBe(476);
+    expect(env.page.columnPx).toBe(410);
     expect(page.page.top()!.id).toBe(before.id);
     expect(Math.abs(held(page.page, before))).toBeLessThan(1);
   });

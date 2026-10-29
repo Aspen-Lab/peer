@@ -25,6 +25,7 @@ import { useMarginStore } from "@/lib/reader/margin";
 import { useReaderPanesStore } from "@/store/reader-panes";
 import { useReadingPrefsStore } from "@/store/reading-prefs";
 import { PaneDivider } from "./pane-divider";
+import { fitPanes, paneRange, readingCentreDragMinimum, stepPane, type PaneName, type PaneRoom } from "./pane-layout";
 import { PEEK_CLOSE_MS, PEEK_OPEN_MS, ReaderShell } from "./reader-shell";
 
 // P11-10 rule 3 (B P11-01 §2.3, §2.6, §6; ruling §1h.113 (a), D6): the left pane's three states — pinned, rail, peek — and what moves
@@ -243,17 +244,20 @@ describe("a window too narrow for the remembered widths", () => {
     expect(useReaderPanesStore.getState()).toMatchObject({ leftWidth: 400, marginWidth: 450 });
   });
 
-  it("hands each divider the scaled centre budget as well as the other pane", () => {
+  // Re-aimed (P12-95 rule 2, the owner's O1; ruling §1h.484): was "hands each divider the scaled centre budget" - `centreMinimum: 500`, the
+  // reading budget at the default step. A divider's range is what a reader may DRAG to, so its room is the drag floor, 434 at this step.
+  it("hands each divider the scaled drag floor as well as the other pane", () => {
     useReaderPanesStore.setState({ leftPinned: true });
     const [left, margin] = open().look().dividers;
-    expect(left.props.room).toEqual({ viewport: 1440, other: 360, centreMinimum: 500 });
-    expect(margin.props.room).toEqual({ viewport: 1440, other: 320, centreMinimum: 500 });
+    expect(left.props.room).toEqual({ viewport: 1440, other: 360, centreMinimum: 434 });
+    expect(margin.props.room).toEqual({ viewport: 1440, other: 320, centreMinimum: 434 });
   });
 
+  // Re-aimed (P12-95 rule 2): the same, 500 to 434.
   it("the margin's room is the rail's 48 px when the left pane is the rail", () => {
     useReaderPanesStore.setState({ leftPinned: false });
     const [margin] = open().look().dividers;
-    expect(margin.props.room).toEqual({ viewport: 1440, other: 48, centreMinimum: 500 });
+    expect(margin.props.room).toEqual({ viewport: 1440, other: 48, centreMinimum: 434 });
   });
 });
 
@@ -277,6 +281,33 @@ describe("the reading budget and the drag floor, as the shell fits them (P12-95)
     expect(open().look().vars).toMatchObject({ "--left-pane-w": "276px", "--margin-w": "280px" });
     useReaderPanesStore.setState({ marginWidth: 390 });
     expect(open().look().vars).toMatchObject({ "--left-pane-w": "276px", "--margin-w": "390px" });
+  });
+});
+
+// P12-95 rule 2: both dividers' ranges let the centre go down to the drag floor, never below - at the step the reader reads at.
+describe("the dividers' ranges end at the drag floor (P12-95 rule 2)", () => {
+  afterEach(() => useReadingPrefsStore.setState({ scaleIndex: 2 }));
+  const rangeOf = (divider: { props: Record<string, unknown> }) => paneRange(divider.props.pane as PaneName, divider.props.room as PaneRoom);
+
+  it("853 at the default step: the margin divider's range is 280 to 347 (it was 280 to 281), End reaches 347 and leaves the centre 434", () => {
+    env.win.innerWidth = 853;
+    const [margin] = open().look().dividers;
+    expect(rangeOf(margin)).toEqual({ min: 280, max: 347 });
+    const end = stepPane("margin", 281, "End", false, margin.props.room as PaneRoom);
+    expect(end).toBe(347);
+    expect(fitPanes({ viewport: 853, margin: end!, centreMinimum: 500, centreDragMinimum: 434 }).centre).toBe(434);
+  });
+
+  it("1366 at the largest step: the margin divider's range ends at 390 (the left pane at its 276), the left divider's at 386 (the margin at its 280): the centre 676 either way", () => {
+    useReadingPrefsStore.setState({ scaleIndex: 7 });
+    env.win.innerWidth = 1366;
+    const [left, margin] = open().look().dividers;
+    expect(left.props.pane).toBe("left");
+    expect(rangeOf(margin)).toEqual({ min: 280, max: 390 });
+    expect(rangeOf(left)).toEqual({ min: 240, max: 386 });
+    expect(1366 - 24 - 276 - 390).toBe(readingCentreDragMinimum(1.6));
+    expect(1366 - 24 - 386 - 280).toBe(readingCentreDragMinimum(1.6));
+    expect(readingCentreDragMinimum(1.6)).toBe(676);
   });
 });
 
