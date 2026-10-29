@@ -2952,6 +2952,43 @@ The engine's boxes cover 297 of the 316 figure blocks. R-Box needs an engine pre
 
 → **C P12-97** now, beside A P12-96.
 
+### §1h.491 — 2026-10-29 — C P12-97 LANDED (FIGURE TEXT AND THE RUNNING FOOT LEAVE THE PARAGRAPHS); C0 100 ×6 UNCHANGED, P1–P2 TEXT IDENTICAL, NO PROSE LOST; C1 SPOT CHECK (PHASE 9)
+
+**C P12-97 landed** (`c30f46ca`; 8 commits).
+- **The rules:** R-F (the foot's key ignores the folio's side; 40 % of the pages with text), R-B (a small line up to 60 characters) and R-A (the stretch to the caption).
+- **A test-only commit:** a sentence across a page break with a figure and a foot between.
+- **`UPLOAD_CONCEPT_EXTRACTION_VERSION` 13 → 14:** the stored body is keyed by it. `FIGURE_EXTRACTION_REVISION` stays: no rule uses the engine.
+- **On the manager's ruling, `PaperReading.version` 17 → 18** (three files), as 51d62eb5 did, so a cached reading is read again once. Three pins were re-aimed 17 → 18, named.
+- No other existing test moved.
+
+**The manager's verification on V:**
+- **Own mutations,** each restored with sha256 equal:
+  - R-A's stretch off: 10 red;
+  - R-B's 60 back to 25: 4 red;
+  - R-F's fold off: 4 red.
+- **Full gates:**
+  - tsc 0;
+  - lint 0 errors / 144 warnings;
+  - 663 files + 3 skipped, 12,597 tests + 3 skipped (+32), 0 failed;
+  - build 0.
+- **The owner's papers (§1h.490's re-verification), with the map dumps before and after (`mgr/out/P*-pre97.json`, `P*-post97.json`; `mgr/diff97.py`):**
+  - **C0 is unchanged: P1–P6 100 each.** Every part is right, and every row's role, kind and level is identical before and after on all six papers.
+  - **P1 and P2: 0 words changed.** P1–P3 are Theme A's papers. On P3, 4 removed runs (226 words); none was prose.
+  - **P3–P6:**
+
+    | Paper | Paragraphs | Short unended blocks | Words removed |
+    |---|---|---|---|
+    | P3 | 94 → 42 | 46 → 1 | 226 |
+    | P4 | 164 → 67 | 96 → 10 | 441 |
+    | P5 | 261 → 131 | 111 → 3 | 507 |
+    | P6 | 239 → 210 | 29 → 10 | 174 |
+
+    - Inserted words: only 14 tick numbers on P4, a fragment that now stands alone.
+  - **Every removed run that a prose heuristic flagged was read by the manager** (16 runs; 5 or more lowercase words of 3+ letters). Each one is a figure's own text (axis titles, legends, diagram labels) or a running head. None is a sentence of the paper.
+- **So Theme A and C0 stand.** On P1 and P2 the text is identical. On P3 only figure fragments left; Theme A's paragraph units are the paper's prose, and its prose is untouched.
+
+**C1:** the drafts' paragraph ordinals change on P3–P6. **A P12-57 phase 9: P3, P4, P5 and P6 × 2 each** on `c30f46ca`, within the 37 calls left of 280. A damaged run reopens C1.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -3262,7 +3299,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-54 | DONE — C (Sonnet); landed (R13b) with the revision at 5 | R13b: one-page figure calls up to 27,000,000 bytes | invented-input test; own mutation; gates | checkpoint P12-54-C-<UTC>.md; manager verifies | briefs/P12-54.md; §1h.429 |
 | P12-55 | DONE — C (Sonnet); landed (R11a, R12a) | R11a ceilings with grid clustering; R12a strokes honour the clip | invented-input tests; 5 re-aimed budget tests named; own mutations; gates | checkpoint P12-55-C-<UTC>.md; manager verifies | briefs/P12-55.md; §1h.429 |
 | P12-56 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | R14a Extended Data; R6b the line before; R15a the bar | invented-input tests; own mutations; gates | checkpoint P12-56-C-<UTC>.md; manager verifies | briefs/P12-56.md; §1h.429 (d), §1h.431 |
-| P12-57 | DONE — phase 8 report 4fd88787: P5 5/5; C1 DONE (§1h.486); 243 of 280 calls | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
+| P12-57 | PHASE 9 RUNNING — spot check P3–P6 × 2 on c30f46ca after C P12-97 (§1h.491); 37 calls left | C1 with the owner's test key: phase 1 harness on P1; phase 2 arms after C P12-53 and Tier 0 land | BYOK path, rows, Google calls, hygiene 0 | report P12-57-A-<UTC>.md | briefs/P12-57.md; §1h.430 |
 | P12-58 | DONE — C (Sonnet); landed with V at 098d74b3 (§1h.447) | D1: upload keeps its document; reading says pending; the page keeps asking | route and hook tests; own mutations; gates | checkpoint P12-58-C-<UTC>.md; manager verifies | briefs/P12-58.md; §1h.432 |
 | P12-59 | DONE — B (Sonnet), report on the branch | the 55 s request; P5's memory by stage; P1 / P3 titles | file:line; three rules each | report P12-59-B-<UTC>.md | briefs/P12-59.md; §1h.432 |
 | P12-60 | DONE — B (Sonnet), report on the branch | open only the figure's page: memory by stage on P5; cache today; three candidates measured | file:line; measures | report P12-60-B-<UTC>.md | briefs/P12-60.md; §1h.433 |
@@ -3302,7 +3339,7 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-95 | DONE — landed 45760755; manager mutations 5 / 11 / 12 red; 12,565 tests | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
 | P12-96 | IN_PROGRESS — A (Sonnet, new), scratch p12/r2/a96, port 4247 | Theme B round 5 (the confirming round) | the walk; B1 W3 ≥ 32 px (§1h.484) | P12-96-A-<UTC>.md | briefs/P12-96.md; §1h.488 |
 | P12-93 | DONE — B (Sonnet), deliverable d1d8d461; package R-F, R-B, R-A → C P12-97 (§1h.490) | Backlog: figure text still read as paragraphs (P3–P6) | counts by mechanism; blast radius | P12-93-B-<UTC>.md | briefs/P12-93.md; §1h.489 |
-| P12-97 | IN_PROGRESS — C (Sonnet), scratch p12/c97 | O6: figure text and the running foot leave the paragraphs (R-F, R-B, R-A) | invented fixtures; own mutations; gates; then the manager's P1–P6 re-verification | checkpoint P12-97-C-<UTC>.md | briefs/P12-97.md; §1h.490 |
+| P12-97 | DONE — landed c30f46ca; manager mutations 10 / 4 / 4 red; 12,597 tests; C0 100 ×6; P3–P6 short blocks 46/96/111/29 → 1/10/3/10, no prose lost (§1h.491) | O6: figure text and the running foot leave the paragraphs (R-F, R-B, R-A) | invented fixtures; own mutations; gates; then the manager's P1–P6 re-verification | checkpoint P12-97-C-<UTC>.md | briefs/P12-97.md; §1h.490 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |

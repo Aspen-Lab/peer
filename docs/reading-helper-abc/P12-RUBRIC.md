@@ -251,3 +251,7 @@ The centre's right padding has been 20 px since §1h.478, and at W3 the text col
 ## Scores of record — Theme B round 4 (§1h.489)
 
 On `d2d2b8b4`, readers B4-r1 and B4-r2 (blind, pack `r2/a92/pack`) give P1 97.92, P2 97.92, P3 97.92 (12 / 12 PASS; E2 0.25 each). The director's reading agrees. Consecutive rounds at the target (Theme B): 1.
+
+## Scores — C0 after C P12-97 (§1h.491)
+
+On the web tree with C P12-97: P1–P6 each 100 (no key; every row's role identical to before). Theme A's papers: the P1 and P2 text is identical, and P3 lost only figure fragments.
