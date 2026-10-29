@@ -35,7 +35,12 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // and an abstract sentence holds no line break; text cached under 11 folds the first subsection into its parent.
 // 13 (P10-42): a block with no sentence end joins the next across a page break or a floating figure whatever the
 // next word (unless it opens a heading or a list); text cached under 12 cuts such a sentence at a capital.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 13;
+// 14 (P12-97): the text of a figure's panels is out of an uploaded PDF's paragraphs where it stood in them: small lines of
+// up to 60 characters, and runs of panel lines anywhere between a caption and the first body line, are figure text; and a
+// running foot is one head whichever side its page number stands, counted over the pages that carry text. Text cached under
+// 13 still holds the tick strings and axis titles of a tall figure and the foot of a paper whose folio alternates sides.
+// It does not touch the figure engine, so FIGURE_EXTRACTION_REVISION (the figure boxes and cuts) is not bumped.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 14;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.
