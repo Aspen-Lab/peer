@@ -144,8 +144,10 @@ describe("useReading — P12-58 rule 3: it keeps asking while the full text is p
     expect([1, 2, 3, 4, 5, 6, 9].map(pollDelayMs)).toEqual([2_000, 4_000, 8_000, 16_000, 20_000, 20_000, 20_000]);
   });
 
-  it("the reading's version moved from 16 to 17 with the 'pending' value, and the hook reads the same number the reading is built with", () => {
-    expect(READING_VERSION).toBe(17);
+  // P12-97, RE-AIMED: 17 was the 'pending' value (P12-58); the version is 18 now, for the figure text and the running foot that
+  // leave an uploaded PDF's paragraphs. The test's point, that the hook reads the number the reading is built with, is unchanged.
+  it("the reading's version is 18 (17 came with the 'pending' value, 18 with P12-97), and the hook reads the same number the reading is built with", () => {
+    expect(READING_VERSION).toBe(18);
     expect(buildReading(base, null).version).toBe(READING_VERSION);
     expect(markFullTextPending(buildReading(base, null)).version).toBe(READING_VERSION);
   });

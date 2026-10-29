@@ -305,7 +305,9 @@ describe("buildReading", () => {
     // P12-58: 16 -> 17 — `provenance.fullText` gains "pending"; no settled reading changes, and a
     // reading cached under 16 (a tab on the build before keeps a private one whose fullText is not "none")
     // is read again once.
-    expect(reading.version).toBe(17);
+    // P12-97, RE-AIMED: 17 -> 18 — no field added; a figure's own text and the running foot leave an uploaded PDF's
+    // paragraphs, so a reading cached under 17 can hold them and is read again once.
+    expect(reading.version).toBe(18);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({

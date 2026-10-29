@@ -39,7 +39,7 @@ const TTL_MS = 24 * 60 * 60 * 1000;
  *  old full reading (P8-04). The version in the URL moves the cache's key with
  *  the bump, so an old body is never served to a newer client. The route
  *  ignores the parameter. */
-export const READING_VERSION: PaperReading["version"] = 17;
+export const READING_VERSION: PaperReading["version"] = 18;
 
 /** P12-58: how long to wait after the 1st, 2nd, 3rd and 4th pending answer before asking again. */
 export const POLL_DELAYS_MS: readonly number[] = [2_000, 4_000, 8_000, 16_000];

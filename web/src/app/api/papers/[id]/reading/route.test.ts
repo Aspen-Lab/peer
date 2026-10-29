@@ -94,7 +94,8 @@ describe("GET /api/papers/[id]/reading", () => {
     // sections and buckets changed; see reading.test.ts's note).
     // P9: 7 -> 8 (the PDF text and the cleaner changed: P9-08 / P9-09 / P9-10).
     // P12-58: 16 -> 17 (`provenance.fullText` gains "pending").
-    expect(body.version).toBe(17);
+    // P12-97, RE-AIMED: 17 -> 18 (a figure's own text and the running foot leave an uploaded PDF's paragraphs).
+    expect(body.version).toBe(18);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
     expect(body.provenance.pageCount).toBe(5);

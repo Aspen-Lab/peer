@@ -162,9 +162,13 @@ export interface PaperReading {
    * 16 → 17 (P12-58): `provenance.fullText` gains "pending". No settled reading changes; the bump is for the
    * tab still running the build before it, which kept any private reading whose `fullText` was not "none" for a day
    * and so would have kept a pending one. A reading cached under 16 is read again once.
+   *
+   * 17 → 18 (P12-97): a figure's own text (tick strings, axis titles, legend entries, panel words) and the running foot
+   * leave an uploaded PDF's paragraphs, so a reading cached under 17 can hold them in its body, its findings and its
+   * map. Read again once.
    */
   // P12-28: discard derived figure URLs and dimensions made by the old caption pairing.
-  version: 17;
+  version: 18;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -844,7 +848,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 17,
+    version: 18,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
