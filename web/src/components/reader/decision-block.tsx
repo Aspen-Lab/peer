@@ -24,6 +24,9 @@
 // a map of fourteen rows — and in one column they follow the details, as the last thing of the block, where they always stood.
 
 import Link from "next/link";
+// `typedRoutes` (next.config.ts) checks every <Link href> at build time; the
+// sign-in link is built from the paper's id, so it is cast like the masthead's.
+import type { Route } from "next";
 import { ADD_KEY_HREF, signInHref } from "@/lib/navigation/add-key-destination";
 import type { Ref, ReactNode } from "react";
 import { IconLink } from "@/components/icons";
@@ -152,7 +155,7 @@ function Details({ sentences, paper, recommendation, now = 0, uploadAction, doi,
           <>
             {" "}
             <Link
-              href={keyNeedsSignIn ? signInHref(signInReturnTo) : ADD_KEY_HREF}
+              href={(keyNeedsSignIn ? signInHref(signInReturnTo) : ADD_KEY_HREF) as Route}
               className={cn(
                 "text-text-faint underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors ",
                 TOUCH_INLINE,
