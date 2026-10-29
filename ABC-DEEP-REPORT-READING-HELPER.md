@@ -2865,6 +2865,40 @@ One phrase of the deliverable shared four words with a paper by chance: a generi
 
 → **Readers B4-r1, then B4-r2** (blind; pack `r2/a92/pack`), one at a time beside C P12-95.
 
+### §1h.488 — 2026-10-29 — READER B4-r1 97.92 ×3; C P12-95 LANDED (THE OWNER'S O1: A DRAG FLOOR OF ABOUT 50 CHARACTERS, THE FIRST VISIT UNCHANGED); THEME B ROUND 5 (A P12-96) STARTED
+
+**Reader B4-r1** (blind, pack `r2/a92/pack`) gives **P1, P2 and P3 97.92 each**.
+- 12 / 12 PASS on each paper.
+- The only extra is the standing E2, 0.25.
+- B1 is read by its letter (§1h.484 applies from round 5).
+- The W3 column is the ruled one (§1h.487).
+- It names the privacy grep as an open gate, because it is not in the pack. The A ran it (37 probes, 0 after the named redactions; the deliverable's pass-requirement row), so the director holds it. The reader did not fail it.
+- Unpriced: the tab 3 px from the text, the P2 29 px reading-place drift (O12), and the answers control's dark fill.
+
+Reader B4-r2 is running.
+
+**C P12-95 landed** (`45760755`; 8 commits: rules 1 to 5, a rule-3 follow-up, a tidy, the checkpoint).
+- **The drag floor:** `readingCentreDragMinimum(scale) = ceil(402 × scale + 32)`, about 50 characters a line (49.35 to 51.24 over the eight steps; 50.02 at 853 default).
+- **Both dividers' rooms** use it.
+- **`fitPanes`** keeps the reading budget for a first visit: pinned against rail is still decided there, and the pane the reader did not set keeps its first-visit width. A saved width may take the centre down to the floor.
+- **`railMinimumWidth`** is unchanged.
+- **At 853 × 480 default** the margin's range is 280 → 347 (a real drag +66 px); it was 280 → 281.
+- **The first visit** is identical on 51,240 cases.
+
+The manager's verification on V:
+- Own mutations, each restored with sha256 equal:
+  - the margin room back to the budget: 5 red;
+  - a saved width given no drag floor: 11 red;
+  - the first visit squeezed at the drag floor: 12 red, the default-fit pin among them.
+- Full gates:
+  - tsc 0;
+  - lint 0 errors / 144 warnings;
+  - 662 files + 3 skipped, 12,565 tests + 3 skipped (+31), 0 failed;
+  - build 0.
+- 4 re-aimed tests, named.
+
+→ **A P12-96 (Theme B round 5, a new A)** on `45760755`, with the brief `briefs/P12-96.md`.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
@@ -3212,7 +3246,8 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P12-91 | DONE — landed e56d6a40; manager mutations 3 / 8 red; 12,381 tests | Tier 1: no set_role setup from the first non-setup part; a split at a part's own edge is a no-op | invented fixtures; own mutations; gates | checkpoint P12-91-C-<UTC>.md | briefs/P12-91.md; §1h.477 |
 | P12-92 | DONE — A (Sonnet), deliverable 633951c0; A 97.92 / 95.83 / 97.92; E6 void → director 97.92 ×3; readers B4 next (§1h.487) | Theme B round 4 on the landed head | the walk, the matrix, E5 / E2 / O1 re-measured | P12-92-A-<UTC>.md | briefs/P12-92.md; §1h.480 |
 | P12-94 | DONE — landed 84534087; manager mutations 14 / 4 red; 12,534 tests; subset test 30,000 cases | Tier 1: no correction against a high / medium part; a low part's correction needs a look that agrees | invented fixtures; differential subset test; own mutations; gates | checkpoint P12-94-C-<UTC>.md | briefs/P12-94.md; §1h.482 |
-| P12-95 | IN_PROGRESS — C (Sonnet), scratch p12/c95 | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
+| P12-95 | DONE — landed 45760755; manager mutations 5 / 11 / 12 red; 12,565 tests | Theme B, owner's O1: drag floor ~50 chars; default layout unchanged | Chromium measure; default-fit pin; own mutations; gates | checkpoint P12-95-C-<UTC>.md | briefs/P12-95.md; §1h.484 |
+| P12-96 | IN_PROGRESS — A (Sonnet, new), scratch p12/r2/a96, port 4247 | Theme B round 5 (the confirming round) | the walk; B1 W3 ≥ 32 px (§1h.484) | P12-96-A-<UTC>.md | briefs/P12-96.md; §1h.488 |
 | P11-61 | **DONE 22:5xZ 2026-10-21** — the question bar refits whenever its width or the reading scale changes (§1h.175): 676 of 3,104 cut cells → 0; +11 tests; manager's mutation red → restored; full gates 10,598 | round 5 Theme A E-N1 | §1h.171, §1h.175 | C → the manager | afe85ed4 (ff; checkpoint `P11-61-C-20261021T2239Z.md`) |
 | P11-25 | **DONE 09:3xZ 2026-10-20** — on the branch (C (Sonnet) 9e24385f, 7fbe6b7c, 0b75856d): "Open as page" in the notes window's header (front only), `openAsPage` records the place as the phone row does then closes the window; a modified press records nothing; at a margin under 352 px (or with an export notice) the link is a 32-px icon with the same name; measured 0 px drift on return at 1280 / 1440, both tabs, light and dark, keyboard. Manager (p505): tsc 0, lint 0 / 144, four touched files 97 / 97 ×3; own mutation a modified press taken as plain: 1 red, restored 61b880ade53360fa = 61b880ade53360fa; full gates `p505/final-p1125.log` build 0, 512 + 3 / 9,422 + 3. Open: the comments in `return-to-paper.ts` and `paper-notes.tsx` say "the window press records nothing" (still true of the edge tab; not of the new link) — a comment-only follow-up; was RUNNING since 08:4xZ 2026-10-20 — C, `briefs/P11-25.md`, `scratchpad/p11c25/wt`, port 4126: "Open as page" in the desktop notes window (item 3's flow at every width) | owner item 3; A9 / A10 | §1h.121 (c) | C → the manager | — |
 | P11-26 | **DONE 21:0xZ 2026-10-20** — on the branch (§1h.128 (b)); was RUNNING (rules 4, 5 added §1h.127 (c)) since 09:1xZ 2026-10-20 — C, `briefs/P11-26.md`, `scratchpad/p11c26/wt`, port 4127: the explain card keeps its top at the selection (B3); a figure in front of the stack is never a thumbnail (X-3) | round 1 Theme B | §1h.122 (b) 1, 4 | C → the manager | — |
