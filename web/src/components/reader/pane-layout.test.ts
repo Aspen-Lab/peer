@@ -483,3 +483,24 @@ describe("fitPanes — a width the reader saved may take the centre down to the 
     }
   });
 });
+
+// P12-95 rule 4 (the owner's O1; ruling §1h.484): which layout registers - the side margin or the bottom band - is the reading budget's
+// question, as it was. A reader can drag the centre lower than the window would ever choose to leave it, but the window still needs
+// the budget's room before it stands a side margin.
+describe("railMinimumWidth — which layout registers does not use the drag floor (P12-95 rule 4)", () => {
+  it("is the rail, the margin's floor, the dividers and the reading budget, at every step: 852 at 1.00, 900 at 1.10, 1138 at 1.60", () => {
+    expect(STEPS.map(railMinimumWidth)).toEqual([781, 817, 852, 900, 948, 1005, 1067, 1138]);
+    for (const scale of STEPS) {
+      expect(railMinimumWidth(scale), `step ${scale}`).toBe(RAIL_PX + MARGIN_MIN_PX + 2 * DIVIDER_PX + readingCentreMinimum(scale));
+      expect(railMinimumWidth(scale), `step ${scale}`).toBeGreaterThan(RAIL_PX + MARGIN_MIN_PX + 2 * DIVIDER_PX + readingCentreDragMinimum(scale));
+    }
+  });
+
+  it("853 x 480 at the default step stands the side margin (852 fits); at the largest step it is the bottom band (the shell stands from 1138)", () => {
+    expect(853 >= railMinimumWidth(1)).toBe(true);
+    expect(853 >= railMinimumWidth(1.6)).toBe(false);
+    // Where the drag floor would have stood the shell (1028 to 1137 at the largest step) the band still registers.
+    expect(1100 >= railMinimumWidth(1.6)).toBe(false);
+    expect(1100 >= RAIL_PX + MARGIN_MIN_PX + 2 * DIVIDER_PX + readingCentreDragMinimum(1.6)).toBe(true);
+  });
+});
