@@ -23,6 +23,7 @@ import { createElement, type ReactElement, type ReactNode } from "react";
 import { stagedRuntime } from "@/test-support/staged-runtime";
 import { useMarginStore } from "@/lib/reader/margin";
 import { useReaderPanesStore } from "@/store/reader-panes";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
 import { PaneDivider } from "./pane-divider";
 import { PEEK_CLOSE_MS, PEEK_OPEN_MS, ReaderShell } from "./reader-shell";
 
@@ -253,6 +254,29 @@ describe("a window too narrow for the remembered widths", () => {
     useReaderPanesStore.setState({ leftPinned: false });
     const [margin] = open().look().dividers;
     expect(margin.props.room).toEqual({ viewport: 1440, other: 48, centreMinimum: 500 });
+  });
+});
+
+// P12-95 rule 3 (the owner's O1; ruling §1h.484): what a first visit shows does not change, and a width the reader saved may take the
+// centre down to the drag floor (434 px at the default step, 676 at the largest) instead of being given back to the reading budget.
+describe("the reading budget and the drag floor, as the shell fits them (P12-95)", () => {
+  afterEach(() => useReadingPrefsStore.setState({ scaleIndex: 2 }));
+
+  it("853 at the default step: a first visit shows the margin at 281 (the text column 468); the reader's saved 347 is kept, and a saved left width alone changes nothing", () => {
+    env.win.innerWidth = 853;
+    expect(open().look().vars).toMatchObject({ "--margin-w": "281px" });
+    useReaderPanesStore.setState({ marginWidth: 347 });
+    expect(open().look().vars).toMatchObject({ "--margin-w": "347px" });
+    useReaderPanesStore.setState({ marginWidth: undefined, leftWidth: 400 });
+    expect(open().look().vars).toMatchObject({ "--margin-w": "281px" });
+  });
+
+  it("1366 at the largest step: a first visit has the left pane at 276 and the margin at 280; a saved margin of 390 is kept, the left pane (not saved) giving way", () => {
+    useReadingPrefsStore.setState({ scaleIndex: 7 });
+    env.win.innerWidth = 1366;
+    expect(open().look().vars).toMatchObject({ "--left-pane-w": "276px", "--margin-w": "280px" });
+    useReaderPanesStore.setState({ marginWidth: 390 });
+    expect(open().look().vars).toMatchObject({ "--left-pane-w": "276px", "--margin-w": "390px" });
   });
 });
 

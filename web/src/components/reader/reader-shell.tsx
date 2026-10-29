@@ -11,7 +11,7 @@ import { registerMargin } from "@/lib/reader/margin";
 import { useReaderPanesStore } from "@/store/reader-panes";
 import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { PaneDivider } from "./pane-divider";
-import { fitPanes, readingCentreMinimum } from "./pane-layout";
+import { fitPanes, readingCentreDragMinimum, readingCentreMinimum } from "./pane-layout";
 
 // The reader's shell (P11-10 rule 3; B P11-01 §2; ruling §1h.113 (a)): from a window of 1024 css px the paper's page is three panes in
 // one full-width grid, as Claude's own: a left pane that stays pinned or folds into a thin rail, the paper's text in the centre, and an
@@ -110,7 +110,10 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true, sid
   const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
   const prefs = useSyncExternalStore(useReadingPrefsStore.subscribe, useReadingPrefsStore.getState, useReadingPrefsStore.getInitialState);
   const scale = READING_SCALE_STEPS[prefs.scaleIndex];
+  // Two floors for the centre (P12-95, the owner's O1): the window keeps the reading budget for a first visit; a width the reader saved may
+  // take it down to the drag floor.
   const centreMinimum = readingCentreMinimum(scale);
+  const centreDragMinimum = readingCentreDragMinimum(scale);
   const viewport = measuredWidth ?? windowWidth;
   // clientWidth is layout px: it already includes the scrollbar, actual page
   // padding and CSS Fit zoom, rather than guessing from the outer window.
@@ -127,7 +130,7 @@ export function ReaderShell({ left, centre, header, keepReadingPlace = true, sid
   // The reader's saved choice. The server snapshot is the store's INITIAL state, never the live one: the stores load after mount
   // (`skipHydration`, <StoreHydrator/>), and a hydrating render that already saw the loaded widths would not match the markup.
   const saved = useSyncExternalStore(useReaderPanesStore.subscribe, useReaderPanesStore.getState, useReaderPanesStore.getInitialState);
-  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned, centreMinimum });
+  const fit = fitPanes({ viewport, left: saved.leftWidth, margin: saved.marginWidth, leftPinned: saved.leftPinned, centreMinimum, centreDragMinimum });
 
   const [peeking, setPeeking] = useState(false);
   // A pane that is pinned does not peek: forgotten at once, so that folding it again does not open it.

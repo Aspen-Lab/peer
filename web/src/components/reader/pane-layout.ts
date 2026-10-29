@@ -66,7 +66,8 @@ export interface PaneRange {
 }
 
 /** The window and the other pane, for a range that keeps the centre at its minimum. `other` is the other pane's TRACK (`RAIL_PX`
- *  for a collapsed left pane). */
+ *  for a collapsed left pane). `centreMinimum` is the least the centre may be dragged to: the shell gives `readingCentreDragMinimum`
+ *  (P12-95), not the window's reading budget. */
 export interface PaneRoom {
   viewport: number;
   other: number;
@@ -128,7 +129,11 @@ export function stepPane(pane: PaneName, width: number, key: string, shift: bool
 /** What the reader remembered, and the window. Any of the three may be absent. */
 export interface PaneRequest {
   viewport: number;
+  /** The reading budget: what the window keeps for the centre until the reader has saved a width (`readingCentreMinimum`). */
   centreMinimum?: number;
+  /** The drag floor: the least the centre may be where it is a width the reader saved that takes the room (`readingCentreDragMinimum`,
+   *  P12-95). Absent, or above the budget: the budget. */
+  centreDragMinimum?: number;
   /** The left pane's remembered width. */
   left?: number;
   /** The margin's remembered width. */
@@ -152,6 +157,20 @@ export interface PaneFit {
   forced: boolean;
 }
 
+/** The widths once the window has taken what it must: `order` says who gives first, each toward its own minimum; `over` is what is still too
+ *  much afterwards (positive: the panes do not fit with the centre at `floor`). */
+function squeeze(order: readonly PaneName[], wantLeft: number, wantMargin: number, floor: number, viewport: number) {
+  const want = { left: wantLeft, margin: wantMargin };
+  const least = { left: LEFT_MIN_PX, margin: MARGIN_MIN_PX };
+  const width = { ...want };
+  let over = wantLeft + wantMargin + floor + 2 * DIVIDER_PX - viewport;
+  for (const pane of order) {
+    width[pane] = want[pane] - Math.min(Math.max(over, 0), want[pane] - least[pane]);
+    over -= want[pane] - width[pane];
+  }
+  return { left: width.left, margin: width.margin, over };
+}
+
 /**
  * The window's answer to the remembered widths. Pure; the remembered values are never touched, so a bigger window restores them.
  *
@@ -163,6 +182,17 @@ export interface PaneFit {
  * A first visit (no choice yet) wants the pane pinned, so inside the shell it is pinned at every width; only the reader's own fold is the rail.
  *
  * Inside the shell (1024 up) step 2 always answers: 240 + 280 + 440 + 24 = 984. The centre is never below `CENTRE_MIN_PX` there.
+ *
+ * Two floors (P12-95, the owner's O1): the centre is kept at the reading budget (`centreMinimum`) until the reader has saved a width, and
+ * may go down to the drag floor (`centreDragMinimum`) for one — so a margin dragged out at 853 px is kept, not given back to the budget.
+ *   - With no width saved the fit is exactly what it was: the budget, the margin first and then the left pane.
+ *   - Whether the left pane can be a column at all is the budget's question, whatever was saved (`railMinimumWidth`, which layout
+ *     registers, does not move either): a saved width never turns a rail into a pinned pane.
+ *   - Pinned, with a width saved (either) and a drag floor under the budget: the floor is the drag floor, and the panes the reader did
+ *     not set give way first, so a dragged pane is the last to give back what it was dragged to. A caller with no drag floor gets the
+ *     old answer, saved widths or not.
+ *   - As the rail, only the margin is on the page: the floor is the drag floor if the margin was saved, the budget if only the left
+ *     pane was (a width the page does not show takes nothing).
  */
 export function fitPanes(request: PaneRequest): PaneFit {
   const viewport = finite(request.viewport) ? request.viewport : SHELL_MIN_VIEWPORT_PX;
@@ -171,19 +201,22 @@ export function fitPanes(request: PaneRequest): PaneFit {
   const wantMargin = clampPane("margin", finite(request.margin) ? request.margin : MARGIN_DEFAULT_PX);
   const wantPinned = request.leftPinned ?? true;
   const centreMinimum = request.centreMinimum ?? CENTRE_MIN_PX;
+  const dragMinimum = Math.min(request.centreDragMinimum ?? centreMinimum, centreMinimum);
+  const savedLeft = finite(request.left);
+  const savedMargin = finite(request.margin);
 
   if (wantPinned) {
-    let over = wantLeft + wantMargin + centreMinimum + gutters - viewport;
-    const margin = wantMargin - Math.min(Math.max(over, 0), wantMargin - MARGIN_MIN_PX);
-    over -= wantMargin - margin;
-    const left = wantLeft - Math.min(Math.max(over, 0), wantLeft - LEFT_MIN_PX);
-    over -= wantLeft - left;
-    if (over <= 0) {
+    const atBudget = squeeze(["margin", "left"], wantLeft, wantMargin, centreMinimum, viewport);
+    if (atBudget.over <= 0) {
+      // The margin gives first, as ever — unless only the margin was saved: then the left pane, which the reader did not set, goes before it.
+      const order: PaneName[] = savedMargin && !savedLeft ? ["left", "margin"] : ["margin", "left"];
+      const lowered = (savedLeft || savedMargin) && dragMinimum < centreMinimum;
+      const { left, margin } = lowered ? squeeze(order, wantLeft, wantMargin, dragMinimum, viewport) : atBudget;
       return { left, leftTrack: left, margin, centre: viewport - left - margin - gutters, pinned: true, forced: false };
     }
   }
 
-  const over = RAIL_PX + wantMargin + centreMinimum + gutters - viewport;
+  const over = RAIL_PX + wantMargin + (savedMargin ? dragMinimum : centreMinimum) + gutters - viewport;
   const margin = wantMargin - Math.min(Math.max(over, 0), wantMargin - MARGIN_MIN_PX);
   return {
     left: wantLeft,
