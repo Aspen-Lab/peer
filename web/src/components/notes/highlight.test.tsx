@@ -89,6 +89,30 @@ describe("highlightSelection — steps 1 to 5", () => {
     expect(useHighlightStrip.getState()).toMatchObject({ id: made?.id, top: BOUNDS.top });
   });
 
+  it("saves, switches and removes a bold or circled passage in the paper's reading note", () => {
+    const t = target({ offset: FIRST });
+    const bold = highlightSelection(t, { paper: PAPER, body: BODY, style: "bold" })!;
+    expect(readHighlight(highlights()[0])).toMatchObject({ quote: "the tide pools", mark: "bold" });
+    expect(noteOf()?.sources).toBeDefined();
+    const circle = highlightSelection(t, { paper: PAPER, body: BODY, style: "circle" })!;
+    expect(circle).toEqual({ id: bold.id, created: false });
+    expect(highlights()).toHaveLength(1);
+    expect(readHighlight(highlights()[0])).toMatchObject({ mark: "circle" });
+    highlightSelection(t, { paper: PAPER, body: BODY, style: "highlight" });
+    expect(readHighlight(highlights()[0])?.mark).toBeUndefined();
+    useNotesStore.getState().removeHighlight(noteOf()!.id, bold.id);
+    expect(highlights()).toHaveLength(0);
+  });
+
+  it("preserves a saved circle through a serialized notes round trip", () => {
+    const made = highlightSelection(target({ offset: FIRST }), { paper: PAPER, body: BODY, style: "circle" })!;
+    const snapshot = JSON.stringify(useNotesStore.getState().notes);
+    useNotesStore.setState({ notes: {} });
+    useNotesStore.setState({ notes: JSON.parse(snapshot) });
+    expect(readingNoteFor(useNotesStore.getState().notes, PAPER.id)).toBeDefined();
+    expect(readHighlight(highlights().find((block) => block.id === made.id))).toMatchObject({ quote: "the tide pools", mark: "circle" });
+  });
+
   it("marks the occurrence the reader selected: the offset picks the second of two", () => {
     run(target({ offset: SECOND }));
     expect(readHighlight(highlights()[0])).toMatchObject({ start: SECOND, end: SECOND + 14 });

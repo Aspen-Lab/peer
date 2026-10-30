@@ -14,7 +14,7 @@
 // Decision block shows. Nothing else on the page hand-writes a status string.
 
 import type { Paper } from "@/types";
-import type { ExtractedFigureCaption } from "./html-text";
+import type { ExtractedFigureCaption, ExtractedTable } from "./html-text";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
@@ -155,7 +155,7 @@ export interface PaperReading {
    * 14 → 16: PDFs with narrow column gutters are re-extracted in reading order;
    * cached passages use the previous extraction and need to be refreshed.
    */
-  version: 16;
+  version: 18;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -206,6 +206,7 @@ export interface ReadingSection {
   /** The paper's display equations in this section, each after the
    *  paragraph it followed on the page. Absent when the section has none. */
   equations?: ReadingEquation[];
+  codeBlocks?: { text: string; language?: string; after: number }[];
 }
 
 /**
@@ -228,6 +229,7 @@ export interface ReadingEquation {
  * it comes into view, and shows the caption alone if there is none.
  */
 export interface ReadingFigure {
+  table?: ExtractedTable;
   ordinal: number;
   /** "Figure 3" */
   label: string;
@@ -608,12 +610,13 @@ export { readableSections, sectionParagraphs } from "./reading-map";
 
 /** The document, split into paragraphs for the page. */
 function readableBody(sections: ReturnType<typeof readableSections>): ReadingSection[] {
-  return sections.map(({ id, section, paragraphs, equations }) => ({
+  return sections.map(({ id, section, paragraphs, equations, codeBlocks }) => ({
     id,
     heading: section.heading,
     canonical: section.canonical,
     paragraphs,
     ...(equations.length > 0 ? { equations } : {}),
+    ...(codeBlocks?.length ? { codeBlocks } : {}),
   }));
 }
 
@@ -678,14 +681,15 @@ export function placeFigures(
 
   const seen = new Set<string>();
   for (const c of captions) {
-    if (!/^fig/i.test(c.label)) continue;
+    const isTable = /^table/i.test(c.label);
+    if (!/^fig/i.test(c.label) && !(isTable && c.table)) continue;
     if (seen.has(c.label)) continue;
     seen.add(c.label);
 
     let at: { section: number; after: number } | null = null;
-    const n = figureNumber(c.label);
+    const n = isTable ? Number(c.label.match(/\d+/)?.[0]) : figureNumber(c.label);
     if (n !== null) {
-      const mention = new RegExp(`\\bfig(?:ure|s?\\.)?\\s*${n}(?![\\d.])`, "i");
+      const mention = new RegExp(`\\b${isTable ? "tab(?:le|s?\\.)?" : "fig(?:ure|s?\\.)?"}\\s*${n}(?![\\d.])`, "i");
       outer: for (let si = 0; si < out.length; si++) {
         for (let pi = 0; pi < out[si].paragraphs.length; pi++) {
           if (mention.test(out[si].paragraphs[pi])) {
@@ -713,6 +717,7 @@ export function placeFigures(
       figure.width = c.width;
       figure.height = c.height;
     }
+    if (c.table) figure.table = c.table;
     if (c.imageUrl) figure.imageUrl = c.imageUrl;
     else if (pdf && typeof c.page === "number") {
       const pictureOf = pictureNumber(c.label);
@@ -806,7 +811,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 16,
+    version: 18,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

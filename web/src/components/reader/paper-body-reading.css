@@ -1,10 +1,10 @@
 /* Paper prose: a comfortable measure with a steady ragged edge. Scale follows
    the reader's existing A/A controls without changing their saved preference. */
 .reading-scaled #paper-body section[id^="paper-section-"] > div {
-  font-size: calc(19px * var(--reading-scale, 1));
-  line-height: 1.8;
+  font-size: calc(17px * var(--reading-scale, 1));
+  line-height: 1.72;
   max-width: 34em;
-  color: var(--color-text);
+  color: color-mix(in srgb, var(--color-text) 72%, var(--color-text-muted));
   text-align: left;
   hyphens: manual;
 }
@@ -27,6 +27,16 @@
 #paper-body section[id^="paper-section-"] + section[id^="paper-section-"] {
   margin-top: 3rem;
 }
+
+#paper-body .reader-keyword {
+  color: var(--color-heading);
+  font-weight: 650;
+}
+#paper-body .reader-citation {
+  color: color-mix(in srgb, var(--color-heading) 72%, #a78bc8);
+  font-weight: 600;
+}
+#paper-body mark :is(.reader-citation, .reader-keyword) { color: inherit; }
 
 /* Reading first: facts line up as a quiet table, while the paper's words keep
    a comfortable prose measure. The same rules work in either reading layout. */
@@ -133,3 +143,96 @@
   padding-left: 0;
 }
 .reader-result { padding: 4px 0; }
+
+
+/* Figures and tables are part of the article, with their own quiet surface. */
+.reader-visual {
+  --reader-visual-accent: #8ba9b9;
+  overflow: hidden;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--reader-visual-accent));
+  break-inside: avoid;
+}
+.reader-visual[data-visual-type="table"] { --reader-visual-accent: #8cab9b; }
+.reader-visual-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 18px 12px;
+  color: var(--color-text-muted);
+  font: 600 13px/1.3 var(--font-sans);
+}
+.reader-visual-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--reader-visual-accent) 22%, var(--color-surface));
+  color: color-mix(in srgb, var(--color-heading) 46%, var(--reader-visual-accent));
+  font-size: 16px;
+}
+.reader-visual-hint { margin-left: auto; font-weight: 400; }
+.reader-visual > div[class*="plate-mat"] { margin: 0 12px; border-radius: 8px; overflow: hidden; }
+.reader-visual-caption {
+  max-width: none;
+  padding: 15px 18px 18px;
+  color: var(--color-text-muted);
+  font: 400 15px/1.6 var(--font-sans);
+}
+.reader-visual-caption > span:first-child { color: var(--color-heading); font-weight: 650; }
+.reader-table-scroll {
+  margin: 0 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--color-bg);
+  scrollbar-width: none;
+}
+.reader-table-scroll::-webkit-scrollbar { display: none; }
+.reader-table-scroll:focus-visible { outline: 2px solid #a78bc8; outline-offset: -2px; }
+.reader-data-table { width: 100%; border-collapse: collapse; font: 400 15px/1.55 var(--font-sans); color: var(--color-text); }
+.reader-data-table :is(th, td) { min-width: 5rem; padding: 11px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); }
+.reader-data-table th { color: var(--color-heading); font-weight: 600; background: color-mix(in srgb, var(--color-surface) 92%, var(--reader-visual-accent)); }
+.reader-data-table tr:last-child :is(th, td) { border-bottom: 0; }
+.reader-table-hint { display: none; }
+.reader-table-hint-wide, .reader-book[data-active="true"] .reader-table-hint { display: inline; }
+.reader-book[data-active="true"] .reader-table-scroll { max-height: clamp(160px, calc(100vh - 490px), 360px); }
+
+@media (max-width: 480px) {
+  .reader-visual-heading { padding-inline: 14px; }
+  .reader-visual-caption { padding-inline: 14px; }
+}
+
+/* Personal reading marks stay distinguishable from automatic keywords. */
+#paper-body .reader-manual-bold { font-weight: 750; }
+#paper-body .reader-manual-circle {
+  border: 1.5px solid #a78bc8;
+  border-radius: 1em;
+  padding: 0.03em 0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Source listings retain their own line breaks and indentation. */
+.reader-code-block {
+  margin: 24px 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-bg-secondary) 86%, #a78bc8 14%);
+  text-align: left;
+}
+.reader-code-label {
+  padding: 13px 18px 0;
+  color: var(--color-text-muted);
+  font: 500 13px/1.4 var(--font-sans), sans-serif;
+  text-transform: none;
+}
+.reader-code-block pre {
+  margin: 0;
+  padding: 14px 18px 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--color-heading);
+  font: 400 14px/1.65 var(--font-mono), monospace;
+  tab-size: 2;
+}
+.reader-code-block code { font: inherit; }

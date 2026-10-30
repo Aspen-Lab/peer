@@ -1577,7 +1577,7 @@ function Reader({
             {/* P7-14 (R10): Paper digestion — the paper: everything the extractor read. Its map
                 (P1-04, R5) is the layout's `map` slot now (P10-04), under the strip, under both tabs. */}
             {/* The paper, when Peer reached it. */}
-            <PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />
+            <PaperBody reading={reading} route={route} title={paper?.title} keywords={paper?.summaryExperimentKeywords} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />
           </>
         ) : (
           <div data-explain-source="summary" className="contents">
@@ -1753,7 +1753,7 @@ function Reader({
     {/* P10-09a (review 7.1, 8.4; ruling §1h.78): the pill above a selection with "Explain this" and "Take notes", and
         the sticky notes it opens at the right. Fixed, in the window's pixels, like the box above. P11-17b: and "Highlight" — wherever `canHighlight`
         accepts the selection (a paragraph, a heading or a caption of the paper's body; since P11-28 a Summary block or an answer), with or without a key. */}
-    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} canHighlight={canHighlight(explainTarget)} />
+    <SelectionToolbar target={explainTarget} canExplain={selectionCanExplain({ canAsk: explainCanAsk, terms, passage: explainTarget?.passage ?? null })} onExplain={openExplain} onTakeNote={takeNote} onHighlight={highlight} onBold={(target) => highlight(target, "bold")} onCircle={(target) => highlight(target, "circle")} canHighlight={canHighlight(explainTarget)} />
     <StickyNotes key={paper.id} paper={paper} reveal={reveal} />
     {/* P11-15 (owner item 1): a figure opened from the paper's body, in the margin's stack, or the lightbox where there is no margin. One per paper, as the stickies: the store's keys repeat across papers. Its key is not the stickies' (a sibling's), or React meets two children with one key. */}
     <FigureHost key={`figure:${paper.id}`} />

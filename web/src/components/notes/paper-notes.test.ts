@@ -59,21 +59,14 @@ describe("PaperNotes — the questions go into the first note (P2-05)", () => {
     expect(paperNotes).not.toMatch(/\breadingNote\(/);
   });
 
-  // P7-14 (R9, the owner's review): the notes entry is no longer a Band at the top of the column but a
-  // button — a small tab fixed at the viewport's right edge, and on a phone a row in the command stack.
-  // `open()` was extracted into `openPaperNotes` (the call above, unchanged), and the page mounts the
-  // button twice with the same two props: the settled questions and the report's answers (P2-05).
-  it("is mounted as the notes button, with the settled questions and the report's answers: at the right edge, and in the command stack for a phone", () => {
+  it("offers the paper's independent notes through the command row", () => {
     const flat = page.replace(/\s+/g, " ");
     const mounts = [...flat.matchAll(/<NotesButton [^>]*\/>/g)].map((m) => m[0]);
-
-    expect(mounts).toHaveLength(2);
-    expect(mounts.map((m) => /variant="(edge|row)"/.exec(m)?.[1]).sort()).toEqual(["edge", "row"]);
-    for (const element of mounts) {
-      expect(element).toContain("paper={paper}");
-      expect(element).toContain("questions={settledQuestions(asked)}");
-      expect(element).toContain("forYourQuestions={report?.forYourQuestions}");
-    }
+    expect(mounts).toHaveLength(1);
+    expect(mounts[0]).toContain('variant="row"');
+    expect(mounts[0]).toContain("paper={paper}");
+    expect(mounts[0]).toContain("questions={settledQuestions(asked)}");
+    expect(mounts[0]).toContain("forYourQuestions={report?.forYourQuestions}");
   });
 
   it("is no longer a band in the column: the page's additions mount no PaperNotes", () => {
@@ -85,17 +78,12 @@ describe("PaperNotes — the questions go into the first note (P2-05)", () => {
     expect(page.slice(page.indexOf("export default function PaperReadingPage"))).not.toContain("<PaperNotes");
   });
 
-  it("the edge tab stands beside the explain box, outside the zoomed container", () => {
+  it("keeps selection actions outside the page container without a permanent notes edge", () => {
     const flat = page.replace(/\s+/g, " ");
     const closed = flat.lastIndexOf("</PageContainer>");
-    const edge = flat.indexOf('<NotesButton variant="edge"');
-    const explain = flat.indexOf("<ExplainBox");
-
     expect(closed).toBeGreaterThan(-1);
-    expect(explain).toBeGreaterThan(closed);
-    // Right after the explain box's own section links, and the last thing the page draws.
-    expect(edge).toBeGreaterThan(flat.indexOf("</SectionLinks>", explain));
-    expect(flat.slice(edge).replace(/<NotesButton [^>]*\/>/, "").trim().startsWith("</> );")).toBe(true);
+    expect(flat.indexOf("<SelectionToolbar", closed)).toBeGreaterThan(closed);
+    expect(flat).not.toContain('<NotesButton variant="edge"');
   });
 
   it("is left as it was where the upload is unavailable: no questions field, no report there", () => {

@@ -18,7 +18,7 @@
 import { tokenize } from "@/lib/scoring/tokenize";
 import { canonicalize, expandTerm, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
 import { parseBlockMarker } from "@/lib/text/math";
-import { headingNumber, numbersHeading, type ExtractedDocument, type ExtractedEquation, type ExtractedSection } from "./html-text";
+import { headingNumber, numbersHeading, type ExtractedDocument, type ExtractedEquation, type ExtractedSection, type ExtractedCodeBlock } from "./html-text";
 // Type only: erased at runtime, so `reading.ts` can import this module
 // without the two importing each other.
 import type { ReadingEquation } from "./reading";
@@ -43,12 +43,20 @@ import { isBoilerplate, scoreSentence, splitSentences } from "./skim";
 export function sectionParagraphs(
   section: Pick<ExtractedSection, "text">,
   lifted: readonly ExtractedEquation[],
-): { paragraphs: string[]; equations: ReadingEquation[] } {
+  listings: readonly ExtractedCodeBlock[] = [],
+): { paragraphs: string[]; equations: ReadingEquation[]; codeBlocks?: (ExtractedCodeBlock & { after: number })[] } {
   const paragraphs: string[] = [];
   const equations: ReadingEquation[] = [];
+  const codeBlocks: (ExtractedCodeBlock & { after: number })[] = [];
   for (const raw of section.text.split(/\n{2,}/)) {
     const para = raw.replace(/\s+/g, " ").trim();
     if (!para) continue;
+    const codeMarker = /^⟦@(\d+)⟧$/.exec(para);
+    if (codeMarker) {
+      const block = listings[Number(codeMarker[1])];
+      if (block) codeBlocks.push({ ...block, after: paragraphs.length - 1 });
+      continue;
+    }
     const k = parseBlockMarker(para);
     if (k !== null) {
       const eq = lifted[k];
@@ -65,7 +73,7 @@ export function sectionParagraphs(
     if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
     paragraphs.push(para);
   }
-  return { paragraphs, equations };
+  return { paragraphs, equations, ...(codeBlocks.length ? { codeBlocks } : {}) };
 }
 
 /**
@@ -90,6 +98,7 @@ export interface ReadableSection {
   section: ExtractedSection;
   paragraphs: string[];
   equations: ReadingEquation[];
+  codeBlocks?: (ExtractedCodeBlock & { after: number })[];
 }
 
 export function readableSections(doc: ExtractedDocument): ReadableSection[] {
@@ -97,12 +106,12 @@ export function readableSections(doc: ExtractedDocument): ReadableSection[] {
   const lifted = doc.equations ?? [];
   doc.sections.forEach((section, index) => {
     if (section.canonical === "abstract") return;
-    const { paragraphs, equations } = sectionParagraphs(section, lifted);
-    if (paragraphs.length === 0 && equations.length === 0) {
+    const { paragraphs, equations, codeBlocks } = sectionParagraphs(section, lifted, doc.codeBlocks);
+    if (paragraphs.length === 0 && equations.length === 0 && !codeBlocks?.length) {
       const next = doc.sections[index + 1];
       if (!next || !numbersHeading(section.heading, next.heading)) return;
     }
-    out.push({ id: section.id ?? `s${index}`, section, paragraphs, equations });
+    out.push({ id: section.id ?? `s${index}`, section, paragraphs, equations, ...(codeBlocks ? { codeBlocks } : {}) });
   });
   return out;
 }

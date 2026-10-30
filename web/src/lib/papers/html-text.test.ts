@@ -219,6 +219,30 @@ describe("LaTeXML extractor", () => {
     expect(out.figureCaptions[1].imageUrl).toBeUndefined();
   });
 
+  it("preserves table cells, spans and inline math without duplicating them in prose", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 Results</h2><p>Table 2 shows the result.</p>
+      <figure class="ltx_table"><figcaption class="ltx_caption">Table 2: Accuracy.</figcaption>
+      <table><tr><th rowspan="2">Method</th><th colspan="2">Score</th></tr>
+      <tr><td><math display="inline" alttext="x_1"><mi>x</mi></math></td><td>99 &amp; 1</td></tr></table></figure>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html, "https://arxiv.org/html/1234.5678");
+    expect(out.figureCaptions[0]).toMatchObject({ label: "Table 2", table: { rows: [
+      { cells: [{ text: "Method", header: true, rowSpan: 2 }, { text: "Score", header: true, colSpan: 2 }] },
+      { cells: [{ text: inlineMath("x_1"), header: false }, { text: "99 & 1", header: false }] },
+    ] } });
+    expect(out.sections[0].text).not.toContain("Method");
+    expect(out.sections[0].text).toContain("Table 2 shows the result.");
+  });
+
+  it("does not fabricate a nested table and keeps its text in the paper", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 Results</h2><p>See Table 1.</p>
+      <figure class="ltx_table"><figcaption class="ltx_caption">Table 1: Data.</figcaption>
+      <table><tr><td>Original <table><tr><td>nested</td></tr></table></td></tr></table></figure>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html);
+    expect(out.figureCaptions[0].table).toBeUndefined();
+    expect(out.sections[0].text).toContain("Original");
+    expect(out.sections[0].text).toContain("nested");
+  });
+
   it("takes a figure drawn as SVG from its <object>, the way arXiv serves plots", () => {
     const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>Words words words words.</p>
       <figure class="ltx_figure"><object type="image/svg+xml" data="1234.5678v2/plot.svg" class="ltx_graphics"></object>

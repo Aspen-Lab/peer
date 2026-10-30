@@ -9,12 +9,23 @@
   font: 500 14px/1.25 var(--font-sans); cursor: pointer;
 }
 .reader-book-mode:hover, .reader-book-navigation button:hover:not(:disabled) { color: var(--color-heading); background: var(--color-surface-hover); }
-.reader-book-mode[aria-pressed="true"] { color: var(--color-heading); }
+.reader-book-mode[aria-pressed="true"] { color: var(--color-heading); background: color-mix(in srgb, #a78bc8 16%, var(--color-surface)); }
 .reader-book-navigation { display: flex; align-items: center; gap: 8px; color: var(--color-text-muted); font: 500 13px/1.25 var(--font-sans); font-variant-numeric: tabular-nums; }
 .reader-book-navigation button { min-width: 38px; padding: 0; }
 .reader-book-navigation button:disabled { opacity: .35; cursor: default; }
 .reader-book-toolbar button:focus-visible, .reader-book-pages:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
-.reader-book[data-active="true"] .reader-book-pages { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; }
+.reader-book[data-active="true"] .reader-book-pages {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+}
+/* Each anchor is a complete two-page spread, including the final half-spread. */
+.reader-book-guides { position: absolute; inset: 0; pointer-events: none; }
+.reader-book-snap, .reader-book-end { position: absolute; top: 0; width: 1px; height: 1px; }
+.reader-book-snap { scroll-snap-align: start; scroll-snap-stop: always; }
 .reader-book[data-active="true"] .reader-book-pages::-webkit-scrollbar { display: none; }
 html:has(.reader-book[data-active="true"]) { scrollbar-width: none; }
 html:has(.reader-book[data-active="true"])::-webkit-scrollbar { display: none; }
@@ -31,3 +42,124 @@ html:has(.reader-book[data-active="true"])::-webkit-scrollbar { display: none; }
 .reader-book[data-active="true"] #paper-body :is(figure, .reader-equation) { break-inside: avoid; }
 .reader-book[data-active="true"] #paper-body figure img { max-height: clamp(220px, calc(100vh - 380px), 540px); }
 @media (prefers-reduced-motion: reduce) { .reader-book-pages { scroll-behavior: auto; } }
+
+.reader-book-wheel-hint { margin-right: 6px; color: var(--color-text-faint); font-weight: 400; }
+.reader-book[data-active="true"] :is(.reader-table-scroll, .reader-equation-scroll, .reader-inline-math) { overscroll-behavior: contain; }
+@media (hover: none), (max-width: 600px) { .reader-book-wheel-hint { display: none; } }
+
+/* The transient sheet folds across the gutter; it never intercepts selection. */
+.reader-book-stage { position: relative; perspective: 1400px; }
+.reader-book-turn-sheet {
+  position: absolute;
+  top: 24px;
+  bottom: 0;
+  width: 50%;
+  visibility: hidden;
+  pointer-events: none;
+  backface-visibility: hidden;
+  border-radius: 2px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--color-heading) 12%, transparent),
+    color-mix(in srgb, var(--color-bg) 85%, transparent) 12%,
+    color-mix(in srgb, var(--color-bg) 60%, transparent) 84%,
+    color-mix(in srgb, var(--color-heading) 8%, transparent));
+  box-shadow: 0 8px 22px color-mix(in srgb, #000 12%, transparent);
+}
+
+.reader-book-mode-group { display: flex; align-items: center; gap: 8px; }
+.reader-book-immersive-toggle span { font-size: 18px; line-height: 1; }
+.reader-book[data-immersive="true"] {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(12px, 2vw, 28px) clamp(18px, 3vw, 48px) clamp(16px, 2vw, 28px);
+  background: color-mix(in srgb, var(--color-bg) 86%, #a78bc8 14%);
+}
+html:has(.reader-book[data-immersive="true"]) { overflow: hidden; }
+.reader-book[data-immersive="true"] .reader-book-local-toolbar {
+  position: static;
+  flex: none;
+  width: min(100%, 1400px);
+  margin: 0 auto 14px;
+  padding: 0;
+  background: transparent;
+}
+.reader-book[data-immersive="true"] .reader-book-stage {
+  width: min(100%, 1400px);
+  flex: 1;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 24px clamp(24px, 3.5vw, 52px);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: 0 16px 60px color-mix(in srgb, #222 13%, transparent), 0 2px 8px color-mix(in srgb, #222 7%, transparent);
+}
+.reader-book[data-immersive="true"] .reader-book-stage::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent 45%, color-mix(in srgb, var(--color-heading) 5%, transparent) 49.7%, color-mix(in srgb, var(--color-heading) 8%, transparent) 50%, color-mix(in srgb, var(--color-heading) 5%, transparent) 50.3%, transparent 55%);
+}
+.reader-book[data-immersive="true"] .reader-book-pages { z-index: 1; }
+.reader-book[data-immersive="true"] #paper-body > section {
+  height: max(260px, calc(100dvh - 190px));
+  margin-top: 16px;
+}
+.reader-book[data-immersive="true"] #paper-body figure img { max-height: max(160px, calc(100dvh - 320px)); }
+.reader-book-turn-sheet {
+  z-index: 3;
+  bottom: auto;
+  overflow: hidden;
+  background: var(--color-surface);
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 24%, transparent), inset 0 0 28px color-mix(in srgb, var(--color-heading) 5%, transparent);
+  transform-style: preserve-3d;
+}
+.reader-book-turn-sheet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-heading) 12%, transparent), transparent 22%, transparent 78%, color-mix(in srgb, var(--color-heading) 10%, transparent));
+}
+.reader-book-snapshot {
+  position: absolute;
+  top: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--color-surface);
+}
+.reader-book-snapshot [data-book-snapshot-body] > section {
+  height: clamp(420px, calc(100vh - 220px), 760px);
+  margin-top: 24px;
+  columns: 2;
+  column-gap: clamp(16px, 4vw, 64px);
+  column-fill: auto;
+}
+.reader-book[data-immersive="true"] .reader-book-snapshot [data-book-snapshot-body] > section { height: max(260px, calc(100dvh - 190px)); margin-top: 16px; }
+.reader-book-snapshot [data-book-snapshot-body] h3 { break-after: avoid; }
+.reader-book-snapshot [data-book-snapshot-body] :is(figure, .reader-equation) { break-inside: avoid; }
+.reader-book-snapshot [data-book-snapshot-body] figure img { max-height: clamp(220px, calc(100vh - 380px), 540px); }
+.reader-book[data-immersive="true"] .reader-book-snapshot [data-book-snapshot-body] figure img { max-height: max(160px, calc(100dvh - 320px)); }
+.reading-scaled .reader-book-snapshot section[data-book-snapshot-section] > div {
+  font-size: calc(17px * var(--reading-scale, 1));
+  line-height: 1.72;
+  max-width: 34em;
+  color: color-mix(in srgb, var(--color-text) 72%, var(--color-text-muted));
+  text-align: left;
+  hyphens: manual;
+}
+.reader-book-snapshot section[data-book-snapshot-section] > div > div + div { margin-top: 1.4em; }
+.reading-scaled .reader-book-snapshot section[data-book-snapshot-section] > h3 { max-width: 34em; font-size: calc(24px * var(--reading-scale, 1)); line-height: 1.3; letter-spacing: -.01em; text-wrap: balance; }
+.reader-book-snapshot section[data-book-snapshot-section] > h3:not(:last-child) { margin-bottom: .8em; }
+.reader-book-snapshot section[data-book-snapshot-section] + section[data-book-snapshot-section] { margin-top: 3rem; }
+.reader-book-snapshot .reader-keyword { color: var(--color-heading); font-weight: 650; }
+.reader-book-snapshot .reader-citation { color: color-mix(in srgb, var(--color-heading) 72%, #a78bc8); font-weight: 600; }
+@media (max-width: 640px) {
+  .reader-book[data-immersive="true"] { padding: 12px; }
+  .reader-book[data-immersive="true"] .reader-book-stage { padding: 16px; }
+}

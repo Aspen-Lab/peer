@@ -99,7 +99,7 @@ describe("PaperBody — an anchor for each heading and each caption", () => {
   it("changes nothing else: the paragraphs' anchors stand, and the heading's and the caption's words are as they were", () => {
     for (let i = 0; i < P; i += 1) expect(html).toContain(`<div id="${paragraphAnchor(0, i)}"`);
     expect(headingHtml(html)).toMatch(/>1 Introduction<\/h3>$/);
-    expect(figcaption(html, 0)).toBe(`<figcaption class="annotation mt-2 leading-[1.6] text-text-faint measure-mono"><span class="text-text-muted">Figure 1</span> · Creep against density in the invented survey.</figcaption>`);
+    expect(figcaption(html, 0)).toMatch(/<figcaption[^>]*><span class="text-text-muted">Figure 1<\/span> · Creep against density in the invented survey\.<\/figcaption>/);
   });
 
   it("gives the heading an id even where the section has no paragraphs (a group heading): p0", () => {

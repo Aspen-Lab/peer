@@ -32,10 +32,7 @@ type FeedItem = { kind: "paper"; data: Paper };
 function paperShellClass(isRead: boolean) {
   return cn(
     cardShell({ padding: "none", entrance: "none" }),
-    // The corner detail. Not a second ring inside the frame — the frame's own
-    // last 12px into each corner, stepped up from `--nm-frame` to
-    // `--nm-frame-hi`. See `@utility cropmarks` in globals.css.
-    "cropmarks group/tile relative overflow-hidden",
+    "group/tile relative overflow-hidden",
     isRead && "tile-read",
   );
 }
@@ -130,8 +127,6 @@ function SaveButton({
 
 // ── Paper tile ────────────────────────────────────────────────
 
-const SELECTED_BG = "color-mix(in srgb, var(--color-accent) 15%, var(--color-surface))";
-
 
 function PaperTile({ paper, isRead, selected, plateTerms = [], line }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[]; line?: string | null }) {
   const savePaper = useFeedStore((s) => s.savePaper);
@@ -174,9 +169,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line }: { paper: 
       <Link
         href={`/papers/${paper.id}`}
         className={cn(paperShellClass(isRead), "feed-card transition-colors")}
-        // The transition belongs in the class string; only the tinted ground,
-        // which is computed from the palette, has to be inline.
-        style={selected ? { background: SELECTED_BG } : undefined}
+        data-selected={selected || undefined}
       >
         <div className="feed-card-cover">
           <PaperPlate paper={paper} terms={plateTerms} />

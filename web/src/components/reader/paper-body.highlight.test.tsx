@@ -49,6 +49,7 @@ interface Spot {
   end?: number;
   quote?: string;
   colour?: HighlightColourId;
+  mark?: "bold" | "circle";
   order?: number;
 }
 const sticky = (id: string, n: number, start: number, end: number): Spot => ({ id, n, start, end, quote: P1.slice(start, end) });
@@ -68,6 +69,18 @@ const TAG = (n: number, style = "") => `<sup[^>]*>⁠<button[^>]*aria-label="Ope
 const HL = (id: string, bg: string, ink: string, part = false) => `<mark data-highlight${part ? "-part" : ""}="${id}" style="background-color:${bg};color:${ink}">`;
 
 // What a reader sees, per preset (B P11-04 §4.2): fill, ink on it, and the deeper shade it wears nested in another mark.
+describe("personal reading mark styles", () => {
+  it("renders a saved bold or circle mark without a fluorescent fill", () => {
+    for (const mark of ["bold", "circle"] as const) {
+      const html = p1([{ ...hl("personal", 0, 5), mark }]);
+      expect(html).toContain(`data-highlight="personal"`);
+      expect(html).toContain(`reader-manual-${mark}`);
+      expect(html).toContain("background-color:transparent");
+      expect(html).toContain("Grain");
+    }
+  });
+});
+
 const PRESETS: Record<HighlightColourId, { fill: string; ink: string; deep: string }> = {
   yellow: { fill: "#ffe600", ink: "#000000", deep: "#dbc600" },
   green: { fill: "#8fe388", ink: "#000000", deep: "#7bc375" },

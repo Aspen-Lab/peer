@@ -1,41 +1,81 @@
-/* A quiet, solid navigation surface. Shape and contrast, rather than
-   dividers, distinguish navigation, the current page and the write action. */
+/* A calm header with the same soft violet as the reading surfaces. */
 .peer-masthead {
-  background: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
+  --masthead-violet: #a78bc8;
+  background: color-mix(in srgb, var(--color-bg-secondary) 94%, var(--masthead-violet));
+  border-bottom: 0;
 }
-.peer-masthead[data-scrolled="true"] { box-shadow: 0 4px 20px color-mix(in srgb, #000 12%, transparent); }
+.peer-masthead[data-scrolled="true"] {
+  box-shadow: 0 5px 24px color-mix(in srgb, var(--color-bg) 35%, transparent);
+}
+.peer-masthead > div:first-child > a {
+  border-radius: 9px;
+  transition: background-color 150ms ease;
+}
+.peer-masthead > div:first-child > a:hover {
+  background: color-mix(in srgb, var(--color-heading) 6%, transparent);
+}
+.peer-masthead > div:first-child > a svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--masthead-violet) 20%, var(--color-surface));
+}
+.peer-masthead > div:first-child > a svg path { fill: var(--masthead-violet); }
+.peer-masthead > div:first-child > a > span {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
 .peer-nav {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--color-surface) 65%, var(--color-bg-secondary));
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: normal;
   text-transform: none;
 }
-.peer-nav { gap: 3px; }
 .peer-nav-link, .peer-help, .peer-write {
+  height: 32px;
   border-radius: 8px;
-  height: 34px;
 }
-.peer-nav-link:hover, .peer-help:hover { background: var(--color-surface-hover); }
-.peer-nav-link[aria-current="page"] { background: var(--color-surface-hover); color: var(--color-heading); }
+.peer-nav-link > span { gap: 7px; padding-inline: 9px; }
+.peer-nav-link, .peer-help {
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.peer-nav-link:hover, .peer-help:hover {
+  background: color-mix(in srgb, var(--color-heading) 8%, transparent);
+  color: var(--color-heading);
+}
+.peer-nav-link[aria-current="page"] {
+  background: color-mix(in srgb, var(--masthead-violet) 23%, var(--color-surface-hover));
+  color: var(--color-heading);
+}
 .peer-write {
-  margin-right: 8px;
-  background: var(--color-heading);
-  color: var(--color-bg);
+  margin-right: 4px;
+  padding-inline: 13px;
+  background: color-mix(in srgb, var(--masthead-violet) 80%, white);
+  color: #211b2b;
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
   letter-spacing: 0;
   text-transform: none;
+  transition: background-color 150ms ease;
 }
-.peer-write:hover { opacity: .85; }
-.peer-write-current { background: var(--color-accent); color: var(--color-fixed-black); }
-.peer-masthead :is(a, button):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.peer-write:hover { background: color-mix(in srgb, var(--masthead-violet) 65%, white); }
+.peer-write-current { background: color-mix(in srgb, var(--masthead-violet) 65%, white); }
+.peer-masthead :is(a, button):focus-visible { outline: 2px solid var(--masthead-violet); outline-offset: 2px; }
 @media (max-width: 1023px) {
   .peer-nav-label { display: none; }
   .peer-nav-link { min-width: 36px; }
 }
 @media (hover: none) {
   .peer-nav-link, .peer-help, .peer-write { min-height: 44px; }
+  .peer-nav { padding-block: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .peer-masthead > div:first-child > a, .peer-nav-link, .peer-help, .peer-write { transition: none; }
 }

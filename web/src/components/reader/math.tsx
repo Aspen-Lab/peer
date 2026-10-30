@@ -18,6 +18,7 @@ import "katex/dist/katex.min.css";
 import "./math-reading.css";
 import type { ReadingEquation } from "@/lib/papers/reading";
 import { splitMath } from "@/lib/text/math";
+import { citationRanges, firstKeyword } from "./keyword-emphasis";
 import { IconCheck, IconCopy } from "@/components/icons";
 
 /** Some sources wrap the TeX in delimiters even when the whole field is math. */
@@ -99,26 +100,34 @@ function InlineEquation({ tex }: { tex: string }) {
 
 /** A paragraph as the reader should see it: its prose, and its formulas
  *  drawn where they stand. Prose with no formula costs one comparison. */
-export function MathText({ text }: { text: string }) {
+export function MathText({ text, keywords, citations = false }: { text: string; keywords?: readonly string[]; citations?: boolean }) {
   const runs = splitMath(text);
-  if (runs.length === 1 && runs[0].kind === "text") return <>{text}</>;
+  const emphasis = keywords?.length ? firstKeyword(runs, keywords) : null;
+  const references = citations ? runs.map((run) => run.kind === "text" ? citationRanges(run.value) : []) : [];
+  if (!emphasis && !references.some((items) => items.length) && runs.length === 1 && runs[0].kind === "text") return <>{text}</>;
   return (
     <>
-      {runs.map((run, i) =>
-        run.kind === "text" ? (
-          <span key={i}>{run.value}</span>
-        ) : isSubstantiveEquation(run.value) ? (
+      {runs.map((run, i) => {
+        if (run.kind === "text") {
+          const highlights: Array<{ start: number; end: number; kind: "citation" | "keyword" }> = (references[i] ?? []).map((range) => ({ ...range, kind: "citation" as const }));
+          if (emphasis?.run === i && !highlights.some((range) => emphasis.start < range.end && emphasis.end > range.start)) {
+            highlights.push({ start: emphasis.start, end: emphasis.end, kind: "keyword" });
+          }
+          highlights.sort((a, b) => a.start - b.start);
+          let cursor = 0;
+          return <span key={i}>{highlights.map((item) => {
+            const before = run.value.slice(cursor, item.start);
+            const value = run.value.slice(item.start, item.end);
+            cursor = item.end;
+            return <span key={item.start}>{before}{item.kind === "keyword" ? <strong className="reader-keyword">{value}</strong> : <span className="reader-citation">{value}</span>}</span>;
+          })}{run.value.slice(cursor)}</span>;
+        }
+        return isSubstantiveEquation(run.value) ? (
           <InlineEquation key={i} tex={run.value} />
         ) : (
-          // A formula is one unbreakable box. One wider than the column —
-          // LaTeXML sets a whole "where head_i = …" clause inline — used to
-          // push the page out sideways on a phone; it scrolls in place now,
-          // and the prose around it stays where it was.
-          <span key={i} className="reader-inline-math">
-            {render(run.value, false)}
-          </span>
-        ),
-      )}
+          <span key={i} className="reader-inline-math">{render(run.value, false)}</span>
+        );
+      })}
     </>
   );
 }

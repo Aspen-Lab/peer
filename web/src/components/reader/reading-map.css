@@ -1,69 +1,120 @@
-/* A quiet, navigable outline: typography and indentation carry the hierarchy. */
+/* A quiet outline: tone, spacing and indentation carry the hierarchy. */
+.reader-left section:has(> [data-map-title]) { margin-top: 0; }
 .reader-left [data-map-title] {
-  font-family: var(--font-sans), sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  width: 100%;
+  min-height: 36px;
+  padding-right: 36px;
+  background: var(--reader-outline-bg, var(--color-bg));
+  box-shadow: 0 -18px 0 var(--reader-outline-bg, var(--color-bg));
+  font: 650 16px/1.3 var(--font-sans), sans-serif;
+  letter-spacing: -0.01em;
   text-transform: none;
-  color: var(--color-text-muted);
+  color: var(--color-heading);
 }
-.reader-left [data-map-title] > span { display: none; }
+/* A small document mark keeps the outline identifiable without dominating it. */
+.reader-left [data-map-title] > span {
+  display: grid;
+  position: relative;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--reader-outline-purple, #a78bc8) 15%, var(--reader-outline-bg, var(--color-surface)));
+}
+.reader-left [data-map-title] > span::before {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 17px;
+  border: 1.5px solid color-mix(in srgb, var(--reader-outline-purple, #a78bc8) 76%, var(--color-heading));
+  border-radius: 3px;
+}
+.reader-left [data-map-title] > span::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--reader-outline-purple, #a78bc8) 76%, var(--color-heading));
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--reader-outline-purple, #a78bc8) 76%, var(--color-heading));
+  transform: translateY(-2px);
+}
+.reader-left p:has(> [data-map-summary]) {
+  margin-top: 3px;
+  padding: 0 0 0 40px;
+  border-radius: 0;
+  background: transparent;
+}
 .reader-left [data-map-summary] {
-  font-size: 12px;
-  line-height: 1.5;
+  color: var(--color-text-muted);
+  font: 400 13.5px/1.5 var(--font-sans), sans-serif;
+  letter-spacing: 0;
 }
-.reader-left [data-map-list] { margin-top: 12px; }
-.reader-left [data-map-row] {
-  margin-top: 0;
-  padding-block: 1px;
-}
+.reader-left [data-map-list] { margin-top: 16px; }
+.reader-left [data-map-row] { margin-top: 0; padding-block: 2px; }
 .reader-left [data-map-row][hidden] { display: none; }
 .reader-left [data-map-row] > div:first-child {
+  position: relative;
   align-items: flex-start;
   gap: 2px;
-  min-height: 32px;
-  border-radius: 6px;
+  min-height: 36px;
+  border-radius: 7px;
   transition: background-color 150ms ease;
 }
 .reader-left [data-map-row] > div:first-child:hover {
-  background-color: var(--color-surface-hover);
+  background: color-mix(in srgb, var(--color-heading) 7%, transparent);
 }
 .reader-left [data-map-row][data-active="true"] > div:first-child {
-  background-color: var(--color-surface);
+  background: color-mix(in srgb, var(--reader-outline-purple, #a78bc8) 15%, var(--reader-outline-bg, var(--color-surface)));
+}
+.reader-left [data-map-row][data-active="true"] > div:first-child::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 13px;
+  width: 3px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--reader-outline-purple, #a78bc8);
 }
 .reader-left [data-map-row] > div > div > a {
   flex: 1 1 14rem;
-  padding: 6px 3px;
+  padding: 8px 3px;
+  color: var(--color-text-muted);
   font-family: var(--font-sans), sans-serif;
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .reader-left [data-map-row][data-level="1"] > div > div > a {
   color: var(--color-heading);
-  font-weight: 600;
+  font-weight: 550;
 }
 .reader-left [data-map-row][data-active="true"] > div > div > a {
   color: var(--color-heading);
+  font-weight: 650;
 }
 .reader-map-toggle, .reader-map-toggle-spacer, .reader-map-excerpt-toggle {
   display: inline-flex;
   flex: 0 0 25px;
   width: 25px;
-  height: 32px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border-radius: 5px;
   color: var(--color-text-faint);
 }
 .reader-map-toggle:hover, .reader-map-excerpt-toggle:hover {
-  background: var(--color-border-strong);
+  background: color-mix(in srgb, var(--color-heading) 9%, transparent);
   color: var(--color-heading);
 }
 .reader-map-chevron {
   display: inline-block;
   font-family: sans-serif;
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1;
   transition: transform 150ms ease;
 }
@@ -77,10 +128,10 @@
   .reader-left [data-map-row] > div:first-child { align-items: center; }
 }
 .reader-map-toggle:focus-visible, .reader-map-excerpt-toggle:focus-visible {
-  outline: 2px solid var(--color-text-muted);
+  outline: 2px solid var(--reader-outline-purple, #a78bc8);
   outline-offset: -2px;
 }
-/* Extra section facts are still available when the paragraph preview is open. */
+/* Extra section facts remain available to assistive technology. */
 .reader-left [data-map-row][data-expanded="false"] .reader-map-meta {
   position: absolute;
   width: 1px;

@@ -79,7 +79,7 @@ describe("passageIsLost — a heading's or a caption's note, against the reading
 
 describe("storedBodyOf — the reading kept in this browser keeps its headings and captions", () => {
   it("gives back the sections as stored, headings and figures with them", () => {
-    const entry = { ts: 1_000, reading: { version: 16, body: BODY } };
+    const entry = { ts: 1_000, reading: { version: 18, body: BODY } };
     const storage = { getItem: () => JSON.stringify({ "p1|key": entry }) };
     const body = storedBodyOf("p1", storage, 2_000);
     expect(body).toEqual(BODY);

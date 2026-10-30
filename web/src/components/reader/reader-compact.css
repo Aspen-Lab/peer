@@ -179,7 +179,12 @@
 .reader-document-tools { margin-bottom: 12px; }
 .reader-document-commands .reader-command-stack { margin-top: 18px; }
 .reader-document .reader-action.reader-action { font-size: 15px; }
-.reader-document .reader-primary-action { min-height: 42px; padding-inline: 16px; }
+.reader-document .reader-primary-action {
+  min-height: 42px;
+  padding-inline: 16px;
+  background: color-mix(in srgb, #a78bc8 80%, white);
+  color: #211b2b;
+}
 .reader-document-details [data-pane-bibliography] { margin-top: 24px; }
 .reader-document .reader-sidebar-facts {
   border-collapse: separate;
@@ -236,13 +241,50 @@
 }
 .reader-document .reader-tab-selected {
   color: var(--color-heading);
-  background: var(--color-surface-hover);
+  background: color-mix(in srgb, #a78bc8 15%, var(--color-surface-hover));
 }
 .reader-document [data-ask-field] { margin-top: 20px; }
 .reader-document [data-ask-field] > label { font-size: 15px; }
 .reader-document [data-ask-bar] { border: 0; background: var(--color-surface); }
+.reader-document [data-ask-bar]:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, #a78bc8 60%, transparent); }
 .reader-document [data-ask-line] { font: 16px/1.5 var(--font-sans); }
 .reader-document [data-ask-bar] button { font-family: var(--font-sans); font-size: 14px; }
 .reader-document .eyebrow + span[aria-hidden="true"] { display: none; }
 .reader-document #paper-body h2.eyebrow { font-size: 18px; }
 .reader-document #paper-body h2.eyebrow > span { display: none; }
+
+/* A quiet reading outline: a soft surface separates navigation from prose. */
+.reader-left[data-mode="whole"] {
+  height: calc((100vh - 4rem) / var(--page-zoom, 1) - var(--legend-h) - 1rem);
+  padding: 16px 14px 24px;
+  border-radius: 14px;
+  --reader-outline-purple: #a78bc8;
+  --reader-outline-bg: color-mix(in srgb, var(--color-bg-secondary) 68%, var(--color-surface));
+  background: var(--reader-outline-bg);
+  scrollbar-width: none;
+}
+.reader-left[data-mode="whole"]::-webkit-scrollbar { display: none; }
+.reader-left[data-mode="whole"] .reader-left-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  align-self: flex-end;
+  width: 32px;
+  min-height: 32px;
+  margin-bottom: -32px;
+  padding: 0;
+}
+.reader-left[data-mode="whole"] .reader-pin-button,
+.reader-rail-button {
+  border-radius: 7px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+.reader-left[data-mode="whole"] .reader-pin-button:hover,
+.reader-rail-button:hover { background: var(--color-surface-hover); }
+.reader-left[data-mode="whole"] .reader-pin-button:focus-visible,
+.reader-rail-button:focus-visible { outline: 2px solid var(--reader-outline-purple, #a78bc8); outline-offset: 2px; }
+.reader-shell .reader-divider::before,
+.reader-shell .reader-divider-rest::before { background: transparent; }
+.reader-shell .reader-divider:hover::before,
+.reader-shell .reader-divider:focus-visible::before,
+.reader-shell .reader-divider[data-dragging]::before { background: var(--reader-outline-purple, #a78bc8); }

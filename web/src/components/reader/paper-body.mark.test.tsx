@@ -129,7 +129,7 @@ describe("PaperBody — the words a sticky was taken on are marked", () => {
   it("marks words that follow a formula without disturbing it, and never a range that cuts one", () => {
     const start = P2.indexOf("grain boundaries");
     const html = paragraphHtml(render({ [paragraphAnchor(0, 2)]: [spot("a", 1, P2, start, start + 16)] }), 2);
-    expect(html).toMatch(/<code[^>]*>x_\{1\}<\/code>/);
+    expect(html).toContain('<annotation encoding="application/x-tex">x_{1}</annotation>');
     expect(html).toMatch(/<mark data-note="1"[^>]*>grain boundaries<\/mark>/);
     const cut = paragraphHtml(render({ [paragraphAnchor(0, 2)]: [spot("a", 1, P2, 4, 14)] }), 2);
     expect(cut).not.toContain("<mark");

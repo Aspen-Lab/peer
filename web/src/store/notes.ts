@@ -12,7 +12,7 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Block, Citable, HighlightColourId, Note } from "@/lib/notes/types";
+import type { Block, Citable, HighlightColourId, Note, ReadingMarkStyle } from "@/lib/notes/types";
 import { anchorBlocks, anchorTextOnShow, blockAt, isPageBlockId, parseAnchorId, type AnchorSection } from "@/lib/notes/anchor-blocks";
 import {
   citedKeys,
@@ -336,11 +336,13 @@ interface NotesState {
       /** Where the selection began in the paragraph's text, to tell one occurrence of the passage from another. */
       hint?: number;
       colour?: HighlightColourId;
+      mark?: Exclude<ReadingMarkStyle, "highlight">;
     },
   ) => { id: string; created: boolean } | null;
   /** P11-07: change one highlight's colour; nothing else of it or of the note. A colour the table does not know, a block that is
    *  not a highlight, and the colour it already has are no-ops. */
   setHighlightColour: (noteId: string, blockId: string, colour: HighlightColourId) => void;
+  setHighlightStyle: (noteId: string, blockId: string, style: ReadingMarkStyle) => void;
   /** P11-07: take a highlight out of the note. Only a block of type `highlight` is taken; the paper's mark leaves in the same render. */
   removeHighlight: (noteId: string, blockId: string) => void;
 }
@@ -512,6 +514,7 @@ export const useNotesStore = create<NotesState>()(
           quote,
           ...place,
           colour: isHighlightColour(at.colour) ? at.colour : DEFAULT_HIGHLIGHT_COLOUR,
+          ...(at.mark === "bold" || at.mark === "circle" ? { mark: at.mark } : {}),
         });
         set((s) => {
           const current = s.notes[noteId];
@@ -528,9 +531,26 @@ export const useNotesStore = create<NotesState>()(
           const blocks = note.blocks.map((b) => {
             const spot = b.id === blockId ? readHighlight(b) : null;
             // A stored colour the table does not know reads as yellow; choosing yellow writes it down.
-            if (!spot || b.highlight?.colour === colour) return b;
+            if (!spot || (b.highlight?.colour === colour && !spot.mark)) return b;
             touched = true;
-            return { ...b, highlight: { ...spot, colour } };
+            const highlight = { ...spot };
+            delete highlight.mark;
+            return { ...b, highlight: { ...highlight, colour } };
+          });
+          return touched ? { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } } : s;
+        }),
+      setHighlightStyle: (noteId, blockId, style) =>
+        set((s) => {
+          const note = s.notes[noteId];
+          if (!note || !["highlight", "bold", "circle"].includes(style)) return s;
+          let touched = false;
+          const blocks = note.blocks.map((b) => {
+            const spot = b.id === blockId ? readHighlight(b) : null;
+            if (!spot || (spot.mark ?? "highlight") === style) return b;
+            touched = true;
+            const rest = { ...spot };
+            delete rest.mark;
+            return { ...b, highlight: { ...rest, ...(style !== "highlight" ? { mark: style } : {}) } };
           });
           return touched ? { notes: { ...s.notes, [noteId]: { ...note, blocks, updatedAt: new Date().toISOString() } } } : s;
         }),

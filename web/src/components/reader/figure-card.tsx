@@ -27,6 +27,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Ref, type SyntheticEvent } from "react";
 import { cn } from "@/lib/cn";
+import { MathText } from "./math";
 import { quoteHead } from "@/lib/notes/blocks";
 import type { FigureRef } from "@/lib/reader/figure-viewer";
 import { FIGURE_STACKED_CAPTION_SHARE, FIGURE_ZOOM_ROW_PX } from "@/lib/reader/windows";
@@ -288,7 +289,7 @@ export function FigureCardView({ label, caption, src, front, top, height, z, sta
           className="shrink-0 overflow-y-auto overscroll-contain px-3 py-2 font-reading text-body-sm leading-[1.6] text-text [overflow-wrap:anywhere]"
           style={{ maxHeight: captionMaxHeight(height, stacked) }}
         >
-          {caption}
+          {caption.includes("⟦") ? <MathText text={caption} /> : caption}
         </div>
       )}
     </MarginCardShell>

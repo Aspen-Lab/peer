@@ -18,7 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import type { Citable, Note, Source } from "@/lib/notes/types";
-import { citedKeys, excerpt } from "@/lib/notes/blocks";
+import { citedKeys } from "@/lib/notes/blocks";
 import { authorYear, citableFromPaper } from "@/lib/notes/cite";
 import { blankNote } from "@/lib/notes/templates";
 import { fileName, toMarkdown } from "@/lib/notes/export";
@@ -28,6 +28,7 @@ import { useFeedStore } from "@/store/feed";
 import { formatTimeAgo } from "@/lib/format";
 import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
+import { markedPassages, noteSearchText } from "./note-preview";
 
 /** Past this many, the rail carries a filter — under it, the eye is faster. */
 const FILTER_FROM = 7;
@@ -76,7 +77,9 @@ function noteMeta(note: Note, cites: number): string {
       : null;
   // "22h", not "22h ago": in a column of them the word never varies.
   const edited = formatTimeAgo(note.updatedAt)?.replace(/ ago$/, "") ?? null;
-  return [first, edited].filter(Boolean).join(" \u00b7 ");
+  const count = markedPassages(note).length;
+  const marks = count > 0 ? `${count} ${count === 1 ? "mark" : "marks"}` : null;
+  return [first, marks, edited].filter(Boolean).join(" \u00b7 ");
 }
 
 function rowClass(active: boolean): string {
@@ -114,7 +117,7 @@ export function EditorRail({
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return list;
-    return list.filter((n) => `${n.title} ${excerpt(n, 400)}`.toLowerCase().includes(q));
+    return list.filter((n) => noteSearchText(n).includes(q));
   }, [list, query]);
 
   /** Every paper this note can reach: the shelf, and whatever it already

@@ -112,7 +112,12 @@ function blockMarkdown(b: Block, blocks: Block[], i: number, sources: Record<str
       // P11-08: the notes' own highlight mark around the words. A star, an underscore and an equals sign in the paper's words are
       // written with the dialect's escapes (`\*`, `\_`, `\=`), so the words come back as one mark and a renderer reads them the same.
       const words = highlightWords(b);
-      return words === null ? null : `==${words.replace(/[*_=]/g, "\\$&")}==`;
+      if (words === null) return null;
+      const mark = readHighlight(b)?.mark;
+      const escaped = words.replace(/[*_=]/g, "\\$&");
+      if (mark === "bold") return `**${escaped}**`;
+      if (mark === "circle") return `◯ ${escaped}`;
+      return `==${escaped}==`;
     }
   }
 }
@@ -357,7 +362,11 @@ function bodyHtml(note: Note): string {
         // P11-08: the words in a paragraph of their own, in the highlight's colour.
         const spot = readHighlight(b);
         const words = highlightWords(b);
-        if (spot && words) out.push(`<p><mark style="${highlightStyle(spot.colour)}">${esc(words)}</mark></p>\n`);
+        if (spot && words) {
+          if (spot.mark === "bold") out.push(`<p><strong>${esc(words)}</strong></p>\n`);
+          else if (spot.mark === "circle") out.push(`<p><span style="border:1px solid #8064a2;border-radius:1em;padding:0 0.15em">${esc(words)}</span></p>\n`);
+          else out.push(`<p><mark style="${highlightStyle(spot.colour)}">${esc(words)}</mark></p>\n`);
+        }
         break;
       }
     }

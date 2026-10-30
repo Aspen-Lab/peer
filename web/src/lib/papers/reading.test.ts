@@ -301,7 +301,7 @@ describe("buildReading", () => {
     // P8-04 for HTML), so a reading cached under 6 is read again.
     // P9: 7 -> 8 — no field added; the PDF text and the cleaner changed
     // (P9-08 / P9-09 / P9-10), so a reading cached under 7 is read again.
-    expect(reading.version).toBe(16);
+    expect(reading.version).toBe(18);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
@@ -836,6 +836,14 @@ describe("placeFigures", () => {
     expect(placed[1].figures?.[0]).toMatchObject({ label: "Figure 7", after: 1 });
     expect(placed[0].figures).toBeUndefined();
     expect(placed[2].figures).toBeUndefined();
+  });
+
+  it("places a structured table next to its first mention", () => {
+    const table = { rows: [{ cells: [{ text: "Score", header: true }, { text: "93%", header: false }] }] };
+    const placed = placeFigures([section("A", "Introduction.", "Table 2 shows the results.")], [
+      { ordinal: 0, label: "Table 2", caption: "Scores", table },
+    ], null);
+    expect(placed[0].figures?.[0]).toMatchObject({ label: "Table 2", after: 1, table });
   });
 
   it("leaves tables out: a table's caption without its table says nothing", () => {

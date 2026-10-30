@@ -40,6 +40,17 @@ export function withSectionIds(sections: DraftSection[]): ExtractedSection[] {
   return sections.map((section, index) => ({ ...section, id: `s${index}` }));
 }
 
+export interface ExtractedTableCell {
+  text: string;
+  header: boolean;
+  rowSpan?: number;
+  colSpan?: number;
+}
+
+export interface ExtractedTable {
+  rows: { cells: ExtractedTableCell[] }[];
+}
+
 export interface ExtractedFigureCaption {
   ordinal: number;
   label: string;
@@ -47,6 +58,8 @@ export interface ExtractedFigureCaption {
   /** The figure's own picture, absolute — HTML sources only, where the
    *  caption sits in a `<figure>` with an `<img>`. */
   imageUrl?: string;
+  /** Structured cells, when the HTML source provides an actual table. */
+  table?: ExtractedTable;
   /** PDFs only: the page the caption was read from. */
   page?: number;
   /** P10-26: the picture's own width and height in pixels, where the extractor knows them (the page draws the
@@ -78,11 +91,17 @@ export interface ExtractedEquation {
   number?: string;
 }
 
+export interface ExtractedCodeBlock {
+  text: string;
+  language?: string;
+}
+
 export interface ExtractedDocument {
   title?: string | null;
   sections: ExtractedSection[];
   figureCaptions: ExtractedFigureCaption[];
   equations?: ExtractedEquation[];
+  codeBlocks?: ExtractedCodeBlock[];
   source: ExtractedSourceKind;
   /** PDFs only: pages the extractor saw (capped at its page limit). */
   pageCount?: number;
@@ -155,8 +174,17 @@ function stripTags(html: string): string {
  * a picture; quoted under "What they found, and how big" it is Peer claiming
  * a caption is a result. Two of the three findings on one paper were captions.
  */
-function withoutCaptions(html: string): string {
+function withoutCaptions(html: string, tableCaptions: "latexml" | "figcaption" | null = null): string {
   return html
+    // Only remove a table from the prose when its full structure can be shown
+    // separately. Unsupported tables remain in the source text.
+    .replace(/<figure\b[^>]*>[\s\S]*?<\/figure>/gi, (figure) => {
+      const captionTag = figure.match(/<figcaption\b([^>]*)>([\s\S]*?)<\/figcaption>/i);
+      const caption = captionTag?.[2];
+      const isCollected = tableCaptions === "figcaption" || (tableCaptions === "latexml" && /class=["'][^"']*ltx_caption/i.test(captionTag?.[1] ?? ""));
+      return isCollected && caption && /^table\s/i.test(parseCaption(stripTags(caption), 0)?.label ?? "") && tableInBlock(figure)
+        ? " " : figure;
+    })
     .replace(/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/gi, " ")
     .replace(/<div\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, " ");
 }
@@ -471,6 +499,35 @@ function figureBlockAround(html: string, captionIndex: number): string | null {
   return html.slice(start, end);
 }
 
+/** Extract only complete, bounded HTML tables; never guess PDF cells or flatten nested tables. */
+function tableInBlock(block: string): ExtractedTable | undefined {
+  const tables = block.match(/<table\b[^>]*>[\s\S]*?<\/table>/gi);
+  if (!tables || tables.length !== 1 || (block.match(/<table\b/gi)?.length ?? 0) !== 1) return undefined;
+  const table = tables[0];
+  const rows = table.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
+  if (!rows.length || rows.length > 100 || rows.length !== (table.match(/<tr\b/gi)?.length ?? 0)) return undefined;
+  const result: ExtractedTable["rows"] = [];
+  for (const row of rows) {
+    const matches = [...row.matchAll(/<(td|th)\b([^>]*)>([\s\S]*?)<\/\1\s*>/gi)];
+    if (!matches.length || matches.length > 30 || matches.length !== (row.match(/<(?:td|th)\b/gi)?.length ?? 0)) return undefined;
+    const cells: ExtractedTableCell[] = [];
+    for (const match of matches) {
+      const span = (name: string) => {
+        const raw = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(match[2]);
+        if (!raw) return 1;
+        const value = Number(raw[1] ?? raw[2] ?? raw[3]);
+        return Number.isInteger(value) && value >= 1 && value <= 30 ? value : 0;
+      };
+      const rowSpan = span("rowspan"), colSpan = span("colspan");
+      const text = oneLine(stripTags(match[3]));
+      if (!rowSpan || !colSpan || text.length > 2000) return undefined;
+      cells.push({ text, header: match[1].toLowerCase() === "th", ...(rowSpan > 1 ? { rowSpan } : {}), ...(colSpan > 1 ? { colSpan } : {}) });
+    }
+    result.push({ cells });
+  }
+  return { rows: result };
+}
+
 function collectCaptions(html: string, captionRe: RegExp, baseUrl?: string): ExtractedFigureCaption[] {
   const captions: ExtractedFigureCaption[] = [];
   for (const match of html.matchAll(captionRe)) {
@@ -478,10 +535,17 @@ function collectCaptions(html: string, captionRe: RegExp, baseUrl?: string): Ext
     if (!parsed) continue;
     const index = match.index ?? 0;
     const block = figureBlockAround(html, index);
-    const imageUrl = block ? imageInBlock(block, baseUrl) : undefined;
+    const isTable = /^table\s/i.test(parsed.label);
+    // The nearest preceding figure may already have ended; never bind its
+    // cells to a later caption.
+    const captionOffset = block?.indexOf(match[0]) ?? -1;
+    const ownsCaption = captionOffset >= 0 && !/<\/figure\s*>/i.test(block?.slice(0, captionOffset) ?? "");
+    const table = isTable && block && ownsCaption ? tableInBlock(block) : undefined;
+    const imageUrl = !isTable && block ? imageInBlock(block, baseUrl) : undefined;
     captions.push({
       ...parsed,
       ...(imageUrl ? { imageUrl } : {}),
+      ...(table ? { table } : {}),
       at: html.length > 0 ? index / html.length : 0,
     });
   }
@@ -574,6 +638,43 @@ export function liftLatexmlMath(html: string): { html: string; equations: Extrac
   return { html: out, equations };
 }
 
+/** Keep LaTeXML's source listing before the HTML-to-prose pass removes its whitespace. */
+export function liftLatexmlListings(html: string): { html: string; codeBlocks: ExtractedCodeBlock[] } {
+  const codeBlocks: ExtractedCodeBlock[] = [];
+  const opening = /<div\b[^>]*class=["'][^"']*\bltx_listing\b[^"']*["'][^>]*>/gi;
+  let result = "";
+  let cursor = 0;
+  for (const match of html.matchAll(opening)) {
+    const start = match.index;
+    if (start < cursor) continue;
+    // Listing lines are nested divs; find the matching closing tag by depth.
+    const tags = /<\/?div\b[^>]*>/gi;
+    tags.lastIndex = start;
+    let depth = 0;
+    let end = -1;
+    for (let tag = tags.exec(html); tag; tag = tags.exec(html)) {
+      depth += /^<\//.test(tag[0]) ? -1 : 1;
+      if (depth === 0) { end = tags.lastIndex; break; }
+    }
+    if (end < 0) break;
+    const listing = html.slice(start, end);
+    const data = /href=["']data:text\/plain;base64,([A-Za-z0-9+/=\s]+)["']/i.exec(listing)?.[1];
+    let text = "";
+    if (data && data.length <= 350_000) {
+      try {
+        const binary = atob(data.replace(/\s/g, ""));
+        text = new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+      } catch { /* Keep the original HTML when the source data is malformed. */ }
+    }
+    if (!text.trim()) continue;
+    const language = /\bltx_lst_language_([a-z0-9_+-]+)/i.exec(match[0])?.[1];
+    codeBlocks.push({ text, ...(language ? { language } : {}) });
+    result += html.slice(cursor, start) + `\n\n⟦@${codeBlocks.length - 1}⟧\n\n`;
+    cursor = end;
+  }
+  return { html: result + html.slice(cursor), codeBlocks };
+}
+
 const LATEXML_HEADING_RE =
   /<h([1-6])\b[^>]*class=["'][^"']*\bltx_title_(?:section|subsection|subsubsection|appendix)\b[^"']*["'][^>]*>([\s\S]*?)<\/h\1>/gi;
 
@@ -581,7 +682,8 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
   const baseUrl = resolveBase(page, pageUrl);
   // Mathematics first: the walk below flattens tags, and a formula flattened
   // is a formula lost.
-  const { html, equations } = liftLatexmlMath(page);
+  const listings = liftLatexmlListings(page);
+  const { html, equations } = liftLatexmlMath(listings.html);
   const sections: DraftSection[] = [];
 
   const abstractMatch = html.match(
@@ -607,7 +709,7 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
   const draft = sectionDrafter();
   for (let i = 0; i < heads.length; i++) {
     const stop = i + 1 < heads.length ? heads[i + 1].index : bodyEnd;
-    const text = stripTags(withoutCaptions(html.slice(heads[i].end, stop)));
+    const text = stripTags(withoutCaptions(html.slice(heads[i].end, stop), "latexml"));
     const section = draft(heads[i].heading, text);
     if (section) sections.push(section);
   }
@@ -622,6 +724,7 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
     ),
     source: "ar5iv",
     ...(equations.length > 0 ? { equations } : {}),
+    ...(listings.codeBlocks.length > 0 ? { codeBlocks: listings.codeBlocks } : {}),
   };
 }
 
@@ -696,7 +799,7 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
     if (!headingMatch) continue;
     const heading = oneLine(stripTags(headingMatch[1]));
     if (!heading) continue;
-    const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " ")));
+    const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " "), "figcaption"));
     const drafted = draft(heading, text);
     if (drafted) sections.push(drafted);
   }
@@ -760,7 +863,7 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
 // text as that section's body. Last resort — used for OA publishers without
 // a dedicated parser.
 
-function walkHeadings(html: string): DraftSection[] {
+function walkHeadings(html: string, tableCaptions: "figcaption" | null = null): DraftSection[] {
   const sections: DraftSection[] = [];
   // Find all heading positions
   const headingRe = /<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
@@ -792,7 +895,7 @@ function walkHeadings(html: string): DraftSection[] {
     const start = matches[i].end;
     const stop = i + 1 < matches.length ? matches[i + 1].index : html.length;
     const slice = html.slice(start, stop);
-    const text = stripTags(withoutCaptions(slice));
+    const text = stripTags(withoutCaptions(slice, tableCaptions));
     const section = draft(matches[i].heading, text);
     if (section) sections.push(section);
   }
@@ -805,7 +908,7 @@ function extractGeneric(html: string, pageUrl?: string): ExtractedDocument {
     /<article\b[^>]*>([\s\S]*?)<\/article>|<main\b[^>]*>([\s\S]*?)<\/main>/i,
   );
   const body = articleMatch ? articleMatch[1] || articleMatch[2] : html;
-  const sections = walkHeadings(body);
+  const sections = walkHeadings(body, "figcaption");
   return {
     title: extractTitleFromHtml(html),
     sections: withSectionIds(trimToBudget(dropStrayHeadings(sections))),

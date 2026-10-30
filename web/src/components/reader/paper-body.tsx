@@ -26,6 +26,7 @@ import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/r
 import { GIST_QUESTION, MAX_STRONG_ROWS, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
 import { Equation, MathText } from "./math";
+import { paperKeywords } from "./keyword-emphasis";
 import { Band } from "@/components/ui/band";
 import { openFigure, useFigureOpen } from "@/lib/reader/figure-viewer";
 import { paragraphKey } from "@/store/plain-rewrites";
@@ -822,7 +823,7 @@ function CaptionText({ figure, spots, failed }: { figure: ReadingFigure; spots?:
     return (
       <>
         <span className="text-text-muted">{figure.label}</span>
-        {text.slice(figure.label.length)}
+        <MathText text={text.slice(figure.label.length)} />
         {tail}
       </>
     );
@@ -905,7 +906,25 @@ function Figure({ figure, anchor, spots }: { figure: ReadingFigure; /** P11-27: 
     </button>
   );
   return (
-    <figure id={anchor} {...{ [ANCHOR_BLOCK_ATTRIBUTE]: "caption" }} className="my-6 scroll-mt-20">
+    <figure id={anchor} {...{ [ANCHOR_BLOCK_ATTRIBUTE]: "caption" }} data-visual-type={figure.table ? "table" : "figure"} className="reader-visual my-6 scroll-mt-20">
+      <div className="reader-visual-heading" aria-hidden="true">
+        <span className="reader-visual-icon">{figure.table ? "▦" : "◈"}</span>
+        <span>{figure.table ? "Table" : "Figure"}</span>
+        {showImage && <span className="reader-visual-hint">Click to enlarge ↗</span>}
+        {figure.table && <span className={`reader-visual-hint reader-table-hint${figure.table.rows.some((row) => row.cells.length > 4) ? " reader-table-hint-wide" : ""}`}>Scroll to explore ↗</span>}
+      </div>
+      {figure.table && (
+        <div className="reader-table-scroll" role="region" aria-label={`${figure.label} data`} tabIndex={0}>
+          <table className="reader-data-table" aria-label={figure.label}>
+            <tbody>{figure.table.rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>{row.cells.map((cell, cellIndex) => {
+                const Cell = cell.header ? "th" : "td";
+                return <Cell key={cellIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan}><MathText text={cell.text} /></Cell>;
+              })}</tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
       {showImage && (
         <div className={box ? figureMatClass(false) : figureMatClass(waiting)}>
           {box ? (
@@ -917,7 +936,7 @@ function Figure({ figure, anchor, spots }: { figure: ReadingFigure; /** P11-27: 
           )}
         </div>
       )}
-      <figcaption className="annotation mt-2 leading-[1.6] text-text-faint measure-mono">
+      <figcaption className="reader-visual-caption">
         <CaptionText figure={figure} spots={spots} failed={failed} />
       </figcaption>
     </figure>
@@ -931,9 +950,9 @@ function Figure({ figure, anchor, spots }: { figure: ReadingFigure; /** P11-27: 
  * is the same text in the same order — only cut into runs — and with no notes it is the paragraph as it was.
  * P11-09: a highlight (a spot with a `colour`) is drawn here too, in its own colour and with no tag — see `notedRuns`.
  */
-function NotedText({ text, spots }: { text: string; spots?: NoteAnchorMap[string] }) {
-  if (!spots || spots.length === 0) return <MathText text={text} />;
-  return <>{notedRuns(text, coveringSegments(text, spots))}</>;
+function NotedText({ text, spots, keywords }: { text: string; spots?: NoteAnchorMap[string]; keywords?: readonly string[] }) {
+  if (!spots || spots.length === 0) return <MathText text={text} keywords={keywords} citations={keywords !== undefined} />;
+  return <>{notedRuns(text, coveringSegments(text, spots), undefined, undefined, keywords !== undefined)}</>;
 }
 
 /**
@@ -1018,8 +1037,8 @@ interface Within {
  * a mark runs across it: the label stays a label inside the mark. Inside a highlight the label takes the highlight's ink (the muted face is not made for a bright
  * fill). Without `labelEnd` — a paragraph, a heading — it is the text, as it was.
  */
-function plainRun(text: string, from: number, to: number, key: string, within: Within | undefined, labelEnd: number | undefined) {
-  if (labelEnd === undefined || from >= labelEnd) return <MathText key={key} text={text.slice(from, to)} />;
+function plainRun(text: string, from: number, to: number, key: string, within: Within | undefined, labelEnd: number | undefined, citations: boolean) {
+  if (labelEnd === undefined || from >= labelEnd) return <MathText key={key} text={text.slice(from, to)} citations={citations} />;
   const cut = Math.min(to, labelEnd);
   return (
     <Fragment key={key}>
@@ -1037,9 +1056,9 @@ function plainRun(text: string, from: number, to: number, key: string, within: W
  * that lie inside an earlier mark) carry `data-highlight-part`. A sticky's mark inside a highlight wears the highlight's deep
  * shade and ink and keeps its tag. A paragraph with no highlight in it renders as it always did.
  */
-function notedRuns(text: string, segments: readonly CoveringSegment[], within?: Within, labelEnd?: number) {
+function notedRuns(text: string, segments: readonly CoveringSegment[], within?: Within, labelEnd?: number, citations = false) {
   return segments.map((segment, k) => {
-    if (segment.kind === "text") return plainRun(text, segment.from, segment.to, `t${k}`, within, labelEnd);
+    if (segment.kind === "text") return plainRun(text, segment.from, segment.to, `t${k}`, within, labelEnd, citations);
     const { spot } = segment;
     if (segment.kind === "tag") {
       // A highlight has no tag, even when the words it stood on are gone.
@@ -1048,14 +1067,16 @@ function notedRuns(text: string, segments: readonly CoveringSegment[], within?: 
     if (isHighlightSpot(spot)) {
       const colour = spot.colour as HighlightColourId;
       const paint = highlightPaint(colour, segment.depth);
-      const style = { backgroundColor: paint.bg, color: paint.ink };
-      const inner = notedRuns(text, segment.inner, { colour, ink: paint.ink }, labelEnd);
+      const manualStyle = spot.mark === "bold" || spot.mark === "circle";
+      const style = manualStyle ? { backgroundColor: "transparent", color: "inherit" } : { backgroundColor: paint.bg, color: paint.ink };
+      const inner = notedRuns(text, segment.inner, manualStyle ? within : { colour, ink: paint.ink }, labelEnd, citations);
+      const className = manualStyle ? `reader-manual-${spot.mark}` : undefined;
       return segment.part ? (
-        <mark key={`p${spot.id}:${k}`} data-highlight-part={spot.id} style={style}>
+        <mark key={`p${spot.id}:${k}`} data-highlight-part={spot.id} style={style} className={className}>
           {inner}
         </mark>
       ) : (
-        <mark key={`h${spot.id}`} data-highlight={spot.id} style={style}>
+        <mark key={`h${spot.id}`} data-highlight={spot.id} style={style} className={className}>
           {inner}
         </mark>
       );
@@ -1063,7 +1084,7 @@ function notedRuns(text: string, segments: readonly CoveringSegment[], within?: 
     // A sticky's mark inside a highlight: the highlight's deep shade and its ink, in place of the highlighter tokens.
     const worn = within ? highlightPaint(within.colour, 1) : null;
     const wear = worn ? { style: { backgroundColor: worn.bg, color: worn.ink } } : null;
-    const inner = notedRuns(text, segment.inner, within && worn ? { colour: within.colour, ink: worn.ink } : within, labelEnd);
+    const inner = notedRuns(text, segment.inner, within && worn ? { colour: within.colour, ink: worn.ink } : within, labelEnd, citations);
     // A part of a later note's mark inside an earlier mark: its words in the nested shade, no tag (the note's tag stands after its last word).
     if (segment.part) {
       return (
@@ -1097,6 +1118,7 @@ function Section({
   mark,
   plain,
   noteAnchors,
+  keywords,
 }: {
   section: ReadingSection;
   index: number;
@@ -1105,9 +1127,11 @@ function Section({
   plain?: PlainView;
   /** P10-09a: the sticky notes taken on this paper's paragraphs, by paragraph id. */
   noteAnchors?: NoteAnchorMap;
+  keywords?: readonly string[];
 }) {
   const figures = section.figures ?? [];
   const equations = section.equations ?? [];
+  const codeBlocks = section.codeBlocks ?? [];
   // What follows paragraph `i` (-1: what opens the section): the equations
   // the paper set there, then the figures it named there.
   const following = (i: number) => (
@@ -1117,6 +1141,12 @@ function Section({
         .map((e, k) => (
           <Equation key={`eq:${i}:${k}`} equation={e} />
         ))}
+      {codeBlocks.filter((block) => block.after === i).map((block, k) => (
+        <div key={`code:${i}:${k}`} className="reader-code-block">
+          <div className="reader-code-label">{block.language ? `Code · ${block.language}` : "Code"}</div>
+          <pre><code>{block.text}</code></pre>
+        </div>
+      ))}
       {figures.map((f, k) =>
         f.after === i ? (
           <Figure key={`${f.label}:${f.ordinal}`} figure={f} anchor={paragraphAnchor(index, captionBlock(section, k))} spots={noteAnchors?.[paragraphAnchor(index, captionBlock(section, k))]} />
@@ -1125,10 +1155,10 @@ function Section({
     </>
   );
   /** Whether the paper set an equation or a figure right after paragraph `i`. */
-  const hasFollowing = (i: number) => equations.some((e) => e.after === i) || figures.some((f) => f.after === i);
+  const hasFollowing = (i: number) => equations.some((e) => e.after === i) || codeBlocks.some((block) => block.after === i) || figures.some((f) => f.after === i);
   // P10-04 (review 3.3): a group heading ("2 Results" holding only "2.1 …") has no paragraphs, no equation
   // and no figure: it is its heading alone, with its anchor, and nothing under it before its first child.
-  const alone = section.paragraphs.length === 0 && equations.length === 0 && figures.length === 0;
+  const alone = section.paragraphs.length === 0 && equations.length === 0 && figures.length === 0 && codeBlocks.length === 0;
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       {/* P1-05: the route marks the heading — an attribute and a tint,
@@ -1158,7 +1188,7 @@ function Section({
               className={rewrite !== undefined ? `space-y-4 scroll-mt-20 ${SIDE_BY_SIDE}` : "space-y-4 scroll-mt-20"}
             >
               <p>
-                <NotedText text={paragraph} spots={noteAnchors?.[paragraphAnchor(index, i)]} />
+                <NotedText text={paragraph} spots={noteAnchors?.[paragraphAnchor(index, i)]} keywords={keywords} />
               </p>
               {rewrite !== undefined && <PlainRewrite text={rewrite} />}
               {offered && plain && (
@@ -1185,11 +1215,15 @@ export function PaperBody({
   reading,
   route,
   plain,
+  title,
+  keywords,
   onSelect,
   noteAnchors,
   onHighlightClick,
 }: {
   reading: PaperReading;
+  title?: string;
+  keywords?: readonly string[];
   route?: DrawRoute;
   /** P4-01 (blueprint §3.6; §1h.12 (h)): "Say it plainly" — the control under each paragraph the
    *  route marks read and the rewrites beside the paragraphs that show one. Absent for a reader
@@ -1210,6 +1244,7 @@ export function PaperBody({
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = useMemo(() => reading.body ?? [], [reading.body]);
+  const emphasis = useMemo(() => paperKeywords(title ?? "", keywords ?? []), [title, keywords]);
   // P10-35 (BACKLOG-91): a note's anchor is positional; the body draws a note only on the words it was taken on. An anchor whose
   // paragraph no longer holds them finds its quote again here (nearest first); it is written back once (the next load needs no
   // search), and one the paper no longer holds is drawn nowhere and told to its sticky.
@@ -1252,6 +1287,7 @@ export function PaperBody({
           mark={sectionMark(route, section.id)}
           plain={plain}
           noteAnchors={resolved?.map}
+          keywords={emphasis}
         />
       ))}
     </Band>

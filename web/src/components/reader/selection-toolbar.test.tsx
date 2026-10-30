@@ -38,6 +38,17 @@ const SIZE = { width: 220, height: 32 };
 const VIEW = { width: 1440, height: 1000 };
 const bounds = { left: 300, top: 400, right: 520, bottom: 440 };
 
+describe("reading mark actions", () => {
+  it("offers bold and circle only when the caller says the passage can be marked", () => {
+    const actions = offeredActions({ canExplain: false, onHighlight: () => {}, canHighlight: true, onBold: () => {}, onCircle: () => {}, canFormat: true });
+    expect(actions).toEqual(["note", "highlight", "bold", "circle"]);
+    expect(offeredActions({ canExplain: false, onBold: () => {}, onCircle: () => {}, canFormat: false })).toEqual(["note"]);
+    const html = renderToStaticMarkup(createElement(SelectionToolbarView, { place: { left: 0, top: 0, below: false }, canExplain: false, onExplain: () => {}, onTakeNote: () => {}, onBold: () => {}, onCircle: () => {} }));
+    expect(html).toContain("data-selection-bold");
+    expect(html).toContain("data-selection-circle");
+  });
+});
+
 describe("toolbarPlace", () => {
   it("stands just above the selection's first line, left-aligned with it", () => {
     const place = toolbarPlace({ bounds, viewport: VIEW, size: SIZE });

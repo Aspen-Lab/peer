@@ -37,6 +37,15 @@ describe("Markdown — a highlight is its own paragraph, ==words==", () => {
     }
   });
 
+  it("exports bold and circled marks without mislabelling them as highlights", () => {
+    const bold = light(); bold.highlight!.mark = "bold";
+    const circled = light(); circled.highlight!.mark = "circle";
+    const md = toMarkdown(noteWith([bold, circled]));
+    expect(md).toContain(`**${WORDS}**`);
+    expect(md).toContain(`◯ ${WORDS}`);
+    expect(md).not.toContain(`==${WORDS}==`);
+  });
+
   it("makes a note of highlights alone a note with a body, not an empty report", () => {
     const md = toMarkdown(noteWith([light("green", "First passage of the paper."), light("blue", "Second passage of the paper.")]));
     expect(md).toContain("==First passage of the paper.==\n\n==Second passage of the paper.==");

@@ -53,6 +53,7 @@ export interface AnchorSpot {
   end?: number;
   quote?: string;
   colour?: HighlightColourId;
+  mark?: "bold" | "circle";
   order?: number;
 }
 
@@ -328,7 +329,7 @@ const READING_CACHE_KEY = "peer-reading-v2";
  * exported): an entry of another shape version, or older than a day, is not the reading the page would show, so it is
  * "not known". Typed from the document itself, so a bump of `PaperReading["version"]` stops the build here until this follows.
  */
-const READING_VERSION: PaperReading["version"] = 16;
+const READING_VERSION: PaperReading["version"] = 18;
 const READING_TTL_MS = 24 * 60 * 60 * 1000;
 
 let parsedFrom: string | null = null;

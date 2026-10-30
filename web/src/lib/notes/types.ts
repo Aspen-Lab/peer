@@ -46,6 +46,7 @@ export interface NoteAnchor {
 /** P11-07 (owner item 8; ruling §1h.112 D3): the six colours a highlight can wear. The table behind the ids (names, fills)
  *  is `highlight-colours.ts`; a stored id that is not one of these reads as `yellow`. */
 export type HighlightColourId = "yellow" | "green" | "blue" | "pink" | "orange" | "ink";
+export type ReadingMarkStyle = "highlight" | "bold" | "circle";
 
 /** P11-07 (B P11-04 §2.2): the words a highlight was made on. It rides on a block of its own (`type: "highlight"`, `text`
  *  empty) in the paper's note — not on a sticky's `anchor` — so a highlight is never numbered, never tagged and never taken
@@ -61,6 +62,8 @@ export interface HighlightSpot {
   start: number;
   end: number;
   colour: HighlightColourId;
+  /** Absent means the original coloured highlight. */
+  mark?: Exclude<ReadingMarkStyle, "highlight">;
 }
 
 export interface Block {

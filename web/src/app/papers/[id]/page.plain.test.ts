@@ -27,7 +27,7 @@ function plainProblems(source: string): string[] {
   };
 
   // The body is handed the view — and only a reader with a model gets one.
-  has("<PaperBody reading={reading} route={route} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />", "the body is no longer handed the plain view");
+  has("<PaperBody reading={reading} route={route} title={paper?.title} keywords={paper?.summaryExperimentKeywords} plain={plainForBody} onSelect={selectExplain} noteAnchors={noteAnchors} onHighlightClick={(id, rect) => useHighlightStrip.getState().show(id, rect.top)} />", "the body is no longer handed the plain view");
   const forBody = /const plainForBody = ([^;]*);/.exec(text)?.[1] ?? "";
   if (!forBody.startsWith("PLAIN_REWRITE_ENABLED && ")) problems.push("the plain view is drawn while Say it plainly is switched off (PLAIN_REWRITE_ENABLED)");
   if (forBody.replace(/^PLAIN_REWRITE_ENABLED && /, "") !== "providerConfigured ? plainView : undefined") problems.push("the plain view is not absent for a reader with no model (the locked-block rule)");

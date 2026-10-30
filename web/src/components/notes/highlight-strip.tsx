@@ -156,8 +156,10 @@ export function HighlightStripView({
   onRemove,
   innerRef,
   blockId,
+  mark,
 }: {
   colour: HighlightColourId;
+  mark?: "bold" | "circle";
   place: StripPlace;
   onPick: (colour: HighlightColourId) => void;
   onRemove: () => void;
@@ -174,11 +176,11 @@ export function HighlightStripView({
       style={{ left: place.left, top: place.top, maxWidth: place.maxWidth, width: "max-content" }}
       className="fixed z-[70] flex flex-wrap items-center gap-x-1 border border-border-strong bg-surface p-1 font-mono text-caption shadow-card-hover"
     >
-      <HighlightSwatches value={colour} onPick={onPick} />
+      {mark ? <span className="px-2 font-sans text-heading">{mark === "bold" ? "Bold" : "Circle"}</span> : <HighlightSwatches value={colour} onPick={onPick} />}
       <button
         type="button"
         data-highlight-remove=""
-        aria-label="Remove highlight"
+        aria-label={mark ? "Remove mark" : "Remove highlight"}
         onMouseDown={keep}
         onClick={onRemove}
         style={{ height: SWATCH_HIT_PX }}
@@ -264,6 +266,14 @@ function useHighlightColour(noteId: string, blockId: string): HighlightColourId 
  * (it wraps to two rows when `width` is narrow). Mounted by the margin while `useHighlightStrip` names a highlight. It hides itself
  * when its highlight is gone (removed from the notes window, say).
  */
+function useHighlightMark(noteId: string, blockId: string): "bold" | "circle" | undefined {
+  const read = () => {
+    const mark = readHighlight(useNotesStore.getState().notes[noteId]?.blocks.find((b) => b.id === blockId))?.mark;
+    return mark === "bold" || mark === "circle" ? mark : undefined;
+  };
+  return useSyncExternalStore(useNotesStore.subscribe, read, read);
+}
+
 export function HighlightStrip({
   noteId,
   blockId,
@@ -278,6 +288,7 @@ export function HighlightStrip({
   width: number;
 }) {
   const colour = useHighlightColour(noteId, blockId);
+  const mark = useHighlightMark(noteId, blockId);
   const el = useRef<HTMLDivElement | null>(null);
   const hide = useHighlightStrip.getState().hide;
   useStripClose(el, hide);
@@ -289,6 +300,7 @@ export function HighlightStrip({
   return (
     <HighlightStripView
       colour={colour}
+      mark={mark}
       blockId={blockId}
       place={stripPlace({ top, left, width, viewportHeight })}
       onPick={(next) => pickHighlightColour(noteId, blockId, next)}
