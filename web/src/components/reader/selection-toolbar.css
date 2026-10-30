@@ -1,0 +1,43 @@
+/* A compact floating tool palette that belongs to the reading surface. */
+.reader-selection-toolbar {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border: 1px solid color-mix(in srgb, var(--color-heading) 9%, transparent);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 10px 32px color-mix(in srgb, #17111f 18%, transparent), 0 2px 8px color-mix(in srgb, #17111f 9%, transparent);
+  font-family: var(--font-sans), sans-serif;
+}
+.reader-selection-toolbar::-webkit-scrollbar { display: none; }
+.reader-selection-toolbar[data-mode="margin"] { flex-direction: column; }
+.reader-selection-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-heading);
+  font: 500 13px/1.2 var(--font-sans), sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.reader-selection-toolbar[data-mode="margin"] .reader-selection-action { justify-content: flex-start; }
+.reader-selection-action :is(svg, .reader-selection-glyph) { flex: none; color: color-mix(in srgb, #a78bc8 65%, var(--color-heading)); }
+.reader-selection-glyph { display: inline-grid; width: 15px; place-items: center; font-size: 16px; }
+.reader-selection-circle { font-size: 18px; line-height: 1; }
+.reader-selection-action:hover, .reader-selection-action:focus-visible { outline: none; background: color-mix(in srgb, #a78bc8 16%, var(--color-surface)); }
+@media (hover: none) { .reader-selection-action { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .reader-selection-action { transition: none; } }

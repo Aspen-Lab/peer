@@ -74,6 +74,8 @@
 // (`canExplain`; the request clips the passage at the route's cap and the card shows its opening words, `explain-box.tsx`).
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { IconBook } from "@/components/icons";
+import "./selection-toolbar.css";
 import type { PaperTerm } from "@/lib/papers/report";
 import { setHighlightOffer } from "@/lib/reader/explain-offer";
 import { MARGIN_CARD_SELECTOR, placeInMargin, useMarginRect, type MarginRect } from "@/lib/reader/margin";
@@ -623,8 +625,6 @@ export function actionsPlace(input: {
   return { mode: "margin", left: spot.left, top: spot.top, below: false, ...(spot.how === "level" ? {} : { clear: spot.how }) };
 }
 
-const BUTTON =
-  "min-h-9 px-2.5 py-2 text-[14px] font-medium leading-5 text-heading transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:bg-surface-hover [@media(hover:none)]:min-h-11";
 
 export function SelectionToolbarView({
   place,
@@ -654,10 +654,6 @@ export function SelectionToolbarView({
   // A press must not move the selection: the words stay highlighted while the pill is used.
   const keep = (event: { preventDefault: () => void }) => event.preventDefault();
   const column = place.mode === "margin";
-  // A divider between the buttons: over each but the first in the column, on the left of each but the first in the row.
-  const divider = column ? "border-t border-border-strong text-left" : "border-l border-border-strong";
-  let drawn = 0;
-  const button = () => (drawn++ === 0 ? (column ? `${BUTTON} text-left` : BUTTON) : `${BUTTON} ${divider}`);
   return (
     <div
       ref={innerRef}
@@ -669,23 +665,26 @@ export function SelectionToolbarView({
       {...(overCard ? { "data-over-card": "" } : {})}
       {...(place.clear ? { "data-header-clear": place.clear } : {})}
       style={{ left: place.left, top: place.top }}
-      className={`fixed z-[70] flex ${column ? "flex-col" : ""} max-w-[calc(100vw-16px)] items-stretch overflow-hidden whitespace-nowrap rounded-lg border border-border-strong bg-surface font-sans shadow-card-hover`}
+      className={`reader-selection-toolbar fixed z-[70] bg-surface border border-border-strong shadow-card-hover ${column ? "flex-col" : ""}`}
     >
       {canExplain && (
-        <button type="button" data-selection-explain="" onMouseDown={keep} onClick={onExplain} className={button()}>
+        <button type="button" data-selection-explain="" onMouseDown={keep} onClick={onExplain} className="reader-selection-action">
+          <span aria-hidden="true" className="reader-selection-glyph">✦</span>
           {SELECTION_LABELS.explain}
         </button>
       )}
-      <button type="button" data-selection-note="" onMouseDown={keep} onClick={onTakeNote} className={button()}>
+      <button type="button" data-selection-note="" onMouseDown={keep} onClick={onTakeNote} className="reader-selection-action">
+        <IconBook size={15} strokeWidth={1.8} />
         {SELECTION_LABELS.note}
       </button>
       {onHighlight && (
-        <button type="button" data-selection-highlight="" onMouseDown={keep} onClick={onHighlight} className={button()}>
+        <button type="button" data-selection-highlight="" onMouseDown={keep} onClick={onHighlight} className="reader-selection-action">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m5 16 8-8 4 4-8 8H5v-4Z"/><path d="m12 9 3-3a2 2 0 0 1 3 0l1 1a2 2 0 0 1 0 3l-3 3M4 21h16"/></svg>
           {SELECTION_LABELS.highlight}
         </button>
       )}
-      {onBold && <button type="button" data-selection-bold="" onMouseDown={keep} onClick={onBold} className={button()}><strong aria-hidden="true">B</strong> Bold</button>}
-      {onCircle && <button type="button" data-selection-circle="" onMouseDown={keep} onClick={onCircle} className={button()}><span aria-hidden="true">◯</span> Circle</button>}
+      {onBold && <button type="button" data-selection-bold="" onMouseDown={keep} onClick={onBold} className="reader-selection-action"><strong aria-hidden="true" className="reader-selection-glyph">B</strong> Bold</button>}
+      {onCircle && <button type="button" data-selection-circle="" onMouseDown={keep} onClick={onCircle} className="reader-selection-action"><span aria-hidden="true" className="reader-selection-glyph reader-selection-circle">◯</span> Circle</button>}
     </div>
   );
 }

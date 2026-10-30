@@ -163,3 +163,43 @@ html:has(.reader-book[data-immersive="true"]) { overflow: hidden; }
   .reader-book[data-immersive="true"] { padding: 12px; }
   .reader-book[data-immersive="true"] .reader-book-stage { padding: 16px; }
 }
+
+/* The incoming page sits behind the folding sheet, so no text shows through it. */
+.reader-book-turn-underlay {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--color-surface);
+}
+.reader-book-turn-underlay:empty { display: none; }
+.reader-book-turn-sheet {
+  backface-visibility: hidden;
+  box-shadow: 0 12px 32px color-mix(in srgb, #14111b 22%, transparent), inset 0 0 18px color-mix(in srgb, var(--color-heading) 4%, transparent);
+  will-change: transform;
+}
+.reader-book-turn-sheet[data-direction="forward"]::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-heading) 12%, transparent), transparent 16%, transparent 84%, color-mix(in srgb, var(--color-heading) 5%, transparent));
+}
+.reader-book-turn-sheet[data-direction="backward"]::after {
+  background: linear-gradient(270deg, color-mix(in srgb, var(--color-heading) 12%, transparent), transparent 16%, transparent 84%, color-mix(in srgb, var(--color-heading) 5%, transparent));
+}
+.reader-book-type-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  margin-right: 12px;
+  border-radius: 9px;
+  background: var(--color-surface);
+}
+.reader-book-type-controls button { min-width: 36px; min-height: 32px; background: transparent; color: var(--color-heading); font-family: var(--font-sans); font-weight: 600; }
+.reader-book-type-controls button span { font-size: 11px; }
+@media (max-width: 640px) {
+  .reader-book-toolbar { flex-wrap: wrap; gap: 8px; }
+  .reader-book-navigation { margin-left: auto; }
+  .reader-book-type-controls { margin-right: 2px; }
+}
+/* Keep the rotating leaf inside the book; it must never cover the toolbar. */
+.reader-book-stage { isolation: isolate; overflow: clip; }
+.reader-book-local-toolbar { z-index: 5; }

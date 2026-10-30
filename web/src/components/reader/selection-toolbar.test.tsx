@@ -447,12 +447,12 @@ describe("SelectionToolbarView — the three actions, in the margin and above (P
     expect([onExplain.mock.calls.length, onTakeNote.mock.calls.length, onHighlight.mock.calls.length]).toEqual([1, 1, 1]);
   });
 
-  it("keeps a divider between the buttons that fits its direction: above the next in the column, left of it in the row", () => {
-    const column = renderToStaticMarkup(view());
-    expect(column).toContain("border-t");
-    expect(column).not.toContain("border-l");
-    const row = renderToStaticMarkup(view({ place: ABOVE }));
-    expect(row).toContain("border-l");
+  it("uses the same uncluttered action buttons in a row and in the margin", () => {
+    for (const markup of [renderToStaticMarkup(view()), renderToStaticMarkup(view({ place: ABOVE }))]) {
+      expect(markup.match(/class="reader-selection-action"/g)).toHaveLength(3);
+      expect(markup).not.toContain("border-t");
+      expect(markup).not.toContain("border-l");
+    }
   });
 });
 

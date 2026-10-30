@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Ke
 import { createPortal } from "react-dom";
 import { IconBook, IconArrowRight } from "@/components/icons";
 import { useReaderPanesStore } from "@/store/reader-panes";
+import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import { withZoomTransition } from "@/lib/theme";
 import "./book-reader.css";
 
 const GAP = 64;
@@ -113,12 +115,16 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
   const bookRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const underlayRef = useRef<HTMLDivElement>(null);
   const turnAnimation = useRef<Animation | null>(null);
   const pendingPage = useRef<number | null>(null);
   const scrollRequested = useRef(false);
   const restoreAnchor = useRef<{ node: HTMLElement; fraction: number } | null>(null);
   const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leftPinned = useReaderPanesStore((state) => state.leftPinned);
+  const scaleIndex = useReadingPrefsStore((state) => state.scaleIndex);
+  const increaseScale = useReadingPrefsStore((state) => state.increaseScale);
+  const decreaseScale = useReadingPrefsStore((state) => state.decreaseScale);
   const wasPinned = useRef(leftPinned);
   const toolbarTarget = useSyncExternalStore(subscribeToolbar, getToolbar, () => null);
   const canBook = available;
@@ -195,6 +201,7 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
       turnAnimation.current = null;
       pendingPage.current = null;
       if (sheet) { sheet.style.visibility = "hidden"; sheet.replaceChildren(); }
+      underlayRef.current?.replaceChildren();
       el.removeEventListener("load", update, true);
     };
   }, [enabled, update]);
@@ -269,6 +276,7 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
     // Finish an interrupted turn first so fast, repeated inputs never lose a page.
     turnAnimation.current?.cancel();
     turnAnimation.current = null;
+    underlayRef.current?.replaceChildren();
     if (pendingPage.current !== null) {
       el.scrollTo({ left: bookSpreadOffset(el.clientWidth, gap, pendingPage.current), behavior: "instant" });
       pendingPage.current = null;
@@ -294,9 +302,8 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
 
     pendingPage.current = next;
     const forward = direction > 0;
-    // The turning leaf carries a non-interactive snapshot of the actual page.
-    // Remove ids so anchors, notes and figure controls still address the live paper.
-    const snapshot = (right: boolean) => {
+    // Show the next spread beneath the turning leaf, while the opposite page stays still.
+    const snapshot = (host: HTMLElement, right: boolean, offset: number) => {
       const copy = el.cloneNode(true) as HTMLElement;
       copy.className = "reader-book-snapshot";
       copy.setAttribute("aria-hidden", "true");
@@ -309,28 +316,32 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
       copy.style.width = `${el.clientWidth}px`;
       copy.style.height = `${el.clientHeight}px`;
       copy.style.left = right ? `${-el.clientWidth / 2}px` : "0";
-      sheet.replaceChildren(copy);
-      copy.scrollLeft = el.scrollLeft;
-      sheet.style.top = `${el.offsetTop}px`;
-      sheet.style.height = `${el.clientHeight}px`;
-      sheet.style.width = `${el.clientWidth / 2}px`;
-      sheet.style.left = `${el.offsetLeft + (right ? el.clientWidth / 2 : 0)}px`;
+      host.replaceChildren(copy);
+      copy.scrollLeft = offset;
+      host.style.top = `${el.offsetTop}px`;
+      host.style.height = `${el.clientHeight}px`;
+      host.style.width = `${el.clientWidth / 2}px`;
+      host.style.left = `${el.offsetLeft + (right ? el.clientWidth / 2 : 0)}px`;
     };
-    snapshot(forward);
+    const underlay = underlayRef.current;
+    if (underlay) snapshot(underlay, forward, bookSpreadOffset(el.clientWidth, gap, next));
+    snapshot(sheet, forward, el.scrollLeft);
     sheet.style.visibility = "visible";
+    sheet.dataset.direction = forward ? "forward" : "backward";
     sheet.style.transformOrigin = forward ? "left center" : "right center";
     const outgoing = sheet.animate(
       [{ transform: "rotateY(0deg)" }, { transform: `rotateY(${forward ? -90 : 90}deg)` }],
-      { duration: 230, easing: "cubic-bezier(.45,0,.7,.35)", fill: "forwards" },
+      { duration: 280, easing: "cubic-bezier(.36,0,.66,.32)", fill: "forwards" },
     );
     turnAnimation.current = outgoing;
     outgoing.onfinish = () => {
       commit();
-      snapshot(!forward);
+      underlay?.replaceChildren();
+      snapshot(sheet, !forward, el.scrollLeft);
       sheet.style.transformOrigin = forward ? "right center" : "left center";
       const incoming = sheet.animate(
         [{ transform: `rotateY(${forward ? 90 : -90}deg)` }, { transform: "rotateY(0deg)" }],
-        { duration: 270, easing: "cubic-bezier(.2,.65,.25,1)", fill: "forwards" },
+        { duration: 320, easing: "cubic-bezier(.18,.7,.25,1)", fill: "forwards" },
       );
       outgoing.cancel();
       turnAnimation.current = incoming;
@@ -413,6 +424,10 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
           <span aria-hidden="true">{immersive ? "↙" : "⤢"}</span> {immersive ? "Exit immersive" : "Immersive"}
         </button>}</div>
         {enabled && <div className="reader-book-navigation" aria-label="Book pages">
+          <div className="reader-book-type-controls" role="group" aria-label="Text size">
+            <button type="button" aria-label="Smaller text" title="Smaller text" disabled={scaleIndex <= 0} onClick={() => withZoomTransition(decreaseScale)}>A<span aria-hidden="true">−</span></button>
+            <button type="button" aria-label="Larger text" title="Larger text" disabled={scaleIndex >= READING_SCALE_STEPS.length - 1} onClick={() => withZoomTransition(increaseScale)}>A<span aria-hidden="true">+</span></button>
+          </div>
           <span className="reader-book-wheel-hint" aria-hidden="true">Scroll to turn</span>
           <button type="button" aria-label="Previous pages" disabled={position.page <= 1} onClick={() => turn(-1)}><span aria-hidden="true">←</span></button>
           <span aria-live="polite">{position.page} / {position.pages}</span>
@@ -434,7 +449,7 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
           <span className="reader-book-end" style={{ left: bookSpreadOffset(geometry.width, geometry.gap, geometry.pages) + geometry.width - 1 }} />
         </div>}
       </div>
-      {enabled && <div ref={sheetRef} className="reader-book-turn-sheet" aria-hidden="true" />}
+      {enabled && <><div ref={underlayRef} className="reader-book-turn-underlay" aria-hidden="true" /><div ref={sheetRef} className="reader-book-turn-sheet" aria-hidden="true" /></>}
       </div>
     </div>
   );

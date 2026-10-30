@@ -190,8 +190,8 @@
 }
 .reader-table-scroll::-webkit-scrollbar { display: none; }
 .reader-table-scroll:focus-visible { outline: 2px solid #a78bc8; outline-offset: -2px; }
-.reader-data-table { width: 100%; border-collapse: collapse; font: 400 15px/1.55 var(--font-sans); color: var(--color-text); }
-.reader-data-table :is(th, td) { min-width: 5rem; padding: 11px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); }
+.reader-data-table { width: 100%; border-collapse: collapse; font: 400 13px/1.5 var(--font-sans); color: var(--color-text); }
+.reader-data-table :is(th, td) { min-width: 4.5rem; padding: 9px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent); }
 .reader-data-table th { color: var(--color-heading); font-weight: 600; background: color-mix(in srgb, var(--color-surface) 92%, var(--reader-visual-accent)); }
 .reader-data-table tr:last-child :is(th, td) { border-bottom: 0; }
 .reader-table-hint { display: none; }
