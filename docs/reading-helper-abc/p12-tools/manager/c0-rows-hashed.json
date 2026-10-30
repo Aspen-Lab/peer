@@ -1,0 +1,444 @@
+{
+ "P1": [
+  {
+   "h": "2b6ed4d5e28e6afad34a382126076433d8fbc39da971ca1b40b3de28ba1a996a",
+   "role": "setup",
+   "level": 1
+  },
+  {
+   "h": "6f78d68146b833faeb071372d54c34e393e7cbd984f80dfffa66c7ff81a80e92",
+   "role": "method",
+   "level": 1
+  },
+  {
+   "h": "92dbdb7762a27045768f9aef9db536dfc75838bf98ce827988d77e79ef972201",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "660ff247c1cfa2b3ace1c9d31a8917793c97adab7e9a360546c26e94ce927c26",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "0ed5f1e18d1351c5e014b5a23ca71cd6cc182fb58879052e3554c0207d43af5f",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "82265f89c12f8a669c05e4c6d250a63a4c5c67b8e06770e56455af44c5431573",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "9e8b9ff7d1b253536466f9ff96c77fc971566a31727308ab4df4ebd4712a5606",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "d5e891da6a2cab98bb1097b65af9b2c2ee601a8e0e64d66b057f3b56e75a9608",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "a612d4f507ff90b1d09bbc70ee58208654923ddf81480c8ede6e38a8657dd290",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "9cbcb22f8c58f4fbcbff87b8da68018914dd8808c8634e9058a879ba3c16e645",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "a523ad98e0e97e3ac8e5548a4876a743f8f27d50c8af78c8cde9a8b70866e69c",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "f0e2b3c0ae8d4d71e51d82c62e0577889d43d65c1e9a1bd229a4e603560fb9ef",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "1e41021267b1fe5dafdf097258b8d7a1a9ec5204d2048b7b44a9f84b66df7dd7",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "4fccc8cb28f1db923aa8a08cbebfdcec8e8a5c4a21bbbaeeeb7be42b450d0c6f",
+   "role": "apparatus",
+   "level": 1
+  }
+ ],
+ "P2": [
+  {
+   "h": "2b6ed4d5e28e6afad34a382126076433d8fbc39da971ca1b40b3de28ba1a996a",
+   "role": "setup",
+   "level": 1
+  },
+  {
+   "h": "ce820ab8c0997b06defa1862c3c8eacc8a2ce0f9c0be3c3a9120f8a8844535f5",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "384bedd83f84bc3b109603a9b4c8840afd6f870702c16a19f68cb1592263d09c",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "1224f9bd0a47b1ca1a7b5c9a4edee187493bd5c0fbed2d376e8f6e755c0f2e7a",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "b717f34eee23ca6160fa9e22ddf2b29d85ba741895b909e993dbb81f8d971889",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "206b444a521aa62b0279cd2ec25f727330810b67717ff016c0140f27a6922558",
+   "role": "evidence",
+   "level": 2
+  },
+  {
+   "h": "43f8316292ddf3a812104c13f68a647d781ee884636e1b25115ddf7867d88ad5",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "82a3bd7b418dd7b23f65715168fd228aacf39becb088d7f156ec48d2fbe4bd8b",
+   "role": "method",
+   "level": 1
+  },
+  {
+   "h": "9d341f85c943704f98e9e1b8c17018df7d4835e9a94c8969867af64a8043a6f3",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "4fccc8cb28f1db923aa8a08cbebfdcec8e8a5c4a21bbbaeeeb7be42b450d0c6f",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "1f885ad4a6de76e3ac0ba4a02ee7737cb60f83afed08ed783c206586ce3518e2",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "aa1855648258565a01199bbb40220596dc4022730e7d73595e5ee2cc66fd0267",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "67de0d1080d64e93b9f30195bdd0632edfbb9ca18074efc4a2ffcd954d10ba40",
+   "role": "apparatus",
+   "level": 1
+  }
+ ],
+ "P3": [
+  {
+   "h": "d3db5338aae140c5cc04ac37690aa4f98041e14a042bc6473d54ecda8d95f93e",
+   "role": "setup",
+   "level": 1
+  },
+  {
+   "h": "e61ea699019f723d22ad54fe58f8f85856f003dde2bb7d0e898187e18a4c2673",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "ceb9753c3f1351f603f650a94739eb4d4bc541c49be51ff006e9fb01586ec37d",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "4ea9efe9ec457f99305fe38506b0d388ef025e2218e78adf0666284b60755ce2",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "852408bfbc8333513e7cc815691cad3270bf9ee001d8dd3902a766bde30f73a6",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "499f6eee47e09896ebd4561e7b74d52f06d2f12bbdd656725603a3e9a71f55ed",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "3f3867313a9dbfd5be4028e351d67cc7ef77f4b2e3d685104cda3352a602e9cc",
+   "role": "method",
+   "level": 1
+  },
+  {
+   "h": "f0e2b3c0ae8d4d71e51d82c62e0577889d43d65c1e9a1bd229a4e603560fb9ef",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "4fccc8cb28f1db923aa8a08cbebfdcec8e8a5c4a21bbbaeeeb7be42b450d0c6f",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "bb4751e7cede91ea300995454ebce6d19889ea286b306c2d3b246bf437489093",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "06900054a2977617ee4d747a8ceac32f07d5e795c76719ce330e929d490b1ba8",
+   "role": "apparatus",
+   "level": 1
+  }
+ ],
+ "P4": [
+  {
+   "h": "d3db5338aae140c5cc04ac37690aa4f98041e14a042bc6473d54ecda8d95f93e",
+   "role": "setup",
+   "level": 1
+  },
+  {
+   "h": "c099142bc3186ded72786ba27e9ea6d2da240fb9fd3fe79b479ecf8e734b2850",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "852408bfbc8333513e7cc815691cad3270bf9ee001d8dd3902a766bde30f73a6",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "3f3867313a9dbfd5be4028e351d67cc7ef77f4b2e3d685104cda3352a602e9cc",
+   "role": "method",
+   "level": 1
+  },
+  {
+   "h": "23967434605a53fd0d41d4b7037ba13c41906a79a5ce1665328b48a4ef3d954e",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "202cfcfc4c5d4a1d4f64b4cf965b1476f8177194dc2dd5c3fa4b7d35a0e0ea2d",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "b4b31ba7e5d1822e6e353f9b07d27dc967a816a2cff06c6c4524e6774ef8f88f",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "349d672b19d039c6c16be34b98a9d97a47932cfffedc6639338d86ceb5a198e1",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "3bc6ac7b603b26b4d70f4f69910f37381aa5ecf4222b53449f435b31aa464dae",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "c6cd4f063f1efe692e89f041b51afb741c6480fece834870c605665f234fae45",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "b72ed7fdb0075466846c43f821f5053f8001a47ac4f8dc1337494063ad91523c",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "f0e2b3c0ae8d4d71e51d82c62e0577889d43d65c1e9a1bd229a4e603560fb9ef",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "2514e1475addffb378fdb07e9a1092176c09dbfbd129ebcaacd0099818d2534c",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "06900054a2977617ee4d747a8ceac32f07d5e795c76719ce330e929d490b1ba8",
+   "role": "apparatus",
+   "level": 1
+  }
+ ],
+ "P5": [
+  {
+   "h": "d3db5338aae140c5cc04ac37690aa4f98041e14a042bc6473d54ecda8d95f93e",
+   "role": "setup",
+   "level": 1
+  },
+  {
+   "h": "81c5c3f8b1ef17ebbdeeb280d890da37d3ce8ac82477416f6eed348301a3ba42",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "2559c6a1b89a5920f20616b778eeb5d68e0eac3735aa4c6ac64b8aefc782cb1a",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "6e29ce7e2180cadf9745bbb9be7dbafacb08a718ed159bab9394127803a5b5c0",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "1e94020b6d3c3059868baa276b0fa1d8f6231fbf6bfd800a43f36edf01de4ee3",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "852408bfbc8333513e7cc815691cad3270bf9ee001d8dd3902a766bde30f73a6",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "499f6eee47e09896ebd4561e7b74d52f06d2f12bbdd656725603a3e9a71f55ed",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "3f3867313a9dbfd5be4028e351d67cc7ef77f4b2e3d685104cda3352a602e9cc",
+   "role": "method",
+   "level": 1
+  },
+  {
+   "h": "dcaa8e5ecb8d70ad4ededfab010e9ac8894d61070d561e97e84cd68d6f1ff0c9",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "f4bb1a7f7bc6d182a23be32e6b751373191f90ccbe2c1a8e4912b1b53c9323ce",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "ad1a48a06ce9182753944957b9f6b7b3e3bb4523c51b990c7ebecb12254b4e5a",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "9ab8d6e24cc6d1c37a43b7cca3628882fd8c50c99003068b5b970e3672db41d6",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "730e6329d252b9cfd75627ecc4571768756d108abe630d1cdb6377f9455d191b",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "f0e2b3c0ae8d4d71e51d82c62e0577889d43d65c1e9a1bd229a4e603560fb9ef",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "77c99b3ccc61a117519eaad7619a229582cd0eddaba6113e0d71c0513154019f",
+   "role": "apparatus",
+   "level": 1
+  }
+ ],
+ "P6": [
+  {
+   "h": "d3db5338aae140c5cc04ac37690aa4f98041e14a042bc6473d54ecda8d95f93e",
+   "role": "setup",
+   "level": 1
+  },
+  {
+   "h": "99b150894d04aab47e01e4e3b39402976814afc847d6f51e44fbab2bbbd9104f",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "bd445c462b7eebbc242e27f08c7d981e97fb28faf17ea73862bf95119b60e0f7",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "c83b22f6483cccd8b93b8620fbfbe05924391b658ccf7fa5222be3c6174b8976",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "6c9ff311217d61a02a4d59fb4bba48a92328b8ac03ba0004e38fa4ca79fffcfa",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "20f08a5b913e2517329279410b2eb7ec32b5b77cd6c10f258e19b5831ad5fa58",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "99f21244578359bdbc1c405fe92e28bf3b0396e1b0d05d2fdcdc81ca9b6ff9e5",
+   "role": "evidence",
+   "level": 1
+  },
+  {
+   "h": "cc2eaababa23341e5c34de3f975f66945c4c443e1139e06feed4b0bbdf82cab9",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "852408bfbc8333513e7cc815691cad3270bf9ee001d8dd3902a766bde30f73a6",
+   "role": "interpretation",
+   "level": 1
+  },
+  {
+   "h": "499f6eee47e09896ebd4561e7b74d52f06d2f12bbdd656725603a3e9a71f55ed",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "3f3867313a9dbfd5be4028e351d67cc7ef77f4b2e3d685104cda3352a602e9cc",
+   "role": "method",
+   "level": 1
+  },
+  {
+   "h": "0c3d919a42e7de49863e98da032b52bb32f25544085b1f0d57dbfbe6816fa92d",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "d472733daa1dde6f050e5a5527f7d1f1937ddbe72ad67737d49d31e9d84c785d",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "a7687d673828bbda1f7cdd90c804cece6b6c522861747ed8ca2aa9cbad621a00",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "27f87dea09b791cf119b27bff56cee624298e719aa4f7e5bce3e0289a9e673ff",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "07432afd0606af74fcbb5df3913df81f8e0015afed3a1139ce457b224b78ea40",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "0fbc27bb821272fcbd7c7413f411677910bc4fd0966e6aad09cb52ced4ffc980",
+   "role": "method",
+   "level": 2
+  },
+  {
+   "h": "f0e2b3c0ae8d4d71e51d82c62e0577889d43d65c1e9a1bd229a4e603560fb9ef",
+   "role": "apparatus",
+   "level": 1
+  },
+  {
+   "h": "77c99b3ccc61a117519eaad7619a229582cd0eddaba6113e0d71c0513154019f",
+   "role": "apparatus",
+   "level": 1
+  }
+ ]
+}

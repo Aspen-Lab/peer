@@ -1,0 +1,22 @@
+const L = require('./lib2.cjs'); const C = require('./bat_cards.cjs'); const sleep = (p, ms) => p.waitForTimeout(ms);
+(async () => {
+  const s = await L.openPaper('P1', L.W.W3, {}); const p = s.page;
+  const paras = await C.goodParas(p);
+  await C.openSticky(p, paras[4], { y: 190 });
+  const card = '[data-margin-card=sticky]';
+  const bb0 = await p.locator(card + ' [data-row]').first().boundingBox(); await p.mouse.click(bb0.x + bb0.width * 0.6, bb0.y + bb0.height / 2); await sleep(p, 500);
+  await p.keyboard.type('base words', { delay: 8 }); await sleep(p, 700);
+  await p.getByRole('button', { name: 'Notes' }).click(); await sleep(p, 1200);
+  const win = 'section[aria-label="Your notes"]';
+  const row = p.locator(win + ' [data-row]').filter({ hasText: 'base words' }).first();
+  await row.evaluate(el => el.scrollIntoView({ block: 'center' })); await sleep(p, 400);
+  const bb = await row.boundingBox(); console.log('row box after scroll', JSON.stringify(bb));
+  const hit = await p.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return e ? e.tagName + '|' + (e.getAttribute('contenteditable') || '') + '|' + (e.closest('[data-margin-card]') ? 'in-card' : e.closest('section[aria-label="Your notes"]') ? 'in-window' : 'other') : null; }, { x: bb.x + 60, y: bb.y + bb.height / 2 });
+  console.log('hit', hit);
+  await p.mouse.click(bb.x + 60, bb.y + bb.height / 2); await sleep(p, 500);
+  console.log('active', await p.evaluate(() => { const a = document.activeElement; return a.tagName + '|' + (a.closest('[data-margin-card]') ? 'card' : a.closest('section[aria-label="Your notes"]') ? 'window' : 'other') + '|' + (a.textContent || '').slice(0, 30); }));
+  await p.keyboard.press('Control+End'); await p.keyboard.type(' zz', { delay: 8 }); console.log('immediately: row', JSON.stringify(await row.innerText()), 'active', await p.evaluate(() => { const a = document.activeElement; return a.tagName + '|' + (a.closest('[data-margin-card]') ? (a.closest('[data-margin-card]').getAttribute('data-margin-card')) : 'other'); })); await sleep(p, 1500);
+  console.log('after typing: window row', JSON.stringify((await row.innerText())), 'sticky', JSON.stringify((await p.locator(card + ' [data-row]').allInnerTexts()).join('/')));
+  await p.screenshot({ path: L.R + '/probe-1236b-w3.png' });
+  await s.browser.close();
+})();

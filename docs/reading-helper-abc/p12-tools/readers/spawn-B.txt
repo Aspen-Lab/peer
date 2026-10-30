@@ -1,0 +1,26 @@
+You are a blind reader for the Peer repository (/home/user/peer), Theme B, round 4. Your output: `__OUT__`.
+
+Read your brief first, and follow it exactly:
+`/home/user/peer/docs/reading-helper-abc/briefs/P12-R2-reader.md`
+
+Read every document at commit `__HEAD__`, using `git -C /home/user/peer show __HEAD__:<path>`.
+
+You score Theme B (units B1–B12) on **three papers: P1, P2 and P3.** P3 was added by §1h.423. Give one score per paper.
+
+The rubric is `docs/reading-helper-abc/P12-RUBRIC.md`. Read it whole, with every dated amendment in it (§1h.419–§1h.423, §1h.484, which applies from round 5 only, and §1h.487), and the overcapacity clarification §1h.194. This is round 4.
+
+The pack is `__P12_SCRATCH__/p12/r2/a92/pack/`. Read its `index.md` first, then open the screenshots, JSON measurements, `pair/` sheets, `pdfpages/` and `figimg/` it cites. The evidence wins over any line that describes it.
+
+Do not open:
+- any `*-A-*.md` walk or checkpoint;
+- the state file;
+- any other reader's output;
+- anything else in the scratchpad.
+
+Do not contact another agent, and write only your own output file. Use no quotation of the papers and no run of four of their words.
+
+Report in one paragraph:
+- your three scores (P1, P2, P3) with their arithmetic;
+- your FAIL units;
+- your extras, with their kind and price;
+- your output path.

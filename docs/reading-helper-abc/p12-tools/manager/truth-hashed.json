@@ -1,0 +1,219 @@
+{
+ "P1": [
+  {
+   "role": "setup",
+   "n": 40,
+   "sha256": "a71f471f032cc0a561bee7a6e522752423d4f34ab89f28597ff7301274015f58"
+  },
+  {
+   "role": "method",
+   "n": 39,
+   "sha256": "b09f3a929cd9fa0dd9d77897af4c45be387f393263553bd50cf5f436b4bbe0ea"
+  },
+  {
+   "role": "evidence",
+   "n": 40,
+   "sha256": "f1997ba4853552119f4f51c1ef50d9d9b6b5f4916f2f85a7c550aef4ef7aa5f1"
+  },
+  {
+   "role": "interpretation",
+   "n": 40,
+   "sha256": "3635d0887ed2fe0a31fa3a25d67f6a436ed894db8da8fdf5c55d34cc90266110"
+  },
+  {
+   "role": "apparatus",
+   "n": 40,
+   "sha256": "ac40b80374e4dc1b8af6244c9c232cec017bdd6298e77b03ad6b9000c8ac1d13"
+  }
+ ],
+ "P2": [
+  {
+   "role": "setup",
+   "n": 40,
+   "sha256": "908442e799f054168c3b4c72a8236e5ac7f60aaae0cf650ac6759915685ff6b4"
+  },
+  {
+   "role": "evidence",
+   "n": 40,
+   "sha256": "c04790e46c31fbd28493b34e860ead6b4de72f334e1be35e60e4ef4e6edcfbe6"
+  },
+  {
+   "role": "interpretation",
+   "n": 40,
+   "sha256": "a0af44c3363b5fafb088de0cec5360b91c59ca2cb3890d4a0e7d81e9470ee852"
+  },
+  {
+   "role": "method",
+   "n": 40,
+   "sha256": "c47e1bc1795f958296c703e86969dbdbd02dd45b2ba29159f0055b554a83490d"
+  },
+  {
+   "role": "apparatus",
+   "n": 39,
+   "sha256": "99de8937ae02687ba9182522b4b47913fbf98c484c7bf74a1d30a494da0eb446"
+  }
+ ],
+ "P3": [
+  {
+   "role": "setup",
+   "n": 30,
+   "sha256": "79f1b09d6c4e9f79ba66375c62dddecde5ecca35037abf235ffaf09514d354fe"
+  },
+  {
+   "role": "evidence",
+   "n": 40,
+   "sha256": "95e8aab6ee9b3c5eb166a47ef6bcceb9da0e9149b71364d69266fec65a45a711"
+  },
+  {
+   "role": "evidence",
+   "n": 40,
+   "sha256": "6a31e316b9a94525978e6491420e8dcdcb752853d181f334f595e25ad1f54df8"
+  },
+  {
+   "role": "evidence",
+   "n": 40,
+   "sha256": "fc20954fa753dd3fc9b126b83030a09582b5c98845434e5e51c7d79a825e0da8"
+  },
+  {
+   "role": "interpretation",
+   "n": 40,
+   "sha256": "daca620eba69f592b51406ad14fbc83a07704cee9a94aa33c0b8bef45e872ade"
+  },
+  {
+   "role": "apparatus",
+   "n": 40,
+   "sha256": "5f21d71ba6bed2db26f8dfb6927500beee75cb0a347737d8058a636b4b7cd533"
+  },
+  {
+   "role": "method",
+   "n": 40,
+   "sha256": "8b539120636a53d6125ea331099e15a7a16dd303c88ef960bead1bfa6e0f4ca8"
+  },
+  {
+   "role": "apparatus",
+   "n": 40,
+   "sha256": "fef13a8982969deae5ef76b69d097e2170ab111b52f8244185d2387d6de6b926"
+  }
+ ],
+ "P4": [
+  {
+   "role": "setup",
+   "n": 11,
+   "sha256": "9ffe78fb16067471cc0e9cd7d2ed97ef1e1a9d70d8cf69df2da88d989c9ce886"
+  },
+  {
+   "role": "evidence",
+   "n": 11,
+   "sha256": "977759132d57db1c2baf34fc86ea136c14fcef38c90f0be10dd43724ad33d1a6"
+  },
+  {
+   "role": "interpretation",
+   "n": 16,
+   "sha256": "5744306d3d28f0a3823013f1325bb4dbf0bb4ef55e21c62301a65d63db20acfd"
+  },
+  {
+   "role": "method",
+   "n": 8,
+   "sha256": "d914d5971671f4bb14bcec09c0885f4e4816cecbbe3fb123c921524f5a1c3642"
+  },
+  {
+   "role": "apparatus",
+   "n": 19,
+   "sha256": "6c9d9aec654e47086564bf979e18aed811815950b9a46ba8db1af56969ec64c7"
+  }
+ ],
+ "P5": [
+  {
+   "role": "setup",
+   "n": 21,
+   "sha256": "d3e785d1f50f5261a2feaf9ef305f3bae91f7dedd5580b81c6df0769c66c0348"
+  },
+  {
+   "role": "evidence",
+   "n": 16,
+   "sha256": "b516381073a510b4b880a1d8e4206f254f0e726ca1e96ed5789df7a68ee5a178"
+  },
+  {
+   "role": "evidence",
+   "n": 21,
+   "sha256": "fb8e3a02c8f6307dd7bd1687c38d5d2daef0587f480a9b2b4a2b68746711e1d0"
+  },
+  {
+   "role": "evidence",
+   "n": 20,
+   "sha256": "196d78be38e18d0c4c609d4d563799e2816299a47d0c57ae472720eda20e558b"
+  },
+  {
+   "role": "evidence",
+   "n": 20,
+   "sha256": "794ff6586df074bdc085f4347f46acc3b4f275f706df5a060cf0e2b99a7521d9"
+  },
+  {
+   "role": "interpretation",
+   "n": 22,
+   "sha256": "6ee16b38e2c19c1e717ab4bf80fbe908f3f8cc84616de0dc6ec191d3b266057a"
+  },
+  {
+   "role": "apparatus",
+   "n": 23,
+   "sha256": "85b89e9d41a1a29070bd9afe71499319d98a294f60f855eeefb47df6c3ba86c2"
+  },
+  {
+   "role": "method",
+   "n": 14,
+   "sha256": "7d25a000fbbbd0da11ac41eea3bd4a6a7fe8bcb4eb53f37f0e9ea77f426b8ea8"
+  },
+  {
+   "role": "apparatus",
+   "n": 13,
+   "sha256": "1cc102b6eb42ad7bd019803d2fc479b207852e60b869ea42d6584b85c3f3a4bd"
+  }
+ ],
+ "P6": [
+  {
+   "role": "setup",
+   "n": 13,
+   "sha256": "040a4a3f639af4db90a40e7a4f043fc6a30574d834de5af92b2621565effc3f3"
+  },
+  {
+   "role": "evidence",
+   "n": 13,
+   "sha256": "2713d8a34313f4502cd55dee3f0840a09aa3a189f252317cab3ee55fea2aa8dd"
+  },
+  {
+   "role": "evidence",
+   "n": 17,
+   "sha256": "2fc792b93aae9dcddae7496ead3224d8d366dc8461af84ca6bdd37e2e8073b70"
+  },
+  {
+   "role": "evidence",
+   "n": 24,
+   "sha256": "b4633773ecaf7bf0e15cb8276528d9b9a167a392ff9dfa717c1ebabb8e06ed60"
+  },
+  {
+   "role": "interpretation",
+   "n": 22,
+   "sha256": "aaddd27b860a3f7fc3bcedf9ff6647f219fb1a9b36edad4014968424719e9d7e"
+  },
+  {
+   "role": "interpretation",
+   "n": 18,
+   "sha256": "0fb486da191c6b520cec28f99a58640bf53c7ea35ac6a9627abdc56e08696b53"
+  },
+  {
+   "role": "apparatus",
+   "n": 23,
+   "sha256": "85b89e9d41a1a29070bd9afe71499319d98a294f60f855eeefb47df6c3ba86c2"
+  },
+  {
+   "role": "method",
+   "n": 20,
+   "sha256": "c0799c24a3ca0a2bbc2ad3419a5b6fdf472367ce41f7fa546a93da1f1667cd79"
+  },
+  {
+   "role": "apparatus",
+   "n": 13,
+   "sha256": "1cc102b6eb42ad7bd019803d2fc479b207852e60b869ea42d6584b85c3f3a4bd"
+  }
+ ]
+}

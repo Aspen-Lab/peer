@@ -1,0 +1,33 @@
+const L = require('./lib.cjs');
+(async () => {
+  const s = await L.newSession();
+  const p = s.page;
+  await L.skipSetup(p);
+  await p.goto(L.BASE + '/welcome', { waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(2500);
+  await p.getByRole('button', { name: 'Step 2: Topics' }).click();
+  await p.waitForTimeout(600);
+  const ti = p.locator('input[placeholder="Add a topic, press Enter"]').first();
+  await ti.fill('attention'); await ti.press('Enter');
+  await p.waitForTimeout(600);
+  await p.getByRole('button', { name: /^Step 5: AI/ }).click();
+  await p.waitForTimeout(800);
+  const sel = p.locator('select').first();
+  const opts = await sel.evaluate(e => Array.from(e.options).map(o => o.value + ':' + o.textContent));
+  console.log(opts.join(' | '));
+  const openai = opts.find(o => /openai/i.test(o));
+  await sel.selectOption({ index: opts.findIndex(o => /openai/i.test(o)) });
+  await p.waitForTimeout(500);
+  const k = p.locator('input[type=password]').first();
+  await k.fill('sk-placeholder-p12-' + 'a38-0000000000000000');
+  await p.waitForTimeout(800);
+  await p.screenshot({ path: L.R + '/tools/ai-step2.png' });
+  // finish: Continue to persona then done?
+  await p.getByRole('button', { name: /Continue/ }).click();
+  await p.waitForTimeout(1200);
+  console.log((await p.locator('body').innerText()).slice(0, 600));
+  const keyset = await p.evaluate(() => Object.keys(localStorage).join(','));
+  console.log('LS keys', keyset);
+  await s.ctx.storageState({ path: L.R + '/key-profile-pre.json' });
+  await s.browser.close();
+})();
