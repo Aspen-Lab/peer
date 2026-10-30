@@ -28,6 +28,8 @@ export function bookSpreadOffset(width: number, gap: number, page: number) {
   return Math.max(0, page - 1) * (width + gap);
 }
 
+const WHEEL_GESTURE_PAUSE_MS = 300;
+
 /** One uninterrupted wheel gesture turns exactly one spread. */
 export class BookWheelGesture {
   private amount = 0;
@@ -39,7 +41,7 @@ export class BookWheelGesture {
 
   /** The tail of the same gesture must not scroll the document at an edge. */
   holdAtBoundary(delta: number, now: number): boolean {
-    const hold = this.turned && Math.sign(delta) === this.direction && now - this.lastInput <= 180;
+    const hold = this.turned && delta !== 0 && now - this.lastInput <= WHEEL_GESTURE_PAUSE_MS;
     if (hold) this.lastInput = now;
     else this.reset();
     return hold;
@@ -48,10 +50,13 @@ export class BookWheelGesture {
   feed(delta: number, now: number): -1 | 0 | 1 {
     const direction = Math.sign(delta);
     if (!direction) return 0;
-    if (now - this.lastInput > 180 || direction !== this.direction) this.reset();
-    this.direction = direction;
+    if (now - this.lastInput > WHEEL_GESTURE_PAUSE_MS) this.reset();
     this.lastInput = now;
+    // Trackpads can briefly reverse during the momentum tail. A change in
+    // direction is still part of the same gesture once a page has turned.
     if (this.turned) return 0;
+    if (direction !== this.direction) this.amount = 0;
+    this.direction = direction;
     this.amount += Math.abs(delta);
     if (this.amount < 45) return 0;
     this.amount = 0;
@@ -370,7 +375,8 @@ export function BookReader({ children, available, showingPaper = true, onEnter }
       }
       event.preventDefault();
       const direction = gesture.feed(delta, now);
-      if (direction) turn(direction);
+      // Finish the current 3D turn before accepting another gesture.
+      if (direction && !turnAnimation.current) turn(direction);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);

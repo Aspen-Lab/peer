@@ -40,27 +40,23 @@ describe("book reading", () => {
     expect(gesture.feed(50, 430)).toBe(1); // a new gesture after a pause
   });
 
-  it("can reverse immediately, and never repeats during the same continuous gesture", () => {
+  it("ignores reversals and long momentum tails until the gesture stops", () => {
     const gesture = new BookWheelGesture();
     expect(gesture.feed(100, 0)).toBe(1);
-    expect(gesture.feed(-100, 30)).toBe(-1);
-    expect(gesture.feed(-100, 140)).toBe(0);
-    expect(gesture.feed(-100, 260)).toBe(0);
-    expect(gesture.feed(-100, 390)).toBe(0);
-    expect(gesture.feed(-100, 520)).toBe(0);
-    expect(gesture.feed(-100, 720)).toBe(-1); // a new gesture after a pause
+    expect(gesture.feed(-100, 30)).toBe(0);
+    expect(gesture.feed(100, 280)).toBe(0);
+    expect(gesture.feed(100, 530)).toBe(0);
+    expect(gesture.feed(-100, 780)).toBe(0);
+    expect(gesture.feed(-100, 1081)).toBe(-1);
   });
 
-  it("absorbs the end of a gesture at a book edge, then lets the page scroll", () => {
+  it("absorbs a gesture's momentum at the book edge before allowing document scrolling", () => {
     const gesture = new BookWheelGesture();
     expect(gesture.feed(100, 0)).toBe(1);
     expect(gesture.holdAtBoundary(15, 30)).toBe(true);
-    expect(gesture.holdAtBoundary(10, 80)).toBe(true);
-    expect(gesture.holdAtBoundary(10, 230)).toBe(true);
-    expect(gesture.holdAtBoundary(10, 380)).toBe(true);
+    expect(gesture.holdAtBoundary(-10, 280)).toBe(true);
     expect(gesture.holdAtBoundary(10, 530)).toBe(true);
-    expect(gesture.holdAtBoundary(10, 680)).toBe(true);
-    expect(gesture.holdAtBoundary(20, 900)).toBe(false);
+    expect(gesture.holdAtBoundary(20, 831)).toBe(false);
   });
 
   it("scrolls the document until the book is mostly in view", () => {
